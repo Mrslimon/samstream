@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aiosamstream"
+version = "0.0.1"
+description = "Async client for Samsung Tizen TVs: control, sdb sideloading and the Samstream player app"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.14.2"
+authors = [{ name = "Islam Ahmady" }]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Framework :: AsyncIO",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
+dependencies = [
+    "aiohttp>=3.12",
+    "samsungtvws[async]==3.0.6",
+    "websockets>=15",
+]
+
+[project.urls]
+Source = "https://github.com/islamahmady/samstream"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aiosamstream"]

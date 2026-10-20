@@ -1,0 +1,87 @@
+html,
+body {
+  margin: 0;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  /* Must stay transparent so the AVPlay video plane shows through */
+  background: transparent;
+  font-family: "Readex Pro", sans-serif;
+}
+
+/* Avoid `inset`/logical properties: Tizen 4.0 runs Chromium 56 */
+#av-player {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 64px;
+  text-align: center;
+  font-size: 48px;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+#status {
+  position: absolute;
+  top: 32px;
+  left: 32px;
+  max-width: 1200px;
+  margin: 0;
+  padding: 16px 24px;
+  font-family: "Readex Pro", monospace;
+  font-size: 22px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 12px;
+}
+
+#mse-video {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  object-fit: contain;
+}
+
+#help {
+  position: absolute;
+  top: 32px;
+  right: 32px;
+  padding: 16px 28px;
+  font-size: 26px;
+  line-height: 1.5;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 12px;
+}
+
+#help[hidden] {
+  display: none;
+}
+
+#help p {
+  margin: 0;
+  unicode-bidi: isolate;
+}
+
+#status:empty {
+  display: none;
+}
+
+#overlay > * {
+  /* Each message picks its own direction; mixed Arabic/English stays ordered */
+  unicode-bidi: isolate;
+}

@@ -1,0 +1,62 @@
+[project]
+name = "samstream-dev"
+version = "0.0.0"
+description = "Development workspace for the Samstream Home Assistant integration"
+requires-python = ">=3.14.2"
+dependencies = ["aiosamstream"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+aiosamstream = { workspace = true }
+
+[tool.uv.workspace]
+members = ["lib/aiosamstream"]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.18",
+    "pytest>=8.4",
+    "pytest-asyncio>=1.2",
+    "pytest-cov>=7.0",
+    "ruff>=0.14",
+]
+# Home Assistant test harness; does not install on native Windows, use WSL/Linux/CI.
+ha = [
+    "pytest-homeassistant-custom-component==0.13.373",
+]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "COM812", # conflicts with formatter
+    "CPY001", # no per-file copyright headers
+    "D203",   # incompatible with D211
+    "D213",   # incompatible with D212
+    "ISC001", # conflicts with formatter
+    "S105",   # CONF_* key names are not secrets
+    "TC001",  # HA idiom: runtime imports for annotations
+    "TC002",
+    "TC003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "D", "PLR2004", "ANN401", "S106", "FBT003", "RUF012"]
+"lib/aiosamstream/tests/**" = ["S101", "D", "PLR2004", "ANN401", "S106", "FBT003", "RUF012"]
+"lib/aiosamstream/src/aiosamstream/__main__.py" = ["T201"]  # CLI output
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+warn_unreachable = true
+mypy_path = "lib/aiosamstream/src"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["lib/aiosamstream/tests", "tests"]

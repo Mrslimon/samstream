@@ -1,0 +1,29 @@
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+*.egg-info/
+
+node_modules/
+tv-app/dist/
+tv-app/.buildResult/
+*.wgt
+!custom_components/samstream/bundled/*.wgt
+
+# Local stream URLs / camera credentials
+.env.local
+tv-app/.signing/
+.env.*.local
+
+# Signing material never goes in git
+*.p12
+author.xml
+distributor.xml
+
+# Pairing token written by `python -m aiosamstream pair`
+.samstream-token

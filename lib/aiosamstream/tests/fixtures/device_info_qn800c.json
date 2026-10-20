@@ -1,0 +1,33 @@
+{
+  "device": {
+    "FrameTVSupport": "false",
+    "GamePadSupport": "true",
+    "Language": "ar_AE",
+    "OS": "Tizen",
+    "PowerState": "on",
+    "TokenAuthSupport": "true",
+    "VoiceSupport": "true",
+    "countryCode": "EG",
+    "description": "Samsung DTV RCR",
+    "developerIP": "192.168.1.21",
+    "developerMode": "1",
+    "duid": "uuid:00000000-0000-0000-0000-000000000001",
+    "firmwareVersion": "Unknown",
+    "id": "uuid:00000000-0000-0000-0000-000000000002",
+    "ip": "192.168.1.11",
+    "model": "23_OSCP_8K_T09",
+    "modelName": "QA65QN800CUXEG",
+    "name": "65&quot; Neo QLED 8K",
+    "networkType": "wireless",
+    "resolution": "7680x4320",
+    "type": "Samsung SmartTV",
+    "udn": "uuid:00000000-0000-0000-0000-000000000002",
+    "wifiMac": "AA:BB:CC:00:11:22"
+  },
+  "id": "uuid:00000000-0000-0000-0000-000000000002",
+  "name": "65&quot; Neo QLED 8K",
+  "remote": "1.0",
+  "type": "Samsung SmartTV",
+  "uri": "http://192.168.1.11:8001/api/v2/",
+  "version": "2.0.25"
+}
