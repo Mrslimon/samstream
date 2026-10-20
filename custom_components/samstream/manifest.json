@@ -10,7 +10,7 @@
   ],
   "documentation": "https://github.com/islamahmady/samstream",
   "integration_type": "device",
-  "iot_class": "local_push",
+  "iot_class": "local_polling",
   "issue_tracker": "https://github.com/islamahmady/samstream/issues",
   "loggers": [
     "aiosamstream",

@@ -1,0 +1,22 @@
+{
+  "entity": {
+    "remote": {
+      "remote": {
+        "default": "mdi:remote-tv"
+      }
+    },
+    "binary_sensor": {
+      "developer_mode": {
+        "default": "mdi:code-braces-box",
+        "state": {
+          "off": "mdi:code-braces"
+        }
+      }
+    },
+    "sensor": {
+      "developer_host": {
+        "default": "mdi:ip-network"
+      }
+    }
+  }
+}

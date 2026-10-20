@@ -41,6 +41,11 @@ INFO = DeviceInfo(
 )
 
 
+@pytest.fixture(autouse=True)
+def _no_real_tv(mock_tv: MagicMock) -> None:
+    """Entries created or reloaded here set up the integration; keep it offline."""
+
+
 @pytest.fixture
 def tv() -> Generator[MagicMock]:
     """Patch the library client used by the flow."""
@@ -212,6 +217,10 @@ async def test_reauth_stores_new_token(
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reauth_successful"
     assert entry.data[CONF_TOKEN] == "token-1"
+    # The update reloads the entry in the background; let it finish, then stop
+    # its polling timer.
+    await hass.async_block_till_done()
+    await hass.config_entries.async_unload(entry.entry_id)
 
 
 async def test_reconfigure_moves_host(
@@ -228,6 +237,10 @@ async def test_reconfigure_moves_host(
     assert result["reason"] == "reconfigure_successful"
     assert entry.data[CONF_HOST] == "192.168.1.50"
     assert entry.data[CONF_TOKEN] == "old-token"
+    # The update reloads the entry in the background; let it finish, then stop
+    # its polling timer.
+    await hass.async_block_till_done()
+    await hass.config_entries.async_unload(entry.entry_id)
 
 
 async def test_reconfigure_rejects_other_tv(

@@ -12,8 +12,14 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import CONF_TOKEN, DOMAIN
+from .coordinator import SamstreamCoordinator
 
-PLATFORMS: list[Platform] = []
+PLATFORMS: list[Platform] = [
+    Platform.BINARY_SENSOR,
+    Platform.MEDIA_PLAYER,
+    Platform.REMOTE,
+    Platform.SENSOR,
+]
 
 
 @dataclass
@@ -21,6 +27,7 @@ class SamstreamData:
     """Runtime objects for one TV."""
 
     tv: SamsungTV
+    coordinator: SamstreamCoordinator
 
 
 type SamstreamConfigEntry = ConfigEntry[SamstreamData]
@@ -29,15 +36,17 @@ type SamstreamConfigEntry = ConfigEntry[SamstreamData]
 async def async_setup_entry(hass: HomeAssistant, entry: SamstreamConfigEntry) -> bool:
     """Set up Samstream from a config entry.
 
-    The TV is often off, so setup only uses what the config flow stored; talking to
-    the TV (and availability) is the coordinator's job from milestone 5.
+    A TV that is off is a normal state, not a setup failure: the device and
+    entities come from what the config flow stored, and show "off".
     """
     tv = SamsungTV(
         entry.data[CONF_HOST],
         async_get_clientsession(hass),
         token=entry.data.get(CONF_TOKEN),
     )
-    entry.runtime_data = SamstreamData(tv=tv)
+    coordinator = SamstreamCoordinator(hass, entry, tv)
+    await coordinator.async_config_entry_first_refresh()
+    entry.runtime_data = SamstreamData(tv=tv, coordinator=coordinator)
 
     connections = set()
     if mac := entry.data.get(CONF_MAC):
@@ -52,9 +61,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: SamstreamConfigEntry) ->
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     return True
 
 
+async def _async_options_updated(
+    hass: HomeAssistant, entry: SamstreamConfigEntry
+) -> None:
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: SamstreamConfigEntry) -> bool:
-    """Unload a config entry."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    """Unload a config entry and close the TV connection."""
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded:
+        await entry.runtime_data.tv.close()
+    return unloaded

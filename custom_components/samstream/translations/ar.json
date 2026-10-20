@@ -46,5 +46,47 @@
       "wrong_device": "هذا العنوان يخص تلفازًا آخر.",
       "unknown": "خطأ غير متوقع، راجع سجل Home Assistant."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "التشغيل عبر الشبكة (Wake-on-LAN)",
+        "description": "يشغّل Home Assistant التلفاز بإرسال حزمة Wake-on-LAN إلى هذا العنوان. استخدم عنوان البث لشبكتك (مثل 192.168.1.255). داخل Docker لا يصل البث العام (255.255.255.255) إلى التلفاز.",
+        "data": {
+          "wol_target": "عنوان Wake-on-LAN"
+        },
+        "data_description": {
+          "wol_target": "عنوان البث IPv4 لشبكة التلفاز، أو عنوان IP الخاص بالتلفاز نفسه."
+        }
+      }
+    },
+    "error": {
+      "invalid_address": "أدخل عنوان IPv4 مثل 192.168.1.255."
+    }
+  },
+  "entity": {
+    "remote": {
+      "remote": {
+        "name": "جهاز التحكم"
+      }
+    },
+    "binary_sensor": {
+      "developer_mode": {
+        "name": "وضع المطوّر"
+      }
+    },
+    "sensor": {
+      "developer_host": {
+        "name": "مضيف المطوّر"
+      }
+    }
+  },
+  "exceptions": {
+    "cannot_connect": {
+      "message": "تعذّر الوصول إلى التلفاز: {error}"
+    },
+    "auth_failed": {
+      "message": "لم يعد التلفاز يقبل Home Assistant. أعد ربطه من صفحة التكامل."
+    }
   }
 }

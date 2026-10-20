@@ -10,6 +10,7 @@ SAMSTREAM_APP_ID: Final = f"{SAMSTREAM_PACKAGE_ID}.Samstream"
 WS_PORT_SECURE: Final = 8002
 REST_PORT: Final = 8001
 SDB_PORT: Final = 26101
+UPNP_PORT: Final = 9197
 
 # Must stay identical across connections, the TV binds trust to name + token.
 CLIENT_NAME: Final = "Home Assistant Samstream"
