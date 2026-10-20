@@ -18,8 +18,10 @@ classifiers = [
 ]
 dependencies = [
     "aiohttp>=3.12",
-    "samsungtvws[async]==3.0.6",
+    "samsungtvws[async]>=2.7.2,<4",  # HA core samsungtv pins 2.7.2
     "websockets>=15",
+    # samsungtvws 2.7.x imports it without declaring it
+    "async-timeout>=4",
 ]
 
 [project.urls]

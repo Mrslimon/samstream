@@ -27,3 +27,6 @@ distributor.xml
 
 # Pairing token written by `python -m aiosamstream pair`
 .samstream-token
+
+# HA URL + long-lived token for dev deploys
+.env.ha

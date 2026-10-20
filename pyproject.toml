@@ -46,9 +46,11 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "D", "PLR2004", "ANN401", "S106", "FBT003", "RUF012"]
+"tests/**" = ["S101", "D", "PLR2004", "ANN401", "S106", "FBT003", "RUF012", "ARG001"]
 "lib/aiosamstream/tests/**" = ["S101", "D", "PLR2004", "ANN401", "S106", "FBT003", "RUF012"]
 "lib/aiosamstream/src/aiosamstream/__main__.py" = ["T201"]  # CLI output
+"custom_components/**" = ["ARG002"]  # HA step signatures take user_input
+"scripts/**" = ["T201", "D103", "INP001", "S603", "S607", "S310", "PLR2004", "PTH111", "E501"]  # dev tooling
 
 [tool.mypy]
 python_version = "3.14"
@@ -56,7 +58,19 @@ strict = true
 warn_unreachable = true
 mypy_path = "lib/aiosamstream/src"
 
+# Type-check against HA, but do not report HA's own internals.
+[[tool.mypy.overrides]]
+module = ["homeassistant.*"]
+follow_imports = "silent"
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["lib/aiosamstream/tests", "tests"]
+# Two packages are named `tests` (library and integration).
+addopts = "--import-mode=importlib"
+pythonpath = ["."]
+
+[tool.coverage.run]
+# Developer CLI, exercised by hand against a real TV.
+omit = ["*/aiosamstream/__main__.py"]

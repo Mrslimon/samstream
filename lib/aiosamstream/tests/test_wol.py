@@ -25,6 +25,8 @@ def test_magic_packet_layout() -> None:
     assert packet[6:] == bytes.fromhex("aabbcc001122") * 16
 
 
+# Real UDP on localhost; the HA test plugin blocks sockets unless allowed.
+@pytest.mark.enable_socket
 async def test_send_reaches_unicast_target() -> None:
     receiver = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     receiver.bind(("127.0.0.1", 0))

@@ -3,17 +3,48 @@
     "step": {
       "user": {
         "title": "Connect your Samsung TV",
-        "description": "Enter the IP address or hostname of the TV. Keep the TV on, you will be asked to allow the connection once.",
+        "description": "Turn the TV on, then enter its IP address. You will be asked to allow the connection on the TV once.",
         "data": {
-          "host": "[%key:common::config_flow::data::host%]"
+          "host": "Host"
+        },
+        "data_description": {
+          "host": "IP address or hostname of the Samsung TV, for example 192.168.1.11."
+        }
+      },
+      "pair_failed": {
+        "title": "Pairing with {name} failed",
+        "description": "Make sure the TV is on and you can see it, then select Submit to try again."
+      },
+      "reauth_confirm": {
+        "title": "Pair {name} again",
+        "description": "The TV no longer accepts Home Assistant. Stand by the TV, select Submit, then choose Allow on the TV."
+      },
+      "reconfigure": {
+        "title": "Change the TV address",
+        "description": "Enter the new IP address of the same TV.",
+        "data": {
+          "host": "Host"
         },
         "data_description": {
           "host": "IP address or hostname of the Samsung TV."
         }
       }
     },
+    "progress": {
+      "wait_for_allow": "Look at {name}: a message asks whether to allow \"Home Assistant Samstream\". Choose **Allow** with the remote. Waiting up to 60 seconds."
+    },
+    "error": {
+      "cannot_connect": "Cannot reach the TV. Check that it is on and that the IP address is correct.",
+      "pairing_denied": "The TV refused the connection. If you chose Deny by mistake, try again and choose Allow.",
+      "pairing_timeout": "Nobody accepted the request on the TV in time.",
+      "unknown": "Unexpected error, see the Home Assistant log."
+    },
     "abort": {
-      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+      "already_configured": "This TV is already set up. Its address has been updated if it changed.",
+      "reauth_successful": "The TV is paired again.",
+      "reconfigure_successful": "The TV address has been updated.",
+      "wrong_device": "That address belongs to a different TV.",
+      "unknown": "Unexpected error, see the Home Assistant log."
     }
   }
 }

@@ -1,14 +1,23 @@
 {
   "domain": "samstream",
   "name": "Samstream",
-  "codeowners": ["@islamahmady"],
+  "codeowners": [
+    "@islamahmady"
+  ],
   "config_flow": true,
-  "dependencies": ["http"],
+  "dependencies": [
+    "http"
+  ],
   "documentation": "https://github.com/islamahmady/samstream",
   "integration_type": "device",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/islamahmady/samstream/issues",
-  "loggers": ["aiosamstream", "samsungtvws"],
-  "requirements": [],
+  "loggers": [
+    "aiosamstream",
+    "samsungtvws"
+  ],
+  "requirements": [
+    "aiosamstream==0.0.1"
+  ],
   "version": "0.0.1"
 }
