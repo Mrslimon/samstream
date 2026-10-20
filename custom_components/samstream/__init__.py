@@ -4,15 +4,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import voluptuous as vol
 from aiosamstream import SamsungTV
+from homeassistant.components.media_player.const import DOMAIN as MEDIA_PLAYER_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_MAC, CONF_MODEL, CONF_NAME, Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import service
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.typing import ConfigType, VolDictType
 
-from .const import CONF_TOKEN, DOMAIN
+from .const import ATTR_APP_ID, CONF_TOKEN, DOMAIN
 from .coordinator import SamstreamCoordinator
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
@@ -31,6 +38,24 @@ class SamstreamData:
 
 
 type SamstreamConfigEntry = ConfigEntry[SamstreamData]
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the actions once, independent of config entries."""
+    app_schema: VolDictType = {vol.Required(ATTR_APP_ID): cv.string}
+    for name, method in (
+        ("launch_app", "async_launch_app"),
+        ("close_app", "async_close_app"),
+    ):
+        service.async_register_platform_entity_service(
+            hass,
+            DOMAIN,
+            name,
+            entity_domain=MEDIA_PLAYER_DOMAIN,
+            schema=app_schema,
+            func=method,
+        )
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: SamstreamConfigEntry) -> bool:

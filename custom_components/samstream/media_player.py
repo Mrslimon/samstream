@@ -1,8 +1,9 @@
-"""The TV as a media player: power, volume and playback keys."""
+"""The TV as a media player: power, volume, playback keys and apps."""
 
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Any
 
 from homeassistant.components.media_player import (
     MediaPlayerDeviceClass,
@@ -11,12 +12,15 @@ from homeassistant.components.media_player import (
 from homeassistant.components.media_player.const import (
     MediaPlayerEntityFeature,
     MediaPlayerState,
+    MediaType,
 )
 from homeassistant.const import CONF_MAC
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import SamstreamConfigEntry
+from .const import DOMAIN
 from .coordinator import SamstreamCoordinator
 from .entity import SamstreamEntity
 
@@ -31,6 +35,8 @@ FEATURES = (
     | MediaPlayerEntityFeature.PLAY
     | MediaPlayerEntityFeature.PAUSE
     | MediaPlayerEntityFeature.STOP
+    | MediaPlayerEntityFeature.SELECT_SOURCE
+    | MediaPlayerEntityFeature.PLAY_MEDIA
 )
 
 
@@ -56,10 +62,30 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
 
     @property
     def state(self) -> MediaPlayerState:
-        """On or off; the current app arrives in milestone 6."""
+        """On or off: the TV does not report whether an app is playing."""
         return (
             MediaPlayerState.ON if self.coordinator.data.is_on else MediaPlayerState.OFF
         )
+
+    @property
+    def app_id(self) -> str | None:
+        """Tizen ID of the app on screen."""
+        return self.coordinator.data.app_id
+
+    @property
+    def app_name(self) -> str | None:
+        """Name of the app on screen."""
+        return self.coordinator.data.app_name
+
+    @property
+    def source(self) -> str | None:
+        """The app on screen, as a source."""
+        return self.coordinator.data.app_name
+
+    @property
+    def source_list(self) -> list[str]:
+        """Installed apps the TV told us about."""
+        return sorted(self.coordinator.apps.values(), key=str.casefold)
 
     @property
     def volume_level(self) -> float | None:
@@ -124,6 +150,50 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
     async def async_media_stop(self) -> None:
         """Stop key."""
         await self._async_key("KEY_STOP")
+
+    async def async_select_source(self, source: str) -> None:
+        """Launch the app with this name."""
+        for app_id, name in self.coordinator.apps.items():
+            if name == source:
+                await self.async_launch_app(app_id)
+                return
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="unknown_source",
+            translation_placeholders={"source": source},
+        )
+
+    async def async_play_media(
+        self, media_type: MediaType | str, media_id: str, **kwargs: Any
+    ) -> None:
+        """`media_content_type: app`, `media_content_id: <Tizen app ID>`."""
+        if media_type != MediaType.APP:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="unsupported_media_type",
+                translation_placeholders={"media_type": str(media_type)},
+            )
+        await self.async_launch_app(media_id)
+
+    async def async_launch_app(self, app_id: str) -> None:
+        """Start or bring an app to the front (also the `launch_app` action)."""
+        await self._async_call(self.coordinator.tv.launch_app(app_id))
+        # Apps need ~3 s to come to the front; show it now, the next poll confirms.
+        self.coordinator.async_set_updated_data(
+            replace(
+                self.coordinator.data,
+                app_id=app_id,
+                app_name=self.coordinator.apps.get(app_id, app_id),
+            )
+        )
+
+    async def async_close_app(self, app_id: str) -> None:
+        """Close an app (the `close_app` action); the TV returns to what was before."""
+        await self._async_call(self.coordinator.tv.close_app(app_id))
+        if self.coordinator.data.app_id == app_id:
+            self.coordinator.async_set_updated_data(
+                replace(self.coordinator.data, app_id=None, app_name=None)
+            )
 
     async def _async_key(self, key: str) -> None:
         await self._async_call(self.coordinator.tv.send_keys([key]))

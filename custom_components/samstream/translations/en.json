@@ -53,10 +53,12 @@
         "title": "Wake-on-LAN",
         "description": "Home Assistant wakes the TV with a Wake-on-LAN packet sent to this address. Use your network's broadcast address (for example 192.168.1.255). Inside Docker a global broadcast (255.255.255.255) does not reach the TV.",
         "data": {
-          "wol_target": "Wake-on-LAN address"
+          "wol_target": "Wake-on-LAN address",
+          "extra_apps": "Extra app IDs"
         },
         "data_description": {
-          "wol_target": "IPv4 broadcast address of the TV's network, or the TV's own IP."
+          "wol_target": "IPv4 broadcast address of the TV's network, or the TV's own IP.",
+          "extra_apps": "Tizen app IDs missing from the built-in list, separated by spaces or commas. Find an app's ID in the current app sensor while it is open."
         }
       }
     },
@@ -78,6 +80,9 @@
     "sensor": {
       "developer_host": {
         "name": "Developer host"
+      },
+      "current_app": {
+        "name": "Current app"
       }
     }
   },
@@ -87,6 +92,34 @@
     },
     "auth_failed": {
       "message": "The TV no longer accepts Home Assistant. Pair it again from the integration page."
+    },
+    "unknown_source": {
+      "message": "No installed app is called {source}."
+    },
+    "unsupported_media_type": {
+      "message": "Only media type \"app\" (a Tizen app ID) is supported, not {media_type}."
+    }
+  },
+  "services": {
+    "launch_app": {
+      "name": "Launch app",
+      "description": "Opens an app on the TV, or brings it to the front.",
+      "fields": {
+        "app_id": {
+          "name": "App ID",
+          "description": "Tizen app ID, for example 111299001912 for YouTube."
+        }
+      }
+    },
+    "close_app": {
+      "name": "Close app",
+      "description": "Closes an app; the TV returns to what was on screen before.",
+      "fields": {
+        "app_id": {
+          "name": "App ID",
+          "description": "Tizen app ID of the app to close."
+        }
+      }
     }
   }
 }

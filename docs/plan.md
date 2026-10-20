@@ -204,3 +204,9 @@ Source: PatrickSt1991/Samsung-Jellyfin-Installer (MIT), `Apps2Samsung.Core/Certi
 - **AVPlay on this TV cannot play RTSP at all.** Every variant failed with `InvalidAccessError`, and HLS through AVPlay freezes after the first frame.
 - **go2rtc WebSocket MSE (fMP4 remux, video only) works:** first frame in 296 ms (H.264) and 953 ms (H.265), playing smoothly. FLAC audio breaks it, so audio must be AAC (ffmpeg transcode in go2rtc) and stays optional.
 - **Architecture change:** milestone 8 plays MSE, not AVPlay. Milestone 10 adds an HA WebSocket proxy view to HA's built-in go2rtc, so the TV never talks to go2rtc directly. The proxy also avoids go2rtc's same-origin check, which rejects the TV app's `file://` origin.
+
+### Roadmap addition (after milestone 6, 2026-10-21)
+- **7c. Revisit app detection with the full app list.**
+  - **Problem today:** 2020+ firmware does not answer `ed.installedApp.get`, so milestone 6 probes a catalog of known IDs, plus the user's "Extra app IDs" option, through `GET /api/v2/applications/<id>`. The current app is the one reporting `visible: true` (YouTube was confirmed on the QN800C).
+  - **Fix:** once milestone 7's sdb client works, read the real installed list from the TV (`vd_applist` / `pkgcmd`) and feed the scan from it. Drop the catalog to a fallback for TVs without Developer Mode, and remove the need for manual extra IDs.
+  - **Also re-check:** whether the full list exposes home / Live TV / HDMI, which are "unknown" today, and whether foreground detection can avoid polling every app ID.

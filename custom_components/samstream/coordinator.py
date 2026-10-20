@@ -1,18 +1,31 @@
-"""Poll the TV's power state and volume."""
+"""Poll the TV's power state, volume and the app on screen."""
 
 from __future__ import annotations
 
 import ipaddress
 import logging
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from aiosamstream import DeviceInfo, SamstreamConnectionError, SamstreamError, SamsungTV
+from aiosamstream import (
+    KNOWN_APPS,
+    DeviceInfo,
+    SamstreamConnectionError,
+    SamstreamError,
+    SamsungTV,
+)
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import CONF_WOL_TARGET, DOMAIN, SCAN_INTERVAL
+from .const import (
+    APP_SCAN_INTERVAL,
+    CONF_EXTRA_APPS,
+    CONF_WOL_TARGET,
+    DOMAIN,
+    SCAN_INTERVAL,
+)
 
 if TYPE_CHECKING:
     from . import SamstreamConfigEntry
@@ -30,6 +43,14 @@ class SamstreamState:
     muted: bool | None = None
     # Last device info the TV reported; kept while it is off.
     info: DeviceInfo | None = None
+    # App in the foreground; None for home, live TV, HDMI or an unknown app.
+    app_id: str | None = None
+    app_name: str | None = None
+
+
+def parse_app_ids(text: str) -> list[str]:
+    """Split the "extra app IDs" option (comma, space or newline separated)."""
+    return [part for part in text.replace(",", " ").split() if part]
 
 
 def default_wol_target(host: str) -> str:
@@ -62,6 +83,9 @@ class SamstreamCoordinator(DataUpdateCoordinator[SamstreamState]):
             update_interval=SCAN_INTERVAL,
         )
         self.tv = tv
+        # Installed apps (id -> name the TV reports), refreshed while the TV is on.
+        self.apps: dict[str, str] = {}
+        self._apps_scanned_at: float | None = None
 
     @property
     def wol_target(self) -> str:
@@ -94,4 +118,41 @@ class SamstreamCoordinator(DataUpdateCoordinator[SamstreamState]):
             muted = await self.tv.rendering.get_mute()
         except SamstreamError as err:
             _LOGGER.debug("No UPnP volume from %s: %s", self.config_entry.title, err)
-        return SamstreamState(is_on=True, volume=volume, muted=muted, info=info)
+
+        await self._async_scan_apps()
+        app_id = app_name = None
+        try:
+            foreground = await self.tv.foreground_app(self.apps)
+        except SamstreamError as err:
+            _LOGGER.debug("No app status from %s: %s", self.config_entry.title, err)
+        else:
+            if foreground is not None:
+                app_id, app_name = foreground.app_id, foreground.name
+        return SamstreamState(
+            is_on=True,
+            volume=volume,
+            muted=muted,
+            info=info,
+            app_id=app_id,
+            app_name=app_name,
+        )
+
+    async def _async_scan_apps(self) -> None:
+        """Find installed apps: on first contact, then every APP_SCAN_INTERVAL.
+
+        The TV cannot list its apps, so every known ID is asked about.
+        """
+        now = time.monotonic()
+        if (
+            self._apps_scanned_at is not None
+            and now - self._apps_scanned_at < APP_SCAN_INTERVAL.total_seconds()
+        ):
+            return
+        extra = parse_app_ids(self.config_entry.options.get(CONF_EXTRA_APPS, ""))
+        try:
+            installed = await self.tv.installed_apps([*KNOWN_APPS, *extra])
+        except SamstreamError as err:
+            _LOGGER.debug("App scan on %s failed: %s", self.config_entry.title, err)
+            return
+        self.apps = {app.app_id: app.name for app in installed}
+        self._apps_scanned_at = now

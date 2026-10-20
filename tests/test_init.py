@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.samstream.const import CONF_WOL_TARGET, DOMAIN
+from custom_components.samstream.const import CONF_EXTRA_APPS, CONF_WOL_TARGET, DOMAIN
 
 from .conftest import MAC, UUID
 
@@ -56,7 +56,10 @@ async def test_options_change_reloads(
     )
     await hass.async_block_till_done()
 
-    assert setup_entry.options == {CONF_WOL_TARGET: "192.168.1.11"}
+    assert setup_entry.options == {
+        CONF_WOL_TARGET: "192.168.1.11",
+        CONF_EXTRA_APPS: "",
+    }
     assert setup_entry.state is ConfigEntryState.LOADED
     coordinator = setup_entry.runtime_data.coordinator
     assert coordinator.wol_target == "192.168.1.11"

@@ -1,4 +1,4 @@
-"""Developer host: the one machine the TV accepts app installs from."""
+"""Current app, and the developer host (the machine allowed to install apps)."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import SamstreamConfigEntry
+from .const import ATTR_APP_ID
 from .coordinator import SamstreamCoordinator
 from .entity import SamstreamEntity
 
@@ -19,8 +20,31 @@ async def async_setup_entry(
     entry: SamstreamConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Add the developer host sensor."""
-    async_add_entities([DeveloperHostSensor(entry.runtime_data.coordinator)])
+    """Add the current app and developer host sensors."""
+    coordinator = entry.runtime_data.coordinator
+    async_add_entities(
+        [CurrentAppSensor(coordinator), DeveloperHostSensor(coordinator)]
+    )
+
+
+class CurrentAppSensor(SamstreamEntity, SensorEntity):
+    """Name of the app on screen, for automations ("is Netflix playing?")."""
+
+    _attr_translation_key = "current_app"
+
+    def __init__(self, coordinator: SamstreamCoordinator) -> None:
+        """Create the sensor for the coordinator's TV."""
+        super().__init__(coordinator, "current_app")
+
+    @property
+    def native_value(self) -> str | None:
+        """App name; unknown for home, live TV, HDMI or while off."""
+        return self.coordinator.data.app_name
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str | None]:
+        """The Tizen app ID, for `samstream.launch_app` / `close_app`."""
+        return {ATTR_APP_ID: self.coordinator.data.app_id}
 
 
 class DeveloperHostSensor(SamstreamEntity, SensorEntity):

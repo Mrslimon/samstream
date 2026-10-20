@@ -4,7 +4,7 @@ from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from aiosamstream import DeviceInfo
+from aiosamstream import AppStatus, DeviceInfo
 from homeassistant.const import CONF_HOST, CONF_MAC, CONF_MODEL, CONF_NAME
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -35,6 +35,10 @@ TV_INFO = DeviceInfo(
 )
 
 
+YOUTUBE = AppStatus("111299001912", "YouTube", True, False, "2.1.527")
+NETFLIX = AppStatus("3201907018807", "Netflix", True, False, "80.24.16020")
+
+
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
     """Allow loading custom_components in every test."""
@@ -54,6 +58,10 @@ def mock_tv() -> Generator[MagicMock]:
     tv.rendering.get_mute = AsyncMock(return_value=False)
     tv.rendering.set_volume = AsyncMock()
     tv.rendering.set_mute = AsyncMock()
+    tv.installed_apps = AsyncMock(return_value=[YOUTUBE, NETFLIX])
+    tv.foreground_app = AsyncMock(return_value=None)
+    tv.launch_app = AsyncMock()
+    tv.close_app = AsyncMock()
     with patch("custom_components.samstream.SamsungTV", return_value=tv):
         yield tv
 

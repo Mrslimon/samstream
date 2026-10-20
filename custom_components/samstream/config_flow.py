@@ -27,8 +27,8 @@ from homeassistant.const import CONF_HOST, CONF_MAC, CONF_MODEL, CONF_NAME
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import CONF_TOKEN, CONF_WOL_TARGET, DOMAIN
-from .coordinator import default_wol_target
+from .const import CONF_EXTRA_APPS, CONF_TOKEN, CONF_WOL_TARGET, DOMAIN
+from .coordinator import default_wol_target, parse_app_ids
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -218,12 +218,12 @@ class SamstreamConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class SamstreamOptionsFlow(OptionsFlow):
-    """Wake-on-LAN address; Docker bridge networks need a directed broadcast."""
+    """Wake-on-LAN address and extra app IDs."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Ask for the Wake-on-LAN target."""
+        """Ask for the Wake-on-LAN target and apps missing from the catalog."""
         errors: dict[str, str] = {}
         if user_input is not None:
             target = user_input[CONF_WOL_TARGET].strip()
@@ -232,14 +232,23 @@ class SamstreamOptionsFlow(OptionsFlow):
             except ValueError:
                 errors[CONF_WOL_TARGET] = "invalid_address"
             else:
-                return self.async_create_entry(data={CONF_WOL_TARGET: target})
+                extra = " ".join(parse_app_ids(user_input.get(CONF_EXTRA_APPS, "")))
+                return self.async_create_entry(
+                    data={CONF_WOL_TARGET: target, CONF_EXTRA_APPS: extra}
+                )
         current = self.config_entry.options.get(CONF_WOL_TARGET) or default_wol_target(
             self.config_entry.data[CONF_HOST]
         )
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
-                {vol.Required(CONF_WOL_TARGET, default=current): str}
+                {
+                    vol.Required(CONF_WOL_TARGET, default=current): str,
+                    vol.Optional(
+                        CONF_EXTRA_APPS,
+                        default=self.config_entry.options.get(CONF_EXTRA_APPS, ""),
+                    ): str,
+                }
             ),
             errors=errors,
         )

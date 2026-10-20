@@ -9,6 +9,11 @@ CONF_TOKEN: Final = "token"
 CONF_TV_SECRET: Final = "tv_secret"
 CONF_WOL_TARGET: Final = "wol_target"
 CONF_HA_URL: Final = "ha_url"
+CONF_EXTRA_APPS: Final = "extra_apps"
+
+ATTR_APP_ID: Final = "app_id"
 
 # Power state only: a TV is polled cheaply over REST, volume over UPnP when on.
 SCAN_INTERVAL: Final = timedelta(seconds=10)
+# Installed apps rarely change; rescanning ~18 known IDs takes about 0.5 s.
+APP_SCAN_INTERVAL: Final = timedelta(minutes=30)

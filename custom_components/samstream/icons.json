@@ -16,7 +16,18 @@
     "sensor": {
       "developer_host": {
         "default": "mdi:ip-network"
+      },
+      "current_app": {
+        "default": "mdi:application"
       }
+    }
+  },
+  "services": {
+    "launch_app": {
+      "service": "mdi:open-in-app"
+    },
+    "close_app": {
+      "service": "mdi:close-box-outline"
     }
   }
 }

@@ -1,17 +1,22 @@
-"""Samsung TV control: pairing, device information, power and remote keys."""
+"""Samsung TV control: pairing, device info, power, remote keys and apps."""
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 
 import aiohttp
 from samsungtvws.async_remote import SamsungTVWSAsyncRemote
 from samsungtvws.async_rest import SamsungTVAsyncRest
 from samsungtvws.command import SamsungTVCommand
-from samsungtvws.exceptions import ConnectionFailure, HttpApiError, UnauthorizedError
-from samsungtvws.remote import SendRemoteKey
+from samsungtvws.exceptions import (
+    ConnectionFailure,
+    HttpApiError,
+    ResponseError,
+    UnauthorizedError,
+)
+from samsungtvws.remote import ChannelEmitCommand, SendRemoteKey
 from websockets.exceptions import WebSocketException
 
 from .const import CLIENT_NAME, REST_PORT, WS_PORT_SECURE
@@ -21,7 +26,7 @@ from .exceptions import (
     SamstreamError,
     SamstreamTimeoutError,
 )
-from .models import DeviceInfo
+from .models import AppStatus, DeviceInfo
 from .upnp import RenderingControl
 from .wol import DEFAULT_TARGET, send_magic_packet
 
@@ -30,6 +35,9 @@ DEFAULT_TIMEOUT = 10.0
 PAIRING_TIMEOUT = 60.0
 # The TV drops key presses sent back to back.
 KEY_DELAY = 0.3
+# The TV's REST server answers empty bodies when hit with many parallel requests.
+REST_CONCURRENCY = 3
+REST_RETRY_DELAY = 0.3
 
 _CONNECTION_ERRORS = (ConnectionFailure, OSError, WebSocketException, TimeoutError)
 
@@ -55,6 +63,7 @@ class SamsungTV:
         self.rendering = RenderingControl(host, session)
         self._remote: SamsungTVWSAsyncRemote | None = None
         self._remote_lock = asyncio.Lock()
+        self._rest_slots = asyncio.Semaphore(REST_CONCURRENCY)
 
     @property
     def token(self) -> str | None:
@@ -63,15 +72,85 @@ class SamsungTV:
 
     async def device_info(self) -> DeviceInfo:
         """Read model, network and Developer Mode details (no pairing needed)."""
-        rest = SamsungTVAsyncRest(
-            self.host, session=self._session, port=REST_PORT, timeout=self._timeout
-        )
         try:
-            data = await rest.rest_device_info()
+            data = await self._rest().rest_device_info()
         except (HttpApiError, TimeoutError) as err:
             msg = f"Cannot reach {self.host}:{REST_PORT}"
             raise SamstreamConnectionError(msg) from err
         return DeviceInfo.from_api(data)
+
+    async def app_status(self, app_id: str) -> AppStatus | None:
+        """Status of one app; None when it is not installed."""
+        async with self._rest_slots:
+            for attempt in range(2):
+                try:
+                    data = await self._rest().rest_app_status(app_id)
+                    break
+                except ResponseError as err:
+                    if attempt:
+                        msg = f"{self.host} gave no usable answer about {app_id}"
+                        raise SamstreamConnectionError(msg) from err
+                    await asyncio.sleep(REST_RETRY_DELAY)
+                except (HttpApiError, TimeoutError) as err:
+                    msg = f"Cannot reach {self.host}:{REST_PORT}"
+                    raise SamstreamConnectionError(msg) from err
+        if not isinstance(data, dict) or "id" not in data:
+            return None  # {"code": 404, ...}
+        return AppStatus.from_api(app_id, data)
+
+    async def installed_apps(self, app_ids: Iterable[str]) -> list[AppStatus]:
+        """Return which of `app_ids` are installed (a few requests at a time).
+
+        An app the TV keeps failing to answer about is left out rather than
+        failing the whole scan.
+        """
+        results = await asyncio.gather(
+            *(self.app_status(i) for i in dict.fromkeys(app_ids)),
+            return_exceptions=True,
+        )
+        if results and all(isinstance(r, BaseException) for r in results):
+            msg = f"Cannot read apps from {self.host}"
+            raise SamstreamConnectionError(msg) from results[0]  # type: ignore[misc]
+        return [r for r in results if isinstance(r, AppStatus)]
+
+    async def foreground_app(self, app_ids: Iterable[str]) -> AppStatus | None:
+        """Return the app on screen among `app_ids`; None for home or live TV."""
+        for status in await self.installed_apps(app_ids):
+            if status.visible:
+                return status
+        return None
+
+    async def launch_app(self, app_id: str, *, meta_tag: str | None = None) -> None:
+        """Start (or bring to front) an app.
+
+        REST cannot pass data, so a `meta_tag` (e.g. the Samstream stream payload)
+        goes as a DEEP_LINK over the remote channel, where the app reads it from
+        its launch request.
+        """
+        if meta_tag is not None:
+            await self._send_commands(
+                [ChannelEmitCommand.launch_app(app_id, "DEEP_LINK", meta_tag)]
+            )
+            return
+        try:
+            # Typed as a dict upstream, but the TV answers a bare `true`.
+            started: object = await self._rest().rest_app_run(app_id)
+        except (HttpApiError, TimeoutError) as err:
+            msg = f"Cannot reach {self.host}:{REST_PORT}"
+            raise SamstreamConnectionError(msg) from err
+        if started is not True:
+            # Some native apps refuse REST launches; the remote channel works.
+            await self._send_commands(
+                [ChannelEmitCommand.launch_app(app_id, "NATIVE_LAUNCH")]
+            )
+
+    async def close_app(self, app_id: str) -> None:
+        """Close an app; the TV returns to what was on screen before it."""
+        try:
+            await self._rest().rest_app_close(app_id)
+        except (HttpApiError, TimeoutError) as err:
+            msg = f"Cannot reach {self.host}:{REST_PORT}"
+            raise SamstreamConnectionError(msg) from err
 
     async def pair(self, accept_within: float = PAIRING_TIMEOUT) -> str | None:
         """Open the remote channel, triggering the "Allow" popup if not yet trusted.
@@ -123,6 +202,11 @@ class SamsungTV:
                     commands.extend(SendRemoteKey.hold(key, hold))
                 else:
                     commands.append(SendRemoteKey.click(key))
+        await self._send_commands(commands, delay=delay)
+
+    async def _send_commands(
+        self, commands: Sequence[SamsungTVCommand], *, delay: float = KEY_DELAY
+    ) -> None:
         async with self._remote_lock:
             # The TV closes idle connections, so a failed send gets one fresh retry.
             for attempt in range(2):
@@ -136,7 +220,7 @@ class SamsungTV:
                 except _CONNECTION_ERRORS as err:
                     await self._drop_remote()
                     if attempt:
-                        msg = f"Cannot send keys to {self.host}"
+                        msg = f"Cannot send commands to {self.host}"
                         raise SamstreamConnectionError(msg) from err
                 else:
                     return
@@ -165,6 +249,11 @@ class SamsungTV:
         """Close the kept-open remote connection."""
         async with self._remote_lock:
             await self._drop_remote()
+
+    def _rest(self) -> SamsungTVAsyncRest:
+        return SamsungTVAsyncRest(
+            self.host, session=self._session, port=REST_PORT, timeout=self._timeout
+        )
 
     def _new_remote(self) -> SamsungTVWSAsyncRemote:
         return SamsungTVWSAsyncRemote(

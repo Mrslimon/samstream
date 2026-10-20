@@ -25,6 +25,30 @@ def _text(value: object) -> str | None:
 
 
 @dataclass(frozen=True, slots=True)
+class AppStatus:
+    """What `GET /api/v2/applications/<id>` reports for an installed app."""
+
+    app_id: str
+    name: str
+    # Tizen keeps many apps preloaded, so `running` says little; `visible` is
+    # the app on screen.
+    running: bool
+    visible: bool
+    version: str | None
+
+    @classmethod
+    def from_api(cls, app_id: str, data: Mapping[str, Any]) -> AppStatus:
+        """Build from the REST payload."""
+        return cls(
+            app_id=app_id,
+            name=_text(data.get("name")) or app_id,
+            running=data.get("running") is True,
+            visible=data.get("visible") is True,
+            version=_text(data.get("version")),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class DeviceInfo:
     """What the TV reports on `GET http://<tv>:8001/api/v2/`."""
 

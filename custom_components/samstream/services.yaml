@@ -1,0 +1,23 @@
+launch_app:
+  target:
+    entity:
+      integration: samstream
+      domain: media_player
+  fields:
+    app_id:
+      required: true
+      example: "111299001912"
+      selector:
+        text:
+
+close_app:
+  target:
+    entity:
+      integration: samstream
+      domain: media_player
+  fields:
+    app_id:
+      required: true
+      example: "111299001912"
+      selector:
+        text:
