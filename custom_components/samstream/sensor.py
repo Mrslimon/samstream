@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import SamstreamConfigEntry
-from .const import ATTR_APP_ID
+from .const import ATTR_APP_ID, SCREEN_HOME, SCREEN_OTHER
 from .coordinator import SamstreamCoordinator
 from .entity import SamstreamEntity
 
@@ -28,18 +28,34 @@ async def async_setup_entry(
 
 
 class CurrentAppSensor(SamstreamEntity, SensorEntity):
-    """Name of the app on screen, for automations ("is Netflix playing?")."""
+    """Name of the app on screen, for automations ("is Netflix playing?").
+
+    With no app in front it reports `home` when the TV listed all its apps (so it
+    must be the home screen, live TV or an input) and `other` when only the
+    catalog is known (could also be an app the catalog lacks).
+    """
 
     _attr_translation_key = "current_app"
+    _attr_device_class = SensorDeviceClass.ENUM
 
     def __init__(self, coordinator: SamstreamCoordinator) -> None:
         """Create the sensor for the coordinator's TV."""
         super().__init__(coordinator, "current_app")
 
     @property
+    def options(self) -> list[str]:
+        """Installed app names plus the two translated states."""
+        return [*sorted(set(self.coordinator.apps.values())), SCREEN_HOME, SCREEN_OTHER]
+
+    @property
     def native_value(self) -> str | None:
-        """App name; unknown for home, live TV, HDMI or while off."""
-        return self.coordinator.data.app_name
+        """App name, `home`, `other`; unknown while the TV is off."""
+        data = self.coordinator.data
+        if not data.is_on:
+            return None
+        if data.app_name:
+            return data.app_name
+        return SCREEN_HOME if self.coordinator.app_source == "tv" else SCREEN_OTHER
 
     @property
     def extra_state_attributes(self) -> dict[str, str | None]:

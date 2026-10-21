@@ -24,6 +24,10 @@ CONF_DISTRIBUTOR_P12: Final = "distributor_p12"
 ATTR_APP_ID: Final = "app_id"
 ATTR_PATH: Final = "path"
 
+# Current app sensor states when no known app is in front.
+SCREEN_HOME: Final = "home"
+SCREEN_OTHER: Final = "other"
+
 # Power state only: a TV is polled cheaply over REST, volume over UPnP when on.
 SCAN_INTERVAL: Final = timedelta(seconds=10)
 # Installed apps rarely change; rescanning ~18 known IDs takes about 0.5 s.

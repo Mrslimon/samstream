@@ -159,7 +159,11 @@
         "name": "Developer host"
       },
       "current_app": {
-        "name": "Current app"
+        "name": "Current app",
+        "state": {
+          "home": "Home / Live TV",
+          "other": "Other app"
+        }
       }
     },
     "button": {

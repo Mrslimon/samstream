@@ -44,7 +44,7 @@ async def test_sources_and_app_on_screen(
     state = hass.states.get(TV)
     assert state.attributes["source_list"] == ["Netflix", "YouTube"]
     assert "source" not in state.attributes
-    assert hass.states.get(CURRENT_APP).state == "unknown"
+    assert hass.states.get(CURRENT_APP).state == "other"
 
     mock_tv.foreground_app.return_value = replace(NETFLIX, visible=True)
     await _poll(hass)
@@ -159,7 +159,7 @@ async def test_launch_and_close_actions(
         blocking=True,
     )
     mock_tv.close_app.assert_awaited_once_with("3201907018807")
-    assert hass.states.get(CURRENT_APP).state == "unknown"
+    assert hass.states.get(CURRENT_APP).state == "other"
 
 
 @pytest.mark.usefixtures("setup_entry")
@@ -186,7 +186,7 @@ async def test_app_status_failure_keeps_tv_on(
     await _poll(hass)
 
     assert hass.states.get(TV).state == "on"
-    assert hass.states.get(CURRENT_APP).state == "unknown"
+    assert hass.states.get(CURRENT_APP).state == "other"
 
 
 async def test_failed_scan_retried_next_poll(
@@ -223,6 +223,10 @@ async def test_full_app_list_from_sdb(
     # Only the extra ID the TV did not list is probed over REST.
     mock_tv.installed_apps.assert_awaited_once_with(["my.extra"])
     assert hass.states.get(TV).attributes["source_list"] == ["YouTube", "شاهد MBC"]
+    # Every app is known, so "no app in front" means home / live TV.
+    sensor = hass.states.get(CURRENT_APP)
+    assert sensor.state == "home"
+    assert sensor.attributes["options"] == ["YouTube", "شاهد MBC", "home", "other"]
 
 
 @pytest.mark.usefixtures("setup_entry")
@@ -254,4 +258,13 @@ async def test_last_app_checked_first(hass: HomeAssistant, mock_tv: MagicMock) -
     mock_tv.foreground_app.return_value = None
     await _poll(hass)
     mock_tv.foreground_app.assert_awaited_once()
+    assert hass.states.get(CURRENT_APP).state == "other"
+
+
+async def test_current_app_unknown_while_off(
+    hass: HomeAssistant, mock_entry: MockConfigEntry, mock_tv: MagicMock
+) -> None:
+    mock_tv.device_info.side_effect = SamstreamConnectionError("off")
+    await hass.config_entries.async_setup(mock_entry.entry_id)
+    await hass.async_block_till_done()
     assert hass.states.get(CURRENT_APP).state == "unknown"
