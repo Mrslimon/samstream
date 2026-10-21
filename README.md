@@ -4,7 +4,8 @@ Home Assistant integration + Samsung Tizen TV app: control the TV and pop an RTS
 stream (with Arabic/English overlay text) on demand from automations, then return to
 whatever was playing.
 
-Status: **milestone 1 – skeleton**. See [docs/plan.md](docs/plan.md) for research, architecture and roadmap.
+Status: **feature complete, preparing the first release** (full documentation follows). See
+[docs/plan.md](docs/plan.md) for research, architecture, roadmap and results.
 
 ## Layout
 
@@ -30,5 +31,21 @@ npm run typecheck && npm test && npm run build   # dist/ = unsigned wgt contents
 Integration tests need Home Assistant, which does not install on native Windows:
 run `uv sync --all-groups && uv run pytest` in WSL or rely on CI.
 
-`manifest.json` `requirements` stays empty until `aiosamstream` is published (milestone 3);
-until then install it into the HA container with `pip install -e lib/aiosamstream`.
+Until `aiosamstream` is on PyPI, install it into the HA container with
+`pip install -e lib/aiosamstream` (`scripts/ha_dev.py install-lib` does this).
+
+## Credits
+
+Samstream was coded with the help of [Claude](https://claude.ai), Anthropic's AI assistant,
+working with the author: Claude wrote most of the code and tests, and the author directed the
+design and tested every step on a real Samsung TV.
+
+It builds on the work of others:
+
+- [samsungtvws](https://github.com/xchwarze/samsung-tv-ws-api) for the TV's WebSocket and REST APIs.
+- [Apps2Samsung](https://github.com/Apps2Samsung/Apps2Samsung) and
+  [Jellyfin2Samsung](https://github.com/Jellyfin2Samsung/Samsung-Jellyfin-Installer), whose
+  per-user Samsung certificate technique Samstream follows.
+- [go2rtc](https://github.com/AlexxIT/go2rtc), Home Assistant's built-in camera restreamer.
+- [Readex Pro](https://fonts.google.com/specimen/Readex+Pro) (SIL Open Font License) for Arabic
+  and Latin text on the TV.
