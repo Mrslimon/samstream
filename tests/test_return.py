@@ -14,7 +14,11 @@ from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.samstream.const import DOMAIN
-from custom_components.samstream.tv_session import session_answer, signal_playing
+from custom_components.samstream.tv_session import (
+    session_answer,
+    signal_closed,
+    signal_playing,
+)
 
 from .conftest import YOUTUBE
 
@@ -44,7 +48,8 @@ def go2rtc(hass: HomeAssistant) -> None:
 @pytest.fixture
 def watching_youtube(mock_tv: MagicMock) -> MagicMock:
     mock_tv.foreground_app = AsyncMock(return_value=replace(YOUTUBE, visible=True))
-    mock_tv.app_status = AsyncMock(return_value=SimpleNamespace(visible=True))
+    # Every app reports visible: YouTube for the poll, Samstream for the return.
+    mock_tv.app_status = AsyncMock(return_value=replace(YOUTUBE, visible=True))
     return mock_tv
 
 
@@ -274,3 +279,92 @@ async def test_update_message_without_camera(hass: HomeAssistant) -> None:
         DOMAIN, "update_message", {"entity_id": TV, "message": "late"}, blocking=True
     )
     assert session_answer(hass, entry, 0)["seq"] == seq
+
+
+async def test_app_paused_through_ha_stays_paused(
+    hass: HomeAssistant, watching_youtube: MagicMock
+) -> None:
+    tv = watching_youtube
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data.coordinator
+    coordinator.async_set_updated_data(replace(coordinator.data, app_id=YOUTUBE.app_id))
+    await hass.services.async_call(
+        "media_player", "media_pause", {"entity_id": TV}, blocking=True
+    )
+    tv.send_keys.reset_mock()
+
+    await play(hass)
+    await stop(hass)
+
+    tv.launch_app.assert_awaited_with(YOUTUBE.app_id)
+    assert keys(tv) == []  # Neither Pause before nor Play after.
+
+
+async def test_resume_switched_off(
+    hass: HomeAssistant, watching_youtube: MagicMock
+) -> None:
+    tv = watching_youtube
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    hass.config_entries.async_update_entry(entry, options={"resume_playback": False})
+    await hass.async_block_till_done()
+
+    await play(hass)
+    await stop(hass)
+
+    tv.launch_app.assert_awaited_with(YOUTUBE.app_id)
+    assert keys(tv) == []
+
+
+def closed(hass: HomeAssistant) -> None:
+    """The TV app reports Back on the latest command."""
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    seq = session_answer(hass, entry, 0)["seq"]
+    async_dispatcher_send(hass, signal_closed(entry.entry_id), seq)
+
+
+async def test_back_on_tv_resumes_the_app_underneath(
+    hass: HomeAssistant, watching_youtube: MagicMock
+) -> None:
+    tv = watching_youtube
+    await play(hass, duration=30)
+    with patch(SLEEP, AsyncMock()):
+        closed(hass)
+        await hass.async_block_till_done()
+    # The TV is already back on YouTube: no relaunch, just Play.
+    assert keys(tv) == ["KEY_PAUSE", "KEY_PLAY"]
+    tv.launch_app.assert_awaited_once_with(SAMSTREAM_APP_ID)
+
+    # The duration timer went with it; a second report does nothing.
+    with patch(SLEEP, AsyncMock()):
+        later(hass, 120)
+        closed(hass)
+        await hass.async_block_till_done()
+    assert keys(tv) == ["KEY_PAUSE", "KEY_PLAY"]
+    tv.launch_app.assert_awaited_once()
+
+
+async def test_back_keeps_a_paused_app_paused(
+    hass: HomeAssistant, watching_youtube: MagicMock
+) -> None:
+    tv = watching_youtube
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    hass.config_entries.async_update_entry(entry, options={"resume_playback": False})
+    await hass.async_block_till_done()
+    await play(hass)
+    with patch(SLEEP, AsyncMock()):
+        closed(hass)
+        await hass.async_block_till_done()
+    assert keys(tv) == []
+
+
+async def test_return_button(hass: HomeAssistant, watching_youtube: MagicMock) -> None:
+    tv = watching_youtube
+    await play(hass)
+    with patch(SLEEP, AsyncMock()):
+        await hass.services.async_call(
+            "button",
+            "press",
+            {"entity_id": "button.65_neo_qled_8k_return_to_previous"},
+            blocking=True,
+        )
+    tv.launch_app.assert_awaited_with(YOUTUBE.app_id)
+    assert keys(tv) == ["KEY_PAUSE", "KEY_PLAY"]

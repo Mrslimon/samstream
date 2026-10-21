@@ -28,6 +28,8 @@ export interface TvApp {
 
 export interface AppsAnswer {
   home: string;
+  /** Live TV and HDMI inputs (older integrations: none). */
+  sources?: string[];
   current: string | null;
   apps: TvApp[];
 }

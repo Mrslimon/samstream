@@ -58,6 +58,8 @@ const HUD_FULL_MS = 5_000;
 const CLOCK_MS = 10_000;
 // After a video ends, close ourselves if HA has not taken the TV back by then.
 const END_FALLBACK_MS = 5_000;
+// How long Back waits for HA to hear about it before closing anyway.
+const CLOSE_REPORT_MS = 800;
 
 /** Home screen (cards + action bar) and the full-screen player. */
 export class App {
@@ -81,6 +83,8 @@ export class App {
   onFirstFrame: (() => void) | undefined;
   /** Called when a video from HA's media library ends. */
   onEnded: (() => void) | undefined;
+  /** Called before Back closes the app HA opened; resolves when HA has heard. */
+  onClosing: (() => Promise<void>) | undefined;
   private readonly noticeScreen: NoticeScreen;
   private readonly mediaScreen: MediaScreen;
   // A notice or a media file on screen instead of home / camera.
@@ -282,8 +286,14 @@ export class App {
 
   /** Back from anything HA opened: close the app (TV returns); else home. */
   private back(): void {
-    if (this.fromHa) this.exit();
-    else this.showHome();
+    if (!this.fromHa) {
+      this.showHome();
+      return;
+    }
+    // Let HA know (it resumes the app underneath), but never hang on it.
+    const told = this.onClosing?.() ?? Promise.resolve();
+    const timeout = new Promise<void>((resolve) => setTimeout(resolve, CLOSE_REPORT_MS));
+    void Promise.race([told, timeout]).then(() => this.exit());
   }
 
   /** Show a notice or media screen; the camera and home make way. */

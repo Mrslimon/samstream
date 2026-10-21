@@ -87,21 +87,28 @@ function sessionUrl(config: PackageConfig, since: number): string {
   return `${base}/api/samstream/tv/${encodeURIComponent(config.tv_secret)}/session?since=${since}`;
 }
 
-/**
- * Ask HA for settings and any command newer than `since`. `playing` tells HA that
- * command is on screen (its `duration` starts then); `ended` that its video ended.
- */
+/** What happened to a command HA sent (its `seq`), reported with the next poll. */
+export interface SessionReport {
+  /** On screen: the first camera frame, the notice, the video start (`duration` starts). */
+  playing?: number;
+  /** The media library video ended. */
+  ended?: number;
+  /** The viewer pressed Back and Samstream closes. */
+  closed?: number;
+}
+
+/** Ask HA for settings and any command newer than `since`. */
 export async function fetchSession(
   fetchText: Fetch,
   config: PackageConfig,
   since: number,
-  playing?: number,
-  ended?: number,
+  report: SessionReport = {},
 ): Promise<{ settings: Partial<TvSettings>; session: Session }> {
-  const url =
-    sessionUrl(config, since) +
-    (playing === undefined ? "" : `&playing=${playing}`) +
-    (ended === undefined ? "" : `&ended=${ended}`);
+  const extra = (Object.keys(report) as (keyof SessionReport)[])
+    .filter((key) => report[key] !== undefined)
+    .map((key) => `&${key}=${report[key]}`)
+    .join("");
+  const url = sessionUrl(config, since) + extra;
   const raw = JSON.parse(await fetchText(url, HA_TIMEOUT_MS)) as {
     settings?: unknown;
     seq?: unknown;

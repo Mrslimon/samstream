@@ -7,6 +7,8 @@ DOMAIN: Final = "samstream"
 
 CONF_TOKEN: Final = "token"
 CONF_TV_SECRET: Final = "tv_secret"
+# The TV's DUID (read over sdb once, kept for certificates covering every TV).
+CONF_DUID: Final = "duid"
 CONF_WOL_TARGET: Final = "wol_target"
 CONF_HA_URL: Final = "ha_url"
 CONF_EXTRA_APPS: Final = "extra_apps"
@@ -14,6 +16,8 @@ CONF_LANGUAGE: Final = "language"
 CONF_THEME: Final = "theme"
 # Install newer bundled TV apps by themselves (when the TV is on and idle).
 CONF_AUTO_UPDATE: Final = "auto_update"
+# Press Play on the app Samstream interrupted when going back to it.
+CONF_RESUME: Final = "resume_playback"
 
 # TV app UI: "auto" follows the TV's own language.
 LANGUAGES: Final = ("auto", "ar", "en")
@@ -40,3 +44,13 @@ CERT_CHECK_INTERVAL: Final = timedelta(hours=12)
 
 # First media player source: presses the remote's Home key.
 SOURCE_HOME: Final = "Home"
+# Sources before the apps, and the remote key each one presses. The TV keeps
+# its own names for inputs; these keys work whatever the input is called.
+SOURCE_KEYS: Final = {
+    SOURCE_HOME: "KEY_HOME",
+    "Live TV": "KEY_TV",
+    "HDMI 1": "KEY_HDMI1",
+    "HDMI 2": "KEY_HDMI2",
+    "HDMI 3": "KEY_HDMI3",
+    "HDMI 4": "KEY_HDMI4",
+}

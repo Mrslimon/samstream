@@ -20,7 +20,12 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.typing import ClientSessionGenerator
 
 from custom_components.samstream.const import CONF_TV_SECRET, DOMAIN
-from custom_components.samstream.stream_relay import mse_codec, stream_name
+from custom_components.samstream.stream_relay import (
+    _allowed,
+    async_publish_stream,
+    mse_codec,
+    stream_name,
+)
 from custom_components.samstream.tv_session import session_answer, signal_playing
 
 # The fake go2rtc is a real local aiohttp server.
@@ -444,3 +449,19 @@ async def test_launch_gives_up(hass: HomeAssistant, mock_tv: MagicMock) -> None:
             DOMAIN, "play_stream", {"entity_id": TV, "url": RTSP}, blocking=True
         )
     assert mock_tv.launch_app.await_count == 5
+
+
+async def test_one_camera_on_two_tvs(hass: HomeAssistant, go2rtc: FakeGo2rtc) -> None:
+    """The second TV must not take the stream away from the first."""
+    tvs = []
+    for secret in ("secret-living-room", "secret-bedroom"):
+        entry = MockConfigEntry(domain=DOMAIN, data={CONF_TV_SECRET: secret})
+        entry.add_to_hass(hass)
+        tvs.append(entry)
+    names = {await async_publish_stream(hass, entry, RTSP) for entry in tvs}
+
+    assert names == {stream_name(RTSP)}
+    name = names.pop()
+    assert _allowed(hass, name, "secret-living-room")
+    assert _allowed(hass, name, "secret-bedroom")
+    assert not _allowed(hass, name, "secret-other")

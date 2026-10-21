@@ -35,13 +35,19 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.util.json import JsonValueType
 
 from . import SamstreamConfigEntry
-from .const import DOMAIN, SOURCE_HOME
+from .const import CONF_RESUME, DOMAIN, SOURCE_HOME, SOURCE_KEYS
 from .coordinator import SamstreamCoordinator
 from .entity import SamstreamEntity
 from .installer import async_install_package, resolve_package_path
 from .remote import normalize_key
 from .stream_relay import async_publish_stream, tv_stream_url
-from .tv_session import current_command, set_command, signal_ended, signal_playing
+from .tv_session import (
+    current_command,
+    set_command,
+    signal_closed,
+    signal_ended,
+    signal_playing,
+)
 from .tv_settings import ensure_tv_secret
 
 _LOGGER = logging.getLogger(__name__)
@@ -68,6 +74,8 @@ class _Interruption:
     was_on: bool
     previous_app: str | None
     return_to_previous: bool
+    # Press Play when going back: False when the app was already paused.
+    resume: bool = True
 
 
 FEATURES = (
@@ -126,6 +134,11 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         self.async_on_remove(
             async_dispatcher_connect(self.hass, signal_ended(entry_id), self._on_ended)
         )
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass, signal_closed(entry_id), self._on_closed
+            )
+        )
 
     async def async_will_remove_from_hass(self) -> None:
         """Drop a pending timed return."""
@@ -165,8 +178,9 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
 
     @property
     def source_list(self) -> list[str]:
-        """Home, then the installed apps the TV told us about."""
-        return [SOURCE_HOME, *sorted(self.coordinator.apps.values(), key=str.casefold)]
+        """Home, Live TV and HDMI inputs, then the installed apps."""
+        apps = sorted(self.coordinator.apps.values(), key=str.casefold)
+        return [*SOURCE_KEYS, *apps]
 
     @property
     def volume_level(self) -> float | None:
@@ -246,9 +260,9 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         await self._async_key("KEY_STOP")
 
     async def async_select_source(self, source: str) -> None:
-        """Launch the app with this name (Home presses the Home key)."""
-        if source == SOURCE_HOME:
-            await self._async_call(self.coordinator.tv.send_keys(["KEY_HOME"]))
+        """Launch the app with this name; Home / Live TV / HDMI press their key."""
+        if key := SOURCE_KEYS.get(source):
+            await self._async_call(self.coordinator.tv.send_keys([key]))
             return
         for app_id, name in self.coordinator.apps.items():
             if name == source:
@@ -542,9 +556,10 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
             await self.async_turn_off()
         elif interruption.previous_app is not None:
             await self._async_launch(interruption.previous_app)
-            await asyncio.sleep(RESUME_DELAY_SECONDS)
-            with contextlib.suppress(SamstreamError):
-                await self.coordinator.tv.send_keys(["KEY_PLAY"])
+            if interruption.resume:
+                await asyncio.sleep(RESUME_DELAY_SECONDS)
+                with contextlib.suppress(SamstreamError):
+                    await self.coordinator.tv.send_keys(["KEY_PLAY"])
         else:
             # Home or Live TV was underneath; closing the app returns there.
             await self.async_close_app(SAMSTREAM_APP_ID)
@@ -562,11 +577,22 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
             previous = None
         if previous == SAMSTREAM_APP_ID:
             previous = None
-        if previous is not None and pause:
+        # The TV does not report playback; a pause sent through HA (card,
+        # automation) is the one thing known. Paused stays paused afterwards.
+        paused = previous is not None and self._paused_app == previous
+        resume = (
+            previous is not None
+            and not paused
+            and self.coordinator.config_entry.options.get(CONF_RESUME, True)
+        )
+        if resume and pause:
             with contextlib.suppress(SamstreamError):
                 await self.coordinator.tv.send_keys(["KEY_PAUSE"])
         return _Interruption(
-            was_on=True, previous_app=previous, return_to_previous=pause
+            was_on=True,
+            previous_app=previous,
+            return_to_previous=pause,
+            resume=resume,
         )
 
     async def _async_samstream_in_front(self) -> bool:
@@ -593,6 +619,23 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
             return
         self._cancel_timed_return()
         self.hass.async_create_task(self._async_timed_return(None))
+
+    @callback
+    def _on_closed(self, seq: int) -> None:
+        """Resume the app underneath: the viewer pressed Back on the TV."""
+        if seq != self._play_seq or self._interruption is None:
+            return
+        interruption, self._interruption = self._interruption, None
+        self._cancel_timed_return()
+        self._play_seq, self._stream_url, self._frame_seen = None, None, False
+        if interruption.previous_app and interruption.resume:
+            self.hass.async_create_task(self._async_resume_after_back())
+
+    async def _async_resume_after_back(self) -> None:
+        await asyncio.sleep(RESUME_DELAY_SECONDS)
+        with contextlib.suppress(SamstreamError):
+            await self.coordinator.tv.send_keys(["KEY_PLAY"])
+        await self.coordinator.async_request_refresh()
 
     def _schedule_return(self, delay: float) -> None:
         self._cancel_return = async_call_later(

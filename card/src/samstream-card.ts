@@ -307,6 +307,17 @@ export class SamstreamCard extends LitElement {
             <div class="tile home"><ha-icon icon="mdi:home"></ha-icon></div>
             <span>${home.name}</span>
           </button>
+          ${(this.apps?.sources ?? []).map(
+            (source) => html`<button
+              class="app ${state.attributes.source === source ? "current" : ""}"
+              @click=${() => this.selectSource(source)}
+            >
+              <div class="tile home">
+                <ha-icon icon=${source.startsWith("HDMI") ? "mdi:video-input-hdmi" : "mdi:television-classic"}></ha-icon>
+              </div>
+              <span>${source === "Live TV" ? t.liveTv : source}</span>
+            </button>`,
+          )}
           ${(this.apps?.apps ?? []).map(
             (app) => html`<button
               class="app ${app.id === current ? "current" : ""}"

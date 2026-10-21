@@ -42,6 +42,9 @@ class SamstreamRemote(SamstreamEntity, RemoteEntity):
     """Sends remote keys over the TV's control channel."""
 
     _attr_translation_key = "remote"
+    # Its on/off is the TV's power again; the media player shows that. The
+    # remote stays for key presses (remote.send_command, the card).
+    _attr_entity_registry_visible_default = False
 
     def __init__(self, coordinator: SamstreamCoordinator) -> None:
         """Create the remote for the coordinator's TV."""

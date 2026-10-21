@@ -25,6 +25,7 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.network import NoURLAvailableError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.samstream.app_signing import async_save_signing
 from custom_components.samstream.const import DOMAIN
 from custom_components.samstream.installer import (
     async_get_sdb_key,
@@ -33,6 +34,7 @@ from custom_components.samstream.installer import (
 )
 
 from .conftest import NETFLIX, YOUTUBE
+from .test_app_signing import setup_for
 
 TV = "media_player.65_neo_qled_8k"
 APP_SENSOR = "binary_sensor.65_neo_qled_8k_samstream_app"
@@ -57,6 +59,8 @@ def sdb() -> Generator[MagicMock]:
     client.install = AsyncMock(return_value=InstallResult(SAMSTREAM_APP_ID, LOG))
     client.connect = AsyncMock()
     client.close = AsyncMock()
+    # The DUID the test certificates list (test_app_signing.DUID).
+    client.duid = AsyncMock(return_value="EXCBZZZZGFIFJSY")
     with patch(
         "custom_components.samstream.installer.SdbClient", return_value=client
     ) as factory:
@@ -286,3 +290,40 @@ async def test_app_sensor_unknown_until_scanned(
     await hass.async_block_till_done()
 
     assert hass.states.get(APP_SENSOR).state == "unavailable"
+
+
+@pytest.mark.usefixtures("setup_entry")
+async def test_install_refused_when_certificate_lacks_tv(
+    hass: HomeAssistant, setup_entry: MockConfigEntry, sdb: MagicMock
+) -> None:
+    """A TV the certificate does not list: a clear error, not the TV's cryptic one."""
+    await async_save_signing(hass, setup_for(["OTHERTVDUID"]))
+    with pytest.raises(HomeAssistantError) as err:
+        await hass.services.async_call(
+            DOMAIN,
+            "install_app",
+            {"entity_id": TV},
+            blocking=True,
+            return_response=True,
+        )
+    assert err.value.translation_key == "certificate_missing_tv"
+    sdb.install.assert_not_awaited()
+    issue = ir.async_get(hass).async_get_issue(
+        DOMAIN, f"duid_not_covered_{setup_entry.entry_id}"
+    )
+    assert issue is not None
+    assert issue.translation_placeholders["duid"] == "EXCBZZZZGFIFJSY"
+    # The DUID is remembered for the next certificate.
+    assert setup_entry.data["duid"] == "EXCBZZZZGFIFJSY"
+
+    await async_save_signing(hass, setup_for(["EXCBZZZZGFIFJSY"]))
+    await hass.services.async_call(
+        DOMAIN, "install_app", {"entity_id": TV}, blocking=True, return_response=True
+    )
+    sdb.install.assert_awaited_once()
+    assert (
+        ir.async_get(hass).async_get_issue(
+            DOMAIN, f"duid_not_covered_{setup_entry.entry_id}"
+        )
+        is None
+    )

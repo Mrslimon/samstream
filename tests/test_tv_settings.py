@@ -40,7 +40,12 @@ async def test_options_step_defaults_and_save(
     result = await _tv_app_options(hass, setup_entry)
     assert result["type"] is FlowResultType.FORM
     defaults = result["data_schema"]({})
-    assert defaults == {CONF_LANGUAGE: "auto", CONF_THEME: "light", "auto_update": True}
+    assert defaults == {
+        CONF_LANGUAGE: "auto",
+        CONF_THEME: "light",
+        "resume_playback": True,
+        "auto_update": True,
+    }
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {CONF_LANGUAGE: "ar", CONF_THEME: "dark"}
@@ -125,6 +130,7 @@ async def test_package_settings_file(
 def sdb() -> MagicMock:
     client = MagicMock()
     client.connect = AsyncMock()
+    client.duid = AsyncMock(return_value="EXCBZZZZGFIFJSY")
     client.close = AsyncMock()
     client.install = AsyncMock(
         return_value=InstallResult(SAMSTREAM_APP_ID, ["install completed"])

@@ -138,12 +138,20 @@ async function boot(): Promise<void> {
   };
   app.onEnded = () => {
     if (config && playSeq !== undefined) {
-      fetchSession(xhrFetch, config, seq, undefined, playSeq).catch(() => undefined);
+      fetchSession(xhrFetch, config, seq, { ended: playSeq }).catch(() => undefined);
     }
   };
+  // Back closes Samstream: tell HA first, so it resumes the app underneath.
+  app.onClosing = () =>
+    config && playSeq !== undefined
+      ? fetchSession(xhrFetch, config, seq, { closed: playSeq }).then(
+          () => undefined,
+          () => undefined,
+        )
+      : Promise.resolve();
   app.onFirstFrame = () => {
     if (config && playSeq !== undefined) {
-      fetchSession(xhrFetch, config, seq, playSeq).catch(() => undefined);
+      fetchSession(xhrFetch, config, seq, { playing: playSeq }).catch(() => undefined);
     }
   };
   if (session?.command) apply(session.command);

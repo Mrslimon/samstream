@@ -58,6 +58,7 @@ from .const import (
     CONF_DISTRIBUTOR_P12,
     CONF_EXTRA_APPS,
     CONF_LANGUAGE,
+    CONF_RESUME,
     CONF_THEME,
     CONF_TOKEN,
     CONF_WOL_TARGET,
@@ -363,6 +364,9 @@ class SamstreamOptionsFlow(OptionsFlow):
                             mode=SelectSelectorMode.LIST,
                         )
                     ),
+                    vol.Required(
+                        CONF_RESUME, default=options.get(CONF_RESUME, True)
+                    ): bool,
                     vol.Required(
                         CONF_AUTO_UPDATE, default=options.get(CONF_AUTO_UPDATE, True)
                     ): bool,

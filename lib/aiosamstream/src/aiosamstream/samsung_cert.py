@@ -18,6 +18,7 @@ so already installed apps keep upgrading.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import secrets
 from dataclasses import dataclass
@@ -195,7 +196,8 @@ async def request_author(
         session, AUTHOR_URL, account, ("author.csr", author_csr(key)), {}
     )
     return SigningIdentity(
-        key=key, chain=(_load_certificate(der), samsung_ca(_AUTHOR_CA))
+        key=key,
+        chain=(_load_certificate(der), await asyncio.to_thread(samsung_ca, _AUTHOR_CA)),
     )
 
 
@@ -216,7 +218,12 @@ async def request_distributor(
     )
     der = await _post_csr(session, DISTRIBUTOR_URL, account, request, fields)
     identity = SigningIdentity(
-        key=key, chain=(_load_certificate(der), samsung_ca(_DISTRIBUTOR_CA[privilege]))
+        key=key,
+        chain=(
+            _load_certificate(der),
+            # File read: not on the event loop.
+            await asyncio.to_thread(samsung_ca, _DISTRIBUTOR_CA[privilege]),
+        ),
     )
     return identity, profile
 

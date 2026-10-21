@@ -568,6 +568,7 @@ var Y = {
 	en: {
 		off: "Off",
 		home: "Home",
+		liveTv: "Live TV",
 		power: "Power",
 		cameras: "Cameras",
 		showCamera: "Show on TV",
@@ -611,6 +612,7 @@ var Y = {
 	ar: {
 		off: "مطفأ",
 		home: "الرئيسية",
+		liveTv: "البث المباشر",
 		power: "التشغيل",
 		cameras: "الكاميرات",
 		showCamera: "اعرض على التلفاز",
@@ -894,6 +896,15 @@ var Z, je = [
             <div class="tile home"><ha-icon icon="mdi:home"></ha-icon></div>
             <span>${i.name}</span>
           </button>
+          ${(this.apps?.sources ?? []).map((n) => P`<button
+              class="app ${t.attributes.source === n ? "current" : ""}"
+              @click=${() => this.selectSource(n)}
+            >
+              <div class="tile home">
+                <ha-icon icon=${n.startsWith("HDMI") ? "mdi:video-input-hdmi" : "mdi:television-classic"}></ha-icon>
+              </div>
+              <span>${n === "Live TV" ? e.liveTv : n}</span>
+            </button>`)}
           ${(this.apps?.apps ?? []).map((e) => P`<button
               class="app ${e.id === n ? "current" : ""}"
               title=${e.name}

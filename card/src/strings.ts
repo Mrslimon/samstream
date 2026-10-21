@@ -3,6 +3,7 @@ export type Language = "en" | "ar";
 export interface Strings {
   off: string;
   home: string;
+  liveTv: string;
   power: string;
   cameras: string;
   showCamera: string;
@@ -48,6 +49,7 @@ const STRINGS: Record<Language, Strings> = {
   en: {
     off: "Off",
     home: "Home",
+    liveTv: "Live TV",
     power: "Power",
     cameras: "Cameras",
     showCamera: "Show on TV",
@@ -91,6 +93,7 @@ const STRINGS: Record<Language, Strings> = {
   ar: {
     off: "مطفأ",
     home: "الرئيسية",
+    liveTv: "البث المباشر",
     power: "التشغيل",
     cameras: "الكاميرات",
     showCamera: "اعرض على التلفاز",

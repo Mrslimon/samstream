@@ -33,6 +33,9 @@
       },
       "download_logos": {
         "default": "mdi:image-multiple"
+      },
+      "return_to_previous": {
+        "default": "mdi:keyboard-return"
       }
     }
   },
@@ -50,7 +53,7 @@
       "service": "mdi:cctv"
     },
     "stop_stream": {
-      "service": "mdi:stop-circle-outline"
+      "service": "mdi:keyboard-return"
     },
     "show_message": {
       "service": "mdi:message-alert"

@@ -23,7 +23,7 @@ from homeassistant.components.websocket_api.decorators import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 
-from .const import DOMAIN, SOURCE_HOME
+from .const import DOMAIN, SOURCE_HOME, SOURCE_KEYS
 from .logos import async_app_logos
 
 URL_BASE = "/samstream_files"
@@ -67,6 +67,8 @@ async def websocket_apps(
         msg["id"],
         {
             "home": SOURCE_HOME,
+            # Live TV and HDMI inputs: tiles after Home (select_source by name).
+            "sources": [name for name in SOURCE_KEYS if name != SOURCE_HOME],
             "current": coordinator.data.app_id,
             "apps": [
                 {"id": app_id, "name": name, "logo": logos.get(app_id)}

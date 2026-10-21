@@ -48,7 +48,7 @@ from .app_signing import (
     async_load_signing,
     async_save_signing,
 )
-from .const import DOMAIN
+from .const import CONF_DUID, DOMAIN
 from .tv_settings import add_package_settings, package_settings
 
 if TYPE_CHECKING:
@@ -166,14 +166,35 @@ async def async_list_apps(
 async def async_read_duid(hass: HomeAssistant, entry: SamstreamConfigEntry) -> str:
     """Read the TV's DUID, which a distributor certificate must list."""
     async with _sdb(hass, entry) as sdb:
-        try:
-            return await sdb.duid()
-        except SdbError as err:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="install_failed",
-                translation_placeholders={"error": str(err)},
-            ) from err
+        return await _read_duid(hass, entry, sdb)
+
+
+async def _read_duid(
+    hass: HomeAssistant, entry: SamstreamConfigEntry, sdb: SdbClient
+) -> str:
+    try:
+        duid = await sdb.duid()
+    except SdbError as err:
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="install_failed",
+            translation_placeholders={"error": str(err)},
+        ) from err
+    if entry.data.get(CONF_DUID) != duid:
+        # Data only: the update listener reloads on option changes, not this.
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_DUID: duid}
+        )
+    return duid
+
+
+def known_duids(hass: HomeAssistant) -> set[str]:
+    """DUIDs of every Samstream TV seen so far (one certificate covers them all)."""
+    return {
+        str(other.data[CONF_DUID])
+        for other in hass.config_entries.async_entries(DOMAIN)
+        if other.data.get(CONF_DUID)
+    }
 
 
 async def async_install_package(
@@ -238,6 +259,24 @@ async def _async_install(
             ) from err
 
     async with _sdb(hass, entry) as sdb:
+        duid = await _read_duid(hass, entry, sdb)
+        if setup is not None and not setup.covers(duid):
+            # The TV would only say "Invalid format of certificate in signature".
+            ir.async_create_issue(
+                hass,
+                DOMAIN,
+                f"duid_not_covered_{entry.entry_id}",
+                is_fixable=False,
+                severity=ir.IssueSeverity.ERROR,
+                translation_key="duid_not_covered",
+                translation_placeholders={"name": entry.title, "duid": duid},
+            )
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="certificate_missing_tv",
+                translation_placeholders={"name": entry.title, "duid": duid},
+            )
+        ir.async_delete_issue(hass, DOMAIN, f"duid_not_covered_{entry.entry_id}")
         try:
             result = await _install_replacing_other_author(sdb, wgt, entry)
         except SdbError as err:
@@ -286,7 +325,8 @@ async def async_obtain_samsung_certificates(
     try:
         if current is not None and current.source == SOURCE_SAMSUNG:
             renew = current.needs_renewal()
-            if current.covers(duid) and not renew:
+            missing = {duid, *known_duids(hass)} - set(current.duids)
+            if not missing and not renew:
                 return current
             key = current.author.key
             author = (
@@ -295,7 +335,8 @@ async def async_obtain_samsung_certificates(
         else:
             key = await hass.async_add_executor_job(_new_signing_key)
             author = await request_author(session, account, key)
-        duids = sorted({*(current.duids if current else []), duid})
+        # Every Samstream TV seen so far, so one sign-in covers them all.
+        duids = sorted({*(current.duids if current else []), *known_duids(hass), duid})
         distributor, _profile = await request_distributor(session, account, key, duids)
     except SamsungCertError as err:
         raise HomeAssistantError(

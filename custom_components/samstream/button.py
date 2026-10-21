@@ -1,14 +1,17 @@
-"""Buttons: install the Samstream app; download app logos for the card."""
+"""Buttons: install the TV app, download app logos, return to the previous app."""
 
 from __future__ import annotations
 
 from homeassistant.components.button import ButtonEntity
+from homeassistant.components.media_player.const import DOMAIN as MEDIA_PLAYER_DOMAIN
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import SamstreamConfigEntry
+from .const import DOMAIN
 from .coordinator import SamstreamCoordinator
 from .entity import SamstreamEntity
 from .installer import async_install_package
@@ -25,7 +28,11 @@ async def async_setup_entry(
     """Add the install and logo buttons."""
     coordinator = entry.runtime_data.coordinator
     async_add_entities(
-        [InstallAppButton(coordinator), DownloadLogosButton(coordinator)]
+        [
+            InstallAppButton(coordinator),
+            DownloadLogosButton(coordinator),
+            ReturnButton(coordinator),
+        ]
     )
 
 
@@ -67,3 +74,25 @@ class DownloadLogosButton(SamstreamEntity, ButtonEntity):
         )
         coordinator.logos = await async_app_logos(self.hass, coordinator.apps)
         coordinator.async_update_listeners()
+
+
+class ReturnButton(SamstreamEntity, ButtonEntity):
+    """Close what Samstream shows and go back to what was on (stop_stream)."""
+
+    _attr_translation_key = "return_to_previous"
+
+    def __init__(self, coordinator: SamstreamCoordinator) -> None:
+        """Create the button for the coordinator's TV."""
+        super().__init__(coordinator, "return_to_previous")
+
+    async def async_press(self) -> None:
+        """Run `samstream.stop_stream` on this TV's media player."""
+        unique_id = (self.unique_id or "").removesuffix("return_to_previous")
+        media_player = er.async_get(self.hass).async_get_entity_id(
+            MEDIA_PLAYER_DOMAIN, DOMAIN, unique_id + "media_player"
+        )
+        if media_player is None:
+            return
+        await self.hass.services.async_call(
+            DOMAIN, "stop_stream", {"entity_id": media_player}, blocking=True
+        )

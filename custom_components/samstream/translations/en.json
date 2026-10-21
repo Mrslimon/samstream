@@ -118,12 +118,14 @@
         "data": {
           "language": "Language",
           "theme": "Theme",
+          "resume_playback": "Resume playback afterwards",
           "auto_update": "Install TV app updates automatically"
         },
         "data_description": {
           "language": "Automatic follows the TV's own language.",
           "theme": "Colors of the home screen; video always plays on black.",
-          "auto_update": "When Home Assistant has a newer Samstream TV app (after an integration update), install it by itself the next time the TV is on and Samstream is not on screen."
+          "auto_update": "When Home Assistant has a newer Samstream TV app (after an integration update), install it by itself the next time the TV is on and Samstream is not on screen.",
+          "resume_playback": "When Samstream goes back to the app it interrupted, press Play so it continues. Home Assistant cannot see whether you had paused it with the TV's own remote; turn this off if that leaves apps playing that you had paused. Pauses made through Home Assistant are always kept."
         }
       }
     },
@@ -180,6 +182,9 @@
       },
       "download_logos": {
         "name": "Download app logos"
+      },
+      "return_to_previous": {
+        "name": "Return to previous"
       }
     },
     "update": {
@@ -257,6 +262,9 @@
     },
     "sdb_host_reversed": {
       "message": "{name} has Developer Mode set to {developer_host}: Home Assistant's address {ha_host} backwards. See Settings → Repairs."
+    },
+    "certificate_missing_tv": {
+      "message": "The Samsung certificate does not include {name} yet (DUID {duid}). Sign in to Samsung again under Samstream → Configure → App signing: the new certificate covers all your TVs."
     }
   },
   "services": {
@@ -407,8 +415,8 @@
       }
     },
     "stop_stream": {
-      "name": "Stop camera on TV",
-      "description": "Leaves the camera: reopens and resumes the app that was playing, or turns the TV off if Samstream woke it."
+      "name": "Return to previous",
+      "description": "Closes the camera, message or video Samstream shows and goes back to what was on: reopens the app (resuming it if it was playing), or turns the TV off again if Samstream turned it on. Use it with presence or timers."
     }
   },
   "issues": {
@@ -431,6 +439,10 @@
     "developer_reversed": {
       "title": "Developer Mode address is reversed on {name}",
       "description": "{name} has **{developer_host}** as its Developer Mode host: that is Home Assistant's address **{ha_host}** backwards. Some Samsung TVs mirror the IP field when the menu language is right-to-left (Arabic, Hebrew, Persian), so the numbers are stored in reverse.\n\nFix it either way:\n- **Type it backwards:** in Developer Mode, enter **{developer_host}**, so the TV stores {ha_host}; or\n- **Switch the TV to English** (Settings → General → System Manager → Language), set **{ha_host}**, then switch back.\n\nThen restart the TV (hold the power button until the Samsung logo appears) and run the install again."
+    },
+    "duid_not_covered": {
+      "title": "Add {name} to your Samsung certificate",
+      "description": "Home Assistant's Samsung certificate does not list **{name}** (DUID {duid}) yet, so the TV refuses the Samstream app. This happens when the TV was added, or its Developer Mode was not reachable, after you signed in.\n\n1. Open **Settings → Devices & services → Samstream**, then **Configure** on any of your TVs.\n2. Choose **App signing → Sign in with Samsung** and sign in as before.\n3. Run the install again.\n\nThe new certificate covers every Samstream TV Home Assistant knows, and apps already installed keep working."
     }
   },
   "selector": {

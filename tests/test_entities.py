@@ -271,3 +271,12 @@ async def test_developer_host_disabled_by_default(hass: HomeAssistant) -> None:
     assert entry is not None
     assert entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
     assert hass.states.get(DEV_HOST) is None
+
+
+@pytest.mark.usefixtures("setup_entry")
+async def test_remote_hidden_by_default(hass: HomeAssistant) -> None:
+    """The media player has the power button; the remote is for key presses."""
+    entry = er.async_get(hass).async_get(REMOTE)
+    assert entry is not None
+    assert entry.hidden_by is er.RegistryEntryHider.INTEGRATION
+    assert hass.states.get(REMOTE).state == "on"

@@ -90,8 +90,9 @@ async def async_publish_stream(
         raise HomeAssistantError(
             translation_domain=DOMAIN, translation_key="go2rtc_unavailable"
         ) from err
-    published: dict[str, str] = hass.data.setdefault(_PUBLISHED, {})
-    published[name] = entry.entry_id
+    # A camera can be on several TVs at once: each one may open the stream.
+    published: dict[str, set[str]] = hass.data.setdefault(_PUBLISHED, {})
+    published.setdefault(name, set()).add(entry.entry_id)
     return name
 
 
@@ -122,10 +123,7 @@ class SamstreamStreamView(HomeAssistantView):
     ) -> web.StreamResponse:
         """Upgrade to WebSocket and stream fMP4 until either side stops."""
         hass = request.app[KEY_HASS]
-        owner = hass.data.get(_PUBLISHED, {}).get(name)
-        entry = hass.config_entries.async_get_entry(owner) if owner else None
-        known = entry.data.get(CONF_TV_SECRET) if entry else None
-        if not known or not secrets.compare_digest(str(known), secret):
+        if not _allowed(hass, name, secret):
             return web.Response(status=HTTPStatus.NOT_FOUND)
         source = await _restream_url(hass, name)
 
@@ -137,6 +135,16 @@ class SamstreamStreamView(HomeAssistantView):
         finally:
             await socket.close()
         return socket
+
+
+def _allowed(hass: HomeAssistant, name: str, secret: str) -> bool:
+    """Tell whether `secret` is a TV the stream `name` was published for."""
+    for entry_id in hass.data.get(_PUBLISHED, {}).get(name, ()):
+        entry = hass.config_entries.async_get_entry(entry_id)
+        known = entry.data.get(CONF_TV_SECRET) if entry else None
+        if known and secrets.compare_digest(str(known), secret):
+            return True
+    return False
 
 
 async def _restream_url(hass: HomeAssistant, name: str) -> str:
