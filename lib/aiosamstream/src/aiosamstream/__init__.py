@@ -7,9 +7,11 @@ from .exceptions import (
     SamstreamConnectionError,
     SamstreamError,
     SamstreamTimeoutError,
+    SdbConnectionError,
     SdbError,
 )
 from .models import AppStatus, DeviceInfo
+from .sdb import InstallResult, SdbClient, generate_key
 from .tv import SamsungTV
 from .wol import send_magic_packet
 
@@ -18,11 +20,15 @@ __all__ = [
     "SAMSTREAM_APP_ID",
     "AppStatus",
     "DeviceInfo",
+    "InstallResult",
     "SamstreamAuthError",
     "SamstreamConnectionError",
     "SamstreamError",
     "SamstreamTimeoutError",
     "SamsungTV",
+    "SdbClient",
+    "SdbConnectionError",
     "SdbError",
+    "generate_key",
     "send_magic_packet",
 ]

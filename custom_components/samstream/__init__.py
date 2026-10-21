@@ -9,14 +9,14 @@ from aiosamstream import SamsungTV
 from homeassistant.components.media_player.const import DOMAIN as MEDIA_PLAYER_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_MAC, CONF_MODEL, CONF_NAME, Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, SupportsResponse
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import service
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType, VolDictType
 
-from .const import ATTR_APP_ID, CONF_TOKEN, DOMAIN
+from .const import ATTR_APP_ID, ATTR_PATH, CONF_TOKEN, DOMAIN
 from .coordinator import SamstreamCoordinator
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -55,6 +55,15 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             schema=app_schema,
             func=method,
         )
+    service.async_register_platform_entity_service(
+        hass,
+        DOMAIN,
+        "install_app",
+        entity_domain=MEDIA_PLAYER_DOMAIN,
+        schema={vol.Required(ATTR_PATH): cv.string},
+        func="async_install_app",
+        supports_response=SupportsResponse.OPTIONAL,
+    )
     return True
 
 

@@ -11,6 +11,12 @@
         "state": {
           "off": "mdi:code-braces"
         }
+      },
+      "samstream_app": {
+        "default": "mdi:television-play",
+        "state": {
+          "off": "mdi:television-off"
+        }
       }
     },
     "sensor": {
@@ -28,6 +34,9 @@
     },
     "close_app": {
       "service": "mdi:close-box-outline"
+    },
+    "install_app": {
+      "service": "mdi:package-down"
     }
   }
 }

@@ -18,6 +18,7 @@ classifiers = [
 ]
 dependencies = [
     "aiohttp>=3.12",
+    "cryptography>=43",  # sdb RSA handshake; already in Home Assistant
     "samsungtvws[async]>=2.7.2,<4",  # HA core samsungtv pins 2.7.2
     "websockets>=15",
     # samsungtvws 2.7.x imports it without declaring it

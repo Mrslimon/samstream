@@ -12,6 +12,7 @@ CONF_HA_URL: Final = "ha_url"
 CONF_EXTRA_APPS: Final = "extra_apps"
 
 ATTR_APP_ID: Final = "app_id"
+ATTR_PATH: Final = "path"
 
 # Power state only: a TV is polled cheaply over REST, volume over UPnP when on.
 SCAN_INTERVAL: Final = timedelta(seconds=10)

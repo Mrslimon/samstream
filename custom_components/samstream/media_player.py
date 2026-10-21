@@ -15,14 +15,16 @@ from homeassistant.components.media_player.const import (
     MediaType,
 )
 from homeassistant.const import CONF_MAC
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceResponse
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.util.json import JsonValueType
 
 from . import SamstreamConfigEntry
 from .const import DOMAIN
 from .coordinator import SamstreamCoordinator
 from .entity import SamstreamEntity
+from .installer import async_install_package, resolve_package_path
 
 PARALLEL_UPDATES = 1
 
@@ -194,6 +196,15 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
             self.coordinator.async_set_updated_data(
                 replace(self.coordinator.data, app_id=None, app_name=None)
             )
+
+    async def async_install_app(self, path: str) -> ServiceResponse:
+        """Install a signed Samstream .wgt over sdb (the `install_app` action)."""
+        package = resolve_package_path(self.hass, path)
+        result = await async_install_package(
+            self.hass, self.coordinator.config_entry, package
+        )
+        log: list[JsonValueType] = list(result.lines)
+        return {"app_id": result.app_id, "log": log}
 
     async def _async_key(self, key: str) -> None:
         await self._async_call(self.coordinator.tv.send_keys([key]))

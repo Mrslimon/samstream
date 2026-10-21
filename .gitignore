@@ -30,3 +30,6 @@ distributor.xml
 
 # HA URL + long-lived token for dev deploys
 .env.ha
+
+# Local dev secrets (sdb RSA key, etc.)
+.dev/

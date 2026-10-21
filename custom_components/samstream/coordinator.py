@@ -85,6 +85,7 @@ class SamstreamCoordinator(DataUpdateCoordinator[SamstreamState]):
         self.tv = tv
         # Installed apps (id -> name the TV reports), refreshed while the TV is on.
         self.apps: dict[str, str] = {}
+        self.app_versions: dict[str, str | None] = {}
         self._apps_scanned_at: float | None = None
 
     @property
@@ -155,4 +156,15 @@ class SamstreamCoordinator(DataUpdateCoordinator[SamstreamState]):
             _LOGGER.debug("App scan on %s failed: %s", self.config_entry.title, err)
             return
         self.apps = {app.app_id: app.name for app in installed}
+        self.app_versions = {app.app_id: app.version for app in installed}
         self._apps_scanned_at = now
+
+    @property
+    def apps_scanned(self) -> bool:
+        """True once the installed apps have been read from the TV at least once."""
+        return self._apps_scanned_at is not None
+
+    async def async_rescan_apps(self) -> None:
+        """Scan apps on the next refresh (e.g. right after installing one)."""
+        self._apps_scanned_at = None
+        await self.async_refresh()

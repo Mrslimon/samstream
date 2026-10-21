@@ -19,3 +19,7 @@ class SamstreamAuthError(SamstreamError):
 
 class SdbError(SamstreamError):
     """An sdb (Smart Development Bridge) operation failed."""
+
+
+class SdbConnectionError(SdbError):
+    """sdbd did not accept a connection: Developer Mode off or another host IP."""

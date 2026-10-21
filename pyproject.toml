@@ -47,7 +47,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "D", "PLR2004", "ANN401", "S106", "FBT003", "RUF012", "ARG001"]
-"lib/aiosamstream/tests/**" = ["S101", "D", "PLR2004", "ANN401", "S106", "FBT001", "FBT003", "RUF012", "ARG002"]
+"lib/aiosamstream/tests/**" = ["S101", "D", "PLR2004", "ANN401", "S106", "FBT001", "FBT003", "RUF012", "ARG002", "INP001"]  # plain dir: only tests/ is a package
 "lib/aiosamstream/src/aiosamstream/__main__.py" = ["T201"]  # CLI output
 "custom_components/**" = ["ARG001", "ARG002", "ARG004", "ANN401"]  # HA-defined signatures
 "scripts/**" = ["T201", "D103", "INP001", "S603", "S607", "S310", "PLR2004", "PTH111", "E501"]  # dev tooling

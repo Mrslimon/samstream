@@ -75,6 +75,9 @@
     "binary_sensor": {
       "developer_mode": {
         "name": "Developer mode"
+      },
+      "samstream_app": {
+        "name": "Samstream app"
       }
     },
     "sensor": {
@@ -98,6 +101,18 @@
     },
     "unsupported_media_type": {
       "message": "Only media type \"app\" (a Tizen app ID) is supported, not {media_type}."
+    },
+    "sdb_unreachable": {
+      "message": "Cannot connect to {name} for app installs. Its Developer Mode host is {developer_host}; it must be {ha_host}. See Settings → Repairs."
+    },
+    "install_failed": {
+      "message": "The TV refused the package: {error}"
+    },
+    "file_not_allowed": {
+      "message": "{path} is outside the Home Assistant config folder and the allowed directories."
+    },
+    "file_not_found": {
+      "message": "Cannot read the package {path}."
     }
   },
   "services": {
@@ -120,6 +135,22 @@
           "description": "Tizen app ID of the app to close."
         }
       }
+    },
+    "install_app": {
+      "name": "Install Samstream app",
+      "description": "Installs a signed Samstream .wgt on the TV over Developer Mode (sdb). Returns the TV's install log.",
+      "fields": {
+        "path": {
+          "name": "Package path",
+          "description": "Signed .wgt file, relative to the Home Assistant config folder (for example samstream/Samstream.wgt)."
+        }
+      }
+    }
+  },
+  "issues": {
+    "developer_mode": {
+      "title": "Developer Mode needed on {name}",
+      "description": "Home Assistant could not connect to {name} to install the Samstream app. The TV only accepts app installs from the one computer set in its Developer Mode.\n\nThe TV's developer host is now **{developer_host}**, and Home Assistant is at **{ha_host}**.\n\n1. On the TV, open **Apps**.\n2. Press **1 2 3 4 5** on the remote (or on the on-screen keypad).\n3. Turn **Developer mode** on, enter **{ha_host}** as the Host PC IP, then choose **OK**.\n4. Restart the TV: hold the power button until the Samsung logo appears.\n5. Run the install again; this message disappears once it works.\n\nIf {ha_host} is not this server's address on your network, set the local network URL under **Settings → System → Network**."
     }
   }
 }

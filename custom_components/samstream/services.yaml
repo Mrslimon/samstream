@@ -21,3 +21,15 @@ close_app:
       example: "111299001912"
       selector:
         text:
+
+install_app:
+  target:
+    entity:
+      integration: samstream
+      domain: media_player
+  fields:
+    path:
+      required: true
+      example: "samstream/Samstream.wgt"
+      selector:
+        text:

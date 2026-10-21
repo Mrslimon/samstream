@@ -75,6 +75,9 @@
     "binary_sensor": {
       "developer_mode": {
         "name": "وضع المطوّر"
+      },
+      "samstream_app": {
+        "name": "تطبيق Samstream"
       }
     },
     "sensor": {
@@ -98,6 +101,18 @@
     },
     "unsupported_media_type": {
       "message": "النوع المدعوم فقط هو \"app\" (معرّف تطبيق Tizen) وليس {media_type}."
+    },
+    "sdb_unreachable": {
+      "message": "تعذّر الاتصال بـ {name} لتثبيت التطبيقات. مضيف وضع المطوّر فيه هو {developer_host} ويجب أن يكون {ha_host}. راجع الإعدادات ← الإصلاحات."
+    },
+    "install_failed": {
+      "message": "رفض التلفاز الحزمة: {error}"
+    },
+    "file_not_allowed": {
+      "message": "‏{path} خارج مجلد إعدادات Home Assistant والمجلدات المسموح بها."
+    },
+    "file_not_found": {
+      "message": "تعذّرت قراءة الحزمة {path}."
     }
   },
   "services": {
@@ -120,6 +135,22 @@
           "description": "معرّف تطبيق Tizen المراد إغلاقه."
         }
       }
+    },
+    "install_app": {
+      "name": "تثبيت تطبيق Samstream",
+      "description": "يثبّت ملف Samstream ‎.wgt الموقّع على التلفاز عبر وضع المطوّر (sdb). يعيد سجل التثبيت من التلفاز.",
+      "fields": {
+        "path": {
+          "name": "مسار الحزمة",
+          "description": "ملف ‎.wgt موقّع، نسبةً إلى مجلد إعدادات Home Assistant (مثل samstream/Samstream.wgt)."
+        }
+      }
+    }
+  },
+  "issues": {
+    "developer_mode": {
+      "title": "يلزم تفعيل وضع المطوّر على {name}",
+      "description": "تعذّر على Home Assistant الاتصال بـ {name} لتثبيت تطبيق Samstream. لا يقبل التلفاز تثبيت التطبيقات إلا من جهاز واحد محدد في وضع المطوّر.\n\nمضيف المطوّر الحالي في التلفاز هو **{developer_host}**، وعنوان Home Assistant هو **{ha_host}**.\n\n1. افتح **التطبيقات** على التلفاز.\n2. اضغط **1 2 3 4 5** على جهاز التحكم (أو على لوحة الأرقام الظاهرة على الشاشة).\n3. فعّل **وضع المطوّر** وأدخل **{ha_host}** كعنوان IP للجهاز المضيف، ثم اختر **موافق**.\n4. أعد تشغيل التلفاز: اضغط مطولًا على زر التشغيل حتى يظهر شعار Samsung.\n5. أعد محاولة التثبيت؛ ستختفي هذه الرسالة عند نجاحها.\n\nإذا لم يكن {ha_host} هو عنوان هذا الخادم على شبكتك، فاضبط عنوان الشبكة المحلية من **الإعدادات ← النظام ← الشبكة**."
     }
   }
 }

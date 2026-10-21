@@ -230,6 +230,7 @@ source = { editable = "lib/aiosamstream" }
 dependencies = [
     { name = "aiohttp" },
     { name = "async-timeout" },
+    { name = "cryptography" },
     { name = "samsungtvws", extra = ["async"] },
     { name = "websockets" },
 ]
@@ -238,6 +239,7 @@ dependencies = [
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.12" },
     { name = "async-timeout", specifier = ">=4" },
+    { name = "cryptography", specifier = ">=43" },
     { name = "samsungtvws", extras = ["async"], specifier = ">=2.7.2,<4" },
     { name = "websockets", specifier = ">=15" },
 ]

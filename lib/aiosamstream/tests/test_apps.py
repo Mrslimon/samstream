@@ -115,6 +115,7 @@ async def test_launch_falls_back_to_remote_channel() -> None:
     with patch.object(tv, "_send_commands", AsyncMock()) as remote:
         await tv.launch_app("org.example.native")
 
+    assert remote.await_args is not None
     command = remote.await_args.args[0][0]
     assert command.params["data"]["action_type"] == "NATIVE_LAUNCH"
     assert command.params["data"]["appId"] == "org.example.native"
@@ -126,6 +127,7 @@ async def test_launch_with_payload_uses_deep_link() -> None:
     with patch.object(tv, "_send_commands", AsyncMock()) as remote:
         await tv.launch_app("SmStrm0001.Samstream", meta_tag='{"url":"ws://x"}')
 
+    assert remote.await_args is not None
     data = remote.await_args.args[0][0].params["data"]
     assert data["action_type"] == "DEEP_LINK"
     assert data["metaTag"] == '{"url":"ws://x"}'
