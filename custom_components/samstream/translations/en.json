@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Connect your Samsung TV",
-        "description": "Turn the TV on, then enter its IP address. You will be asked to allow the connection on the TV once.",
+        "description": "Turn the TV on, then enter its IP address. You will be asked to allow the connection on the TV once.\n\nSo Home Assistant can also turn the TV **on** (for a doorbell camera at night), switch on Wake-on-LAN on the TV first:\n1. **Settings → All Settings → Connection → Network → Expert Settings**.\n2. Turn on **Power On with Mobile** (on some models **Power On with Network** or **Wake on LAN**).\n3. Optional: **Settings → All Settings → Connection → External Device Manager → Device Connection Manager → Access Notification → First Time Only**, so the TV does not ask again.\n\nA fixed IP for the TV (a DHCP reservation on your router) keeps everything working after restarts.",
         "data": {
           "host": "Host"
         },
@@ -246,7 +246,7 @@
       "message": "Set the local network URL under Settings → System → Network, so the TV can reach Home Assistant."
     },
     "tv_did_not_wake": {
-      "message": "The TV did not turn on in time."
+      "message": "The TV did not turn on in time. On the TV, turn on Wake-on-LAN: Settings → All Settings → Connection → Network → Expert Settings → Power On with Mobile. If Home Assistant runs in Docker or the TV is on another network, set the Wake-on-LAN target under Samstream → Configure → Network."
     },
     "message_required": {
       "message": "Enter a title or a message."
