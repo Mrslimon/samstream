@@ -1,12 +1,15 @@
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 import {
+  SECTIONS,
   cameraList,
   friendlyName,
   initials,
   remoteEntity,
+  sectionsOf,
   tileColor,
   type AppsAnswer,
   type Hass,
+  type Section,
   type TvApp,
 } from "./helpers";
 import { languageOf, strings, type Strings } from "./strings";
@@ -15,6 +18,8 @@ export interface CardConfig {
   type: string;
   entity: string;
   cameras?: string[];
+  /** Sections in order: tv, cameras, message, apps, remote, media. */
+  sections?: string[];
   show_cameras?: boolean;
   show_message?: boolean;
   show_apps?: boolean;
@@ -55,6 +60,7 @@ export class SamstreamCard extends LitElement {
   }
 
   static getConfigForm() {
+    const text = (hass?: Hass) => strings(languageOf(hass?.locale?.language ?? hass?.language));
     return {
       schema: [
         {
@@ -62,18 +68,25 @@ export class SamstreamCard extends LitElement {
           required: true,
           selector: { entity: { domain: "media_player", integration: "samstream" } },
         },
-        { name: "cameras", selector: { entity: { domain: "camera", multiple: true } } },
         {
-          type: "grid",
-          name: "",
-          schema: [
-            { name: "show_cameras", selector: { boolean: {} } },
-            { name: "show_message", selector: { boolean: {} } },
-            { name: "show_apps", selector: { boolean: {} } },
-            { name: "show_remote", selector: { boolean: {} } },
-          ],
+          name: "sections",
+          selector: {
+            select: {
+              multiple: true,
+              reorder: true,
+              mode: "list",
+              options: SECTIONS.map((value) => ({ value, label: text()[sectionKey(value)] })),
+            },
+          },
         },
+        { name: "cameras", selector: { entity: { domain: "camera", multiple: true } } },
       ],
+      computeLabel: (field: { name: string }, hass?: Hass) => {
+        const t = text(hass);
+        if (field.name === "sections") return t.sections;
+        if (field.name === "cameras") return t.camerasField;
+        return undefined;
+      },
     };
   }
 
@@ -81,7 +94,7 @@ export class SamstreamCard extends LitElement {
     const tv = Object.values(hass.entities ?? {}).find(
       (entry) => entry.platform === "samstream" && entry.entity_id.startsWith("media_player."),
     );
-    return { entity: tv?.entity_id ?? "" };
+    return { entity: tv?.entity_id ?? "", sections: [...SECTIONS] };
   }
 
   private get text(): Strings {
@@ -116,17 +129,45 @@ export class SamstreamCard extends LitElement {
       return html`<ha-card><div class="empty">${this.config.entity}?</div></ha-card>`;
     }
     const on = state.state !== "off" && state.state !== "unavailable";
-    const show = (key: keyof CardConfig) => this.config[key] !== false;
+    const sections = sectionsOf(this.config);
+    // Off: only the power control works; keep one even without the TV section.
+    const shown = on ? sections : sections.includes("tv") ? ["tv" as Section] : [];
     return html`
       <ha-card dir=${this.rtl ? "rtl" : "ltr"}>
-        ${this.renderHeader(on)}
-        ${on && show("show_cameras") ? this.renderCameras() : nothing}
-        ${on && show("show_message") ? this.renderMessage() : nothing}
-        ${on && show("show_apps") ? this.renderApps() : nothing}
-        ${on && show("show_remote") ? this.renderRemote() : nothing}
+        ${on || shown.length > 0 ? nothing : this.renderPowerOnly()}
+        ${shown.map((section, index) => this.renderSection(section, on, index === 0))}
         ${this.feedback ? html`<div class="feedback">${this.feedback}</div>` : nothing}
       </ha-card>
     `;
+  }
+
+  private renderSection(section: Section, on: boolean, first: boolean): TemplateResult {
+    const body = {
+      tv: () => this.renderHeader(on),
+      cameras: () => this.renderCameras(),
+      message: () => this.renderMessage(),
+      apps: () => this.renderApps(),
+      remote: () => this.renderRemote(),
+      media: () => this.renderMedia(),
+    }[section]();
+    return html`<div class="section ${first ? "first" : ""}">${body}</div>`;
+  }
+
+  private renderPowerOnly(): TemplateResult {
+    return html`<div class="power-only">
+      <span>${friendlyName(this.hass, this.config.entity)} · ${this.text.off}</span>
+      ${this.powerButton(false)}
+    </div>`;
+  }
+
+  private powerButton(on: boolean): TemplateResult {
+    return html`<button
+      class="round ${on ? "on" : ""}"
+      title=${this.text.power}
+      @click=${() => this.call("media_player", "toggle", { entity_id: this.config.entity })}
+    >
+      <ha-icon icon="mdi:power"></ha-icon>
+    </button>`;
   }
 
   private renderHeader(on: boolean): TemplateResult {
@@ -143,13 +184,7 @@ export class SamstreamCard extends LitElement {
           <div class="name">${friendlyName(this.hass, this.config.entity)}</div>
           <div class="sub">${subtitle}</div>
         </div>
-        <button
-          class="round ${on ? "on" : ""}"
-          title=${t.power}
-          @click=${() => this.call("media_player", "toggle", { entity_id: this.config.entity })}
-        >
-          <ha-icon icon="mdi:power"></ha-icon>
-        </button>
+        ${this.powerButton(on)}
       </div>
     `;
   }
@@ -283,24 +318,33 @@ export class SamstreamCard extends LitElement {
           <div class="side">
             ${key("KEY_RETURN", "mdi:arrow-u-left-top", t.back)}
             ${key("KEY_HOME", "mdi:home", t.home)}
-            <button class="key" title=${t.playPause} @click=${() =>
-              this.call("media_player", "media_play_pause", { entity_id: this.config.entity })}>
-              <ha-icon icon="mdi:play-pause"></ha-icon>
-            </button>
+            ${key("KEY_MENU", "mdi:menu", t.menu)}
           </div>
-          <div class="side">
-            <button class="key" title=${t.volumeUp} @click=${() =>
-              this.call("media_player", "volume_up", { entity_id: this.config.entity })}>
-              <ha-icon icon="mdi:volume-plus"></ha-icon>
-            </button>
-            <button class="key" title=${t.mute} @click=${() => this.toggleMute()}>
-              <ha-icon icon="mdi:volume-off"></ha-icon>
-            </button>
-            <button class="key" title=${t.volumeDown} @click=${() =>
-              this.call("media_player", "volume_down", { entity_id: this.config.entity })}>
-              <ha-icon icon="mdi:volume-minus"></ha-icon>
-            </button>
-          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  private renderMedia(): TemplateResult {
+    const t = this.text;
+    const media = (service: string, icon: string, label: string) =>
+      html`<button class="key" title=${label} @click=${() =>
+        this.call("media_player", service, { entity_id: this.config.entity }, false)}>
+        <ha-icon icon=${icon}></ha-icon>
+      </button>`;
+    const volume = this.hass.states[this.config.entity]?.attributes.volume_level;
+    return html`
+      <section>
+        <h3>${t.media}</h3>
+        <div class="media">
+          ${media("media_play_pause", "mdi:play-pause", t.playPause)}
+          <span class="spacer"></span>
+          ${media("volume_down", "mdi:volume-minus", t.volumeDown)}
+          <span class="level">${typeof volume === "number" ? Math.round(volume * 100) : "–"}</span>
+          ${media("volume_up", "mdi:volume-plus", t.volumeUp)}
+          <button class="key" title=${t.mute} @click=${() => this.toggleMute()}>
+            <ha-icon icon="mdi:volume-off"></ha-icon>
+          </button>
         </div>
       </section>
     `;
@@ -432,8 +476,31 @@ export class SamstreamCard extends LitElement {
       display: flex;
       flex-direction: column;
       gap: 10px;
+    }
+    .section:not(.first) {
       padding-top: 14px;
       border-top: 1px solid var(--divider-color);
+    }
+    .power-only {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--secondary-text-color);
+    }
+    .media {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .media .spacer {
+      flex: 1;
+    }
+    .media .level {
+      min-width: 2.5em;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      color: var(--secondary-text-color);
     }
     h3 {
       margin: 0;
@@ -635,6 +702,11 @@ export class SamstreamCard extends LitElement {
       text-align: center;
     }
   `;
+}
+
+/** Label key of a section in the editor. */
+function sectionKey(section: Section): "tv" | "cameras" | "message" | "apps" | "remote" | "media" {
+  return section;
 }
 
 if (!customElements.get("samstream-card")) {

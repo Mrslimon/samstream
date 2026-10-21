@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cameraList, initials, remoteEntity, tileColor, type Hass } from "./helpers";
+import { cameraList, initials, remoteEntity, sectionsOf, tileColor, type Hass } from "./helpers";
 import { LANGUAGES, languageOf, strings } from "./strings";
 
 function hass(partial: Partial<Hass>): Hass {
@@ -78,5 +78,17 @@ describe("strings", () => {
   it("has the same keys in every language", () => {
     const keys = Object.keys(strings("en")).sort();
     for (const language of LANGUAGES) expect(Object.keys(strings(language)).sort()).toEqual(keys);
+  });
+});
+
+describe("sectionsOf", () => {
+  it("keeps the chosen order and drops unknown or repeated ones", () => {
+    expect(sectionsOf({ sections: ["remote", "media", "remote", "x"] })).toEqual(["remote", "media"]);
+    expect(sectionsOf({ sections: [] })).toEqual([]);
+  });
+
+  it("reads the switches of cards made before sections existed", () => {
+    expect(sectionsOf({})).toEqual(["tv", "cameras", "message", "apps", "remote", "media"]);
+    expect(sectionsOf({ show_cameras: false, show_remote: false })).toEqual(["tv", "message", "apps"]);
   });
 });

@@ -77,3 +77,28 @@ export function tileColor(name: string): string {
   const hue = Math.abs(hash) % 360;
   return `hsl(${hue} 55% 46%)`;
 }
+
+export const SECTIONS = ["tv", "cameras", "message", "apps", "remote", "media"] as const;
+export type Section = (typeof SECTIONS)[number];
+
+export interface SectionConfig {
+  sections?: string[];
+  show_cameras?: boolean;
+  show_message?: boolean;
+  show_apps?: boolean;
+  show_remote?: boolean;
+}
+
+/** Sections to draw, in order; cards from before `sections` keep their switches. */
+export function sectionsOf(config: SectionConfig): Section[] {
+  if (Array.isArray(config.sections)) {
+    const known = config.sections.filter((s): s is Section => (SECTIONS as readonly string[]).includes(s));
+    return known.filter((s, i) => known.indexOf(s) === i);
+  }
+  const shown: Section[] = ["tv"];
+  if (config.show_cameras !== false) shown.push("cameras");
+  if (config.show_message !== false) shown.push("message");
+  if (config.show_apps !== false) shown.push("apps");
+  if (config.show_remote !== false) shown.push("remote", "media");
+  return shown;
+}

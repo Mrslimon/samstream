@@ -19,7 +19,12 @@ export interface Strings {
   alert: string;
   apps: string;
   remote: string;
+  media: string;
+  tv: string;
+  sections: string;
+  camerasField: string;
   back: string;
+  menu: string;
   ok: string;
   volumeDown: string;
   volumeUp: string;
@@ -50,7 +55,12 @@ const STRINGS: Record<Language, Strings> = {
     alert: "Alert",
     apps: "Apps",
     remote: "Remote",
+    media: "Playback and volume",
+    tv: "TV and power",
+    sections: "Sections (drag to reorder)",
+    camerasField: "Cameras (empty: all)",
     back: "Back",
+    menu: "Menu",
     ok: "OK",
     volumeDown: "Volume down",
     volumeUp: "Volume up",
@@ -79,7 +89,12 @@ const STRINGS: Record<Language, Strings> = {
     alert: "تنبيه",
     apps: "التطبيقات",
     remote: "جهاز التحكم",
+    media: "التشغيل والصوت",
+    tv: "التلفاز والتشغيل",
+    sections: "الأقسام (اسحب لإعادة الترتيب)",
+    camerasField: "الكاميرات (فارغ: الكل)",
     back: "رجوع",
+    menu: "القائمة",
     ok: "موافق",
     volumeDown: "خفض الصوت",
     volumeUp: "رفع الصوت",
