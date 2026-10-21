@@ -924,6 +924,6 @@ if (!customElements.get("samstream-card")) {
     name: "Samstream",
     description: "Cameras, messages, apps and a remote for your Samsung TV.",
     preview: true,
-    documentationURL: "https://github.com/islamahmady/samstream",
+    documentationURL: "https://github.com/Mrslimon/samstream",
   });
 }

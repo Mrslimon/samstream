@@ -1452,7 +1452,7 @@ customElements.get("samstream-card") || (customElements.define("samstream-card",
 	name: "Samstream",
 	description: "Cameras, messages, apps and a remote for your Samsung TV.",
 	preview: !0,
-	documentationURL: "https://github.com/islamahmady/samstream"
+	documentationURL: "https://github.com/Mrslimon/samstream"
 }));
 //#endregion
 export { $ as SamstreamCard };

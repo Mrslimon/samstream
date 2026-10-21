@@ -1,8 +1,28 @@
 # Samstream
 
-Home Assistant integration + Samsung Tizen TV app: control the TV and pop an RTSP camera
-stream (with Arabic/English overlay text) on demand from automations, then return to
-whatever was playing.
+**Your Samsung TV, finally a first-class citizen in Home Assistant.**
+
+Home Assistant's built-in Samsung integration covers the basics: power, volume, keys.
+Samstream takes over the whole screen: a real remote, a touchpad, your cameras, your videos
+and full-screen alerts, all driven by automations, then it hands the TV back exactly where
+you left it.
+
+- 🎮 **Full remote control.** D-pad, OK, Back, Home, Menu, volume and playback from HA, with
+  hold-to-repeat and real long presses. Every installed app is listed and one tap away.
+- 🖱️ **Touch controls.** A touchpad that drives the TV's pointer, and a keyboard that types
+  straight into the TV, Arabic included.
+- 📹 **Cameras on demand.** Doorbell rings, the camera pops up on the TV in a couple of
+  seconds, with your message on top. Low latency, no transcoding.
+- 🎬 **Your own videos.** Play anything from HA's media library on the TV, or straight from
+  HA's media browser.
+- 🚨 **Messages that grab attention.** Full-screen info, warning or alert cards with sound or
+  text-to-speech, and text you can update live (perfect for an AI describing who is at the door).
+- ↩️ **Seamless takeover.** Samstream pauses what you were watching, shows the camera or
+  message, then reopens the app and resumes it, or switches the TV off again if it was off.
+- 🃏 **A dashboard card.** Pick the parts you want (remote only, cameras only, anything), in any
+  order, with app logos, right to left in Arabic.
+- 📦 **Zero fuss install.** HA installs the Samstream TV app for you, signed with your own
+  Samsung certificate, and keeps it up to date.
 
 Status: **feature complete, preparing the first release** (full documentation follows). See
 [docs/plan.md](docs/plan.md) for research, architecture, roadmap and results.

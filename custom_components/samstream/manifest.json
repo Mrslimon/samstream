@@ -2,7 +2,7 @@
   "domain": "samstream",
   "name": "Samstream",
   "codeowners": [
-    "@islamahmady"
+    "@Mrslimon"
   ],
   "config_flow": true,
   "dependencies": [
@@ -10,10 +10,10 @@
     "http",
     "websocket_api"
   ],
-  "documentation": "https://github.com/islamahmady/samstream",
+  "documentation": "https://github.com/Mrslimon/samstream",
   "integration_type": "device",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/islamahmady/samstream/issues",
+  "issue_tracker": "https://github.com/Mrslimon/samstream/issues",
   "loggers": [
     "aiosamstream",
     "samsungtvws"

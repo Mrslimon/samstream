@@ -36,7 +36,7 @@ class SamstreamAppUpdate(SamstreamEntity, UpdateEntity):
     _attr_supported_features = (
         UpdateEntityFeature.INSTALL | UpdateEntityFeature.PROGRESS
     )
-    _attr_release_url = "https://github.com/islamahmady/samstream/releases"
+    _attr_release_url = "https://github.com/Mrslimon/samstream/releases"
 
     def __init__(self, coordinator: SamstreamCoordinator, bundled: str | None) -> None:
         """Compare the TV's copy with `bundled` (None when no package ships)."""
