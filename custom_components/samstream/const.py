@@ -35,3 +35,6 @@ APP_SCAN_INTERVAL: Final = timedelta(minutes=30)
 # Samsung certificates last a year; warn (and renew on sign-in) this early.
 RENEW_BEFORE: Final = timedelta(days=30)
 CERT_CHECK_INTERVAL: Final = timedelta(hours=12)
+
+# First media player source: presses the remote's Home key.
+SOURCE_HOME: Final = "Home"

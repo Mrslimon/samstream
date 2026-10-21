@@ -28,6 +28,7 @@ from .const import (
     SCAN_INTERVAL,
 )
 from .installer import async_list_apps
+from .logos import async_app_logos
 
 if TYPE_CHECKING:
     from . import SamstreamConfigEntry
@@ -88,6 +89,8 @@ class SamstreamCoordinator(DataUpdateCoordinator[SamstreamState]):
         # Installed apps (id -> name the TV reports), refreshed while the TV is on.
         self.apps: dict[str, str] = {}
         self.app_versions: dict[str, str | None] = {}
+        # App ID -> logo URL, from the user's logo folder (see logos.py).
+        self.logos: dict[str, str] = {}
         # "tv" (full list over sdb) or "catalog" (known IDs probed over REST).
         self.app_source = "catalog"
         # True while the Samstream app is being installed (one install at a time).
@@ -196,6 +199,7 @@ class SamstreamCoordinator(DataUpdateCoordinator[SamstreamState]):
             versions |= {app.app_id: app.version for app in found}
         self.apps = apps
         self.app_versions = versions
+        self.logos = await async_app_logos(self.hass, apps)
         self._apps_scanned_at = now
 
     @property

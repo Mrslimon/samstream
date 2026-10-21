@@ -193,7 +193,9 @@ async def test_browse_media(
         answer = await client.receive_json()
 
     assert answer["success"], answer
-    assert answer["result"]["title"] == "Media"
+    # The TV's apps first, then the media library.
+    titles = [child["title"] for child in answer["result"]["children"]]
+    assert titles == ["Apps", "Media"]
     keep = browse.await_args.kwargs["content_filter"]
     assert keep(SimpleNamespace(media_content_type="video/mp4"))
     assert keep(SimpleNamespace(media_content_type="audio/mpeg"))

@@ -1,0 +1,102 @@
+export type Language = "en" | "ar";
+
+export interface Strings {
+  off: string;
+  home: string;
+  power: string;
+  cameras: string;
+  showCamera: string;
+  stop: string;
+  message: string;
+  messagePlaceholder: string;
+  title: string;
+  duration: string;
+  seconds: string;
+  showMessage: string;
+  updateText: string;
+  info: string;
+  warning: string;
+  alert: string;
+  apps: string;
+  remote: string;
+  back: string;
+  ok: string;
+  volumeDown: string;
+  volumeUp: string;
+  mute: string;
+  playPause: string;
+  noCameras: string;
+  sent: string;
+  failed: string;
+}
+
+const STRINGS: Record<Language, Strings> = {
+  en: {
+    off: "Off",
+    home: "Home",
+    power: "Power",
+    cameras: "Cameras",
+    showCamera: "Show on TV",
+    stop: "Stop",
+    message: "Message",
+    messagePlaceholder: "Text to show on the TV",
+    title: "Title",
+    duration: "Duration",
+    seconds: "s",
+    showMessage: "Full-screen message",
+    updateText: "Update text",
+    info: "Info",
+    warning: "Warning",
+    alert: "Alert",
+    apps: "Apps",
+    remote: "Remote",
+    back: "Back",
+    ok: "OK",
+    volumeDown: "Volume down",
+    volumeUp: "Volume up",
+    mute: "Mute",
+    playPause: "Play / pause",
+    noCameras: "No cameras in Home Assistant yet.",
+    sent: "Sent to the TV",
+    failed: "Failed",
+  },
+  ar: {
+    off: "مطفأ",
+    home: "الرئيسية",
+    power: "التشغيل",
+    cameras: "الكاميرات",
+    showCamera: "اعرض على التلفاز",
+    stop: "إيقاف",
+    message: "الرسالة",
+    messagePlaceholder: "نص يظهر على التلفاز",
+    title: "العنوان",
+    duration: "المدة",
+    seconds: "ث",
+    showMessage: "رسالة بملء الشاشة",
+    updateText: "تحديث النص",
+    info: "معلومة",
+    warning: "تحذير",
+    alert: "تنبيه",
+    apps: "التطبيقات",
+    remote: "جهاز التحكم",
+    back: "رجوع",
+    ok: "موافق",
+    volumeDown: "خفض الصوت",
+    volumeUp: "رفع الصوت",
+    mute: "كتم",
+    playPause: "تشغيل / إيقاف مؤقت",
+    noCameras: "لا توجد كاميرات في Home Assistant بعد.",
+    sent: "أُرسل إلى التلفاز",
+    failed: "فشل",
+  },
+};
+
+export function languageOf(code: string | undefined): Language {
+  return code?.toLowerCase().startsWith("ar") ? "ar" : "en";
+}
+
+export function strings(language: Language): Strings {
+  return STRINGS[language];
+}
+
+export const LANGUAGES = Object.keys(STRINGS) as Language[];

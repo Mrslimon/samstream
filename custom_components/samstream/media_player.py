@@ -21,6 +21,7 @@ from homeassistant.components.media_player.browse_media import (
     async_process_play_media_url,
 )
 from homeassistant.components.media_player.const import (
+    MediaClass,
     MediaPlayerEntityFeature,
     MediaPlayerState,
     MediaType,
@@ -34,7 +35,7 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.util.json import JsonValueType
 
 from . import SamstreamConfigEntry
-from .const import DOMAIN
+from .const import DOMAIN, SOURCE_HOME
 from .coordinator import SamstreamCoordinator
 from .entity import SamstreamEntity
 from .installer import async_install_package, resolve_package_path
@@ -55,8 +56,8 @@ RESUME_DELAY_SECONDS = 3
 # `duration` counts from the first frame; if the app never reports one (a
 # stream error, an old app), the return still comes this much later.
 FIRST_FRAME_WAIT_SECONDS = 30
-# First source in the list: presses the remote's Home key.
-SOURCE_HOME = "Home"
+# Media browser folder with the TV's apps.
+APPS_FOLDER = "samstream://apps"
 
 
 @dataclass
@@ -152,6 +153,12 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         if data.app_name is None and data.is_on and self.coordinator.app_source == "tv":
             return SOURCE_HOME
         return data.app_name
+
+    @property
+    def entity_picture(self) -> str | None:
+        """Logo of the app on screen, if the user added one (see logos.py)."""
+        app_id = self.coordinator.data.app_id
+        return self.coordinator.logos.get(app_id) if app_id else None
 
     @property
     def source_list(self) -> list[str]:
@@ -276,13 +283,54 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         media_content_type: MediaType | str | None = None,
         media_content_id: str | None = None,
     ) -> BrowseMedia:
-        """HA's media library, video and audio only (the TV plays them)."""
-        return await media_source.async_browse_media(
+        """TV apps (launch) and HA's media library (video and audio to play)."""
+        if media_content_id == APPS_FOLDER:
+            return self._browse_apps()
+        library = await media_source.async_browse_media(
             self.hass,
             media_content_id,
             content_filter=lambda item: item.media_content_type.startswith(
                 ("video/", "audio/")
             ),
+        )
+        if media_content_id is not None:
+            return library
+        # Top level: the TV's apps next to the media library.
+        return BrowseMedia(
+            media_class=MediaClass.DIRECTORY,
+            media_content_id="",
+            media_content_type="",
+            title=self.coordinator.config_entry.title,
+            can_play=False,
+            can_expand=True,
+            children=[self._browse_apps(children=False), library],
+        )
+
+    def _browse_apps(self, *, children: bool = True) -> BrowseMedia:
+        apps = sorted(self.coordinator.apps.items(), key=lambda a: a[1].casefold())
+        logos = self.coordinator.logos
+        return BrowseMedia(
+            media_class=MediaClass.DIRECTORY,
+            media_content_id=APPS_FOLDER,
+            media_content_type=MediaType.APPS,
+            title="Apps",
+            can_play=False,
+            can_expand=True,
+            children_media_class=MediaClass.APP,
+            children=[
+                BrowseMedia(
+                    media_class=MediaClass.APP,
+                    media_content_id=app_id,
+                    media_content_type=MediaType.APP,
+                    title=name,
+                    can_play=True,
+                    can_expand=False,
+                    thumbnail=logos.get(app_id),
+                )
+                for app_id, name in apps
+            ]
+            if children
+            else None,
         )
 
     async def async_launch_app(self, app_id: str) -> None:

@@ -21,6 +21,7 @@ from homeassistant.helpers.typing import ConfigType, VolDictType
 from .app_signing import async_check_certificate_expiry
 from .const import ATTR_APP_ID, ATTR_PATH, CERT_CHECK_INTERVAL, CONF_TOKEN, DOMAIN
 from .coordinator import SamstreamCoordinator
+from .frontend import async_setup_frontend
 from .installer import async_bundled_version
 from .signin import SamstreamSignInView
 from .stream_relay import SamstreamStreamView
@@ -57,6 +58,7 @@ type SamstreamConfigEntry = ConfigEntry[SamstreamData]
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Register the actions and the sign-in hand-off view once."""
     hass.http.register_view(SamstreamSignInView())
+    await async_setup_frontend(hass)
     hass.http.register_view(SamstreamTvSettingsView())
     hass.http.register_view(SamstreamStreamView())
     hass.http.register_view(SamstreamTvSessionView())
