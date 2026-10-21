@@ -495,7 +495,7 @@ async def test_mjpeg_relay(
     await hass.services.async_call(
         DOMAIN,
         "play_stream",
-        {"entity_id": TV, "url": RTSP, "tv_corner": "top_left"},
+        {"entity_id": TV, "url": RTSP, "tv_corner": "on"},
         blocking=True,
     )
     url = launched_payload(hass, mock_tv)["stream"]["mjpeg_url"]

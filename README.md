@@ -30,9 +30,11 @@ Samsung's TVs set some hard limits. Samstream works around what it can; these re
 
 **On the TV**
 
-- **No picture-in-picture over other apps.** A sideloaded app cannot draw over Netflix,
-  YouTube or Live TV, and Samsung's Multi View has no API or remote key for apps. Samstream
-  takes the full screen, then hands it back.
+- **Picture-in-picture only with Live TV and HDMI.** Over Live TV, an HDMI input or Home,
+  the camera can play with the TV's own picture kept in a corner (*TV picture in a corner*);
+  the camera then shows as fast pictures rather than video, since the TV has one video layer.
+  A sideloaded app cannot draw over Netflix or YouTube, and Samsung's Multi View has no API,
+  so over streaming apps Samstream takes the full screen, then hands it back.
 - **Playback state is invisible.** The TV does not report whether the app underneath was
   playing or paused. Samstream pauses it and presses Play afterwards; a pause made through
   Home Assistant is remembered, but one made with the TV's own remote is not. Turn off

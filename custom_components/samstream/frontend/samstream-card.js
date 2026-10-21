@@ -1103,7 +1103,7 @@ var Z, Ae = [
 			camera: e,
 			...t ? { message: t } : {},
 			...n ? { duration: n } : {},
-			...r ? { tv_corner: this.rtl ? "top_left" : "top_right" } : {}
+			...r ? { tv_corner: "on" } : {}
 		});
 	}
 	showNotice() {

@@ -118,6 +118,7 @@
         "data": {
           "language": "Language",
           "theme": "Theme",
+          "tv_corner": "Corner for the TV picture",
           "resume_playback": "Resume playback afterwards",
           "auto_update": "Install TV app updates automatically"
         },
@@ -125,7 +126,8 @@
           "language": "Automatic follows the TV's own language.",
           "theme": "Colors of the home screen; video always plays on black.",
           "auto_update": "When Home Assistant has a newer Samstream TV app (after an integration update), install it by itself the next time the TV is on and Samstream is not on screen.",
-          "resume_playback": "When Samstream goes back to the app it interrupted, press Play so it continues. Home Assistant cannot see whether you had paused it with the TV's own remote; turn this off if that leaves apps playing that you had paused. Pauses made through Home Assistant are always kept."
+          "resume_playback": "When Samstream goes back to the app it interrupted, press Play so it continues. Home Assistant cannot see whether you had paused it with the TV's own remote; turn this off if that leaves apps playing that you had paused. Pauses made through Home Assistant are always kept.",
+          "tv_corner": "Where Live TV or the HDMI input stays visible when a camera plays with the TV picture in a corner."
         }
       }
     },
@@ -323,7 +325,7 @@
         },
         "tv_corner": {
           "name": "TV picture in a corner",
-          "description": "Keep watching Live TV or the HDMI input in a corner while the camera plays (Samsung Tizen TVs from 2023; with streaming apps the corner shows Live TV)."
+          "description": "Keep Live TV, an HDMI input or Home visible in a corner while the camera plays: On uses the corner from the TV app settings. Over a streaming app (YouTube, Netflix) the camera plays normally instead."
         }
       }
     },
@@ -496,6 +498,7 @@
     "tv_corner": {
       "options": {
         "off": "Off",
+        "on": "On (corner from settings)",
         "top_left": "Top left",
         "top_right": "Top right",
         "bottom_left": "Bottom left",

@@ -45,7 +45,12 @@ CERT_CHECK_INTERVAL: Final = timedelta(hours=12)
 # First media player source: presses the remote's Home key.
 SOURCE_HOME: Final = "Home"
 # Where play_stream can keep the TV's own picture (Live TV / HDMI).
-TV_CORNERS: Final = ("off", "top_left", "top_right", "bottom_left", "bottom_right")
+CORNERS: Final = ("top_left", "top_right", "bottom_left", "bottom_right")
+# play_stream tv_corner: off, on (the corner from the options) or a corner.
+TV_CORNERS: Final = ("off", "on", *CORNERS)
+# Options: which corner "on" uses.
+CONF_TV_CORNER: Final = "tv_corner"
+DEFAULT_TV_CORNER: Final = "top_right"
 # Sources before the apps, and the remote key each one presses. The TV keeps
 # its own names for inputs; these keys work whatever the input is called.
 SOURCE_KEYS: Final = {

@@ -72,6 +72,7 @@ play_stream:
           translation_key: tv_corner
           options:
             - "off"
+            - "on"
             - top_left
             - top_right
             - bottom_left

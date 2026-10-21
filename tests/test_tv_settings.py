@@ -43,6 +43,7 @@ async def test_options_step_defaults_and_save(
     assert defaults == {
         CONF_LANGUAGE: "auto",
         CONF_THEME: "light",
+        "tv_corner": "top_right",
         "resume_playback": True,
         "auto_update": True,
     }

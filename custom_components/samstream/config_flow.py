@@ -61,9 +61,12 @@ from .const import (
     CONF_RESUME,
     CONF_THEME,
     CONF_TOKEN,
+    CONF_TV_CORNER,
     CONF_WOL_TARGET,
+    CORNERS,
     DEFAULT_LANGUAGE,
     DEFAULT_THEME,
+    DEFAULT_TV_CORNER,
     DOMAIN,
     LANGUAGES,
     THEMES,
@@ -362,6 +365,16 @@ class SamstreamOptionsFlow(OptionsFlow):
                             options=list(THEMES),
                             translation_key=CONF_THEME,
                             mode=SelectSelectorMode.LIST,
+                        )
+                    ),
+                    vol.Required(
+                        CONF_TV_CORNER,
+                        default=options.get(CONF_TV_CORNER, DEFAULT_TV_CORNER),
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=list(CORNERS),
+                            translation_key=CONF_TV_CORNER,
+                            mode=SelectSelectorMode.DROPDOWN,
                         )
                     ),
                     vol.Required(

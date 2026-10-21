@@ -573,8 +573,8 @@ export class SamstreamCard extends LitElement {
       camera,
       ...(message ? { message } : {}),
       ...(duration ? { duration } : {}),
-      // The top corner away from the TV app's status pill.
-      ...(corner ? { tv_corner: this.rtl ? "top_left" : "top_right" } : {}),
+      // The corner from the TV app settings; HA skips it over a streaming app.
+      ...(corner ? { tv_corner: "on" } : {}),
     });
   }
 

@@ -35,7 +35,14 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.util.json import JsonValueType
 
 from . import SamstreamConfigEntry
-from .const import CONF_RESUME, DOMAIN, SOURCE_HOME, SOURCE_KEYS
+from .const import (
+    CONF_RESUME,
+    CONF_TV_CORNER,
+    DEFAULT_TV_CORNER,
+    DOMAIN,
+    SOURCE_HOME,
+    SOURCE_KEYS,
+)
 from .coordinator import SamstreamCoordinator
 from .entity import SamstreamEntity
 from .installer import async_install_package, resolve_package_path
@@ -436,7 +443,8 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
             "url": stream_url,
             "type": "mse",
         }
-        if tv_corner != "off":
+        corner = await self._async_corner(tv_corner)
+        if corner is not None:
             # Pictures, not video: the TV's picture needs the video layer.
             stream["mjpeg_url"] = tv_mjpeg_url(self.hass, entry, name)
         await self._async_take_over(
@@ -445,12 +453,42 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
                 "stream": stream,
                 "message": message or "",
                 # Live TV / HDMI keeps playing in this corner (TV Window API).
-                "tv_corner": None if tv_corner == "off" else tv_corner,
+                "tv_corner": corner,
             },
             duration=duration,
             return_to_previous=return_to_previous,
             stream_url=stream_url,
         )
+
+    async def _async_corner(self, requested: str) -> str | None:
+        """Corner for the TV's own picture, or None for the normal camera.
+
+        Only over Live TV, an HDMI input or Home (no app in front), or a TV that
+        is off: the TV window shows the TV's input, so over an app it would
+        replace that app with Live TV.
+        """
+        if requested == "off":
+            return None
+        corner = (
+            self.coordinator.config_entry.options.get(CONF_TV_CORNER, DEFAULT_TV_CORNER)
+            if requested == "on"
+            else requested
+        )
+        if self._interruption is not None:
+            previous = self._interruption.previous_app
+        elif not self.coordinator.data.is_on:
+            return corner
+        else:
+            try:
+                previous = await self.coordinator.async_current_app()
+            except SamstreamError:
+                return None  # Unknown: the normal camera is always safe.
+        if previous not in (None, SAMSTREAM_APP_ID):
+            _LOGGER.debug(
+                "%s shows %s: camera without the corner", self.entity_id, previous
+            )
+            return None
+        return corner
 
     async def async_show_message(  # noqa: PLR0913 - one argument per action field
         self,
