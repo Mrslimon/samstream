@@ -6,7 +6,7 @@ import asyncio
 from dataclasses import replace
 from typing import Any
 
-from aiosamstream import SAMSTREAM_APP_ID
+from aiosamstream import SAMSTREAM_APP_ID, SamstreamConnectionError
 from homeassistant.components.camera import async_get_stream_source
 from homeassistant.components.media_player import (
     MediaPlayerDeviceClass,
@@ -35,6 +35,9 @@ from .tv_settings import ensure_tv_secret
 PARALLEL_UPDATES = 1
 # Wake-on-LAN to a launchable TV usually takes 5-15 s.
 WAKE_WAIT_SECONDS = 25
+# The TV's REST server drops out for a few seconds after an install.
+LAUNCH_ATTEMPTS = 5
+LAUNCH_RETRY_SECONDS = 2
 
 FEATURES = (
     MediaPlayerEntityFeature.TURN_ON
@@ -249,12 +252,23 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         if not self.coordinator.data.is_on:
             await self.async_turn_on()
             await self._async_wait_until_on()
-        await self._async_call(self.coordinator.tv.launch_app(SAMSTREAM_APP_ID))
+        await self._async_launch_samstream()
 
     async def async_stop_stream(self) -> None:
         """Close Samstream (the `stop_stream` action)."""
         set_command(self.hass, self.coordinator.config_entry, {"action": "stop"})
         await self.async_close_app(SAMSTREAM_APP_ID)
+
+    async def _async_launch_samstream(self) -> None:
+        """Open the app, retrying while the TV briefly does not answer."""
+        for _ in range(LAUNCH_ATTEMPTS - 1):
+            try:
+                await self.coordinator.tv.launch_app(SAMSTREAM_APP_ID)
+            except SamstreamConnectionError:
+                await asyncio.sleep(LAUNCH_RETRY_SECONDS)
+            else:
+                return
+        await self._async_call(self.coordinator.tv.launch_app(SAMSTREAM_APP_ID))
 
     async def _async_wait_until_on(self) -> None:
         """After waking the TV, give it time to accept the launch."""

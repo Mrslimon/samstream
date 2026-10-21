@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 import pytest
 from aiohttp import web
-from aiosamstream import SAMSTREAM_APP_ID
+from aiosamstream import SAMSTREAM_APP_ID, SamstreamConnectionError
 from homeassistant.core import HomeAssistant
 from homeassistant.core_config import async_process_ha_core_config
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
@@ -389,3 +389,34 @@ def test_mse_codec() -> None:
     assert mse_codec(box(b"moov", box(b"hvcC"))).startswith("hvc1.")
     with pytest.raises(ValueError, match="no H"):
         mse_codec(box(b"moov"))
+
+
+@pytest.mark.usefixtures("setup_entry", "go2rtc")
+async def test_launch_retries_while_tv_does_not_answer(
+    hass: HomeAssistant, mock_tv: MagicMock
+) -> None:
+    mock_tv.launch_app = AsyncMock(
+        side_effect=[
+            SamstreamConnectionError("down"),
+            SamstreamConnectionError("down"),
+            None,
+        ]
+    )
+    with patch("custom_components.samstream.media_player.asyncio.sleep", AsyncMock()):
+        await hass.services.async_call(
+            DOMAIN, "play_stream", {"entity_id": TV, "url": RTSP}, blocking=True
+        )
+    assert mock_tv.launch_app.await_count == 3
+
+
+@pytest.mark.usefixtures("setup_entry", "go2rtc")
+async def test_launch_gives_up(hass: HomeAssistant, mock_tv: MagicMock) -> None:
+    mock_tv.launch_app = AsyncMock(side_effect=SamstreamConnectionError("down"))
+    with (
+        patch("custom_components.samstream.media_player.asyncio.sleep", AsyncMock()),
+        pytest.raises(HomeAssistantError),
+    ):
+        await hass.services.async_call(
+            DOMAIN, "play_stream", {"entity_id": TV, "url": RTSP}, blocking=True
+        )
+    assert mock_tv.launch_app.await_count == 5

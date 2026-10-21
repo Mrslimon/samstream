@@ -44,16 +44,18 @@ play_stream:
       selector:
         entity:
           domain: camera
-    url:
-      example: "rtsp://user:pass@192.168.1.6:554/Streaming/channels/101"
-      selector:
-        text:
     label:
       example: "Front door"
       selector:
         text:
     message:
       example: "Someone is at the door"
+      selector:
+        text:
+          multiline: true
+    url:
+      advanced: true
+      example: "rtsp://user:pass@192.168.1.6:554/Streaming/channels/101"
       selector:
         text:
 

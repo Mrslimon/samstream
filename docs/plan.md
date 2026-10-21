@@ -239,3 +239,19 @@ Source: PatrickSt1991/Samsung-Jellyfin-Installer (MIT), `Apps2Samsung.Core/Certi
   - While the app is open it polls the same endpoint (every ~2 s, or later a WebSocket channel) for new or stop commands.
   - The payload parsing in `launch.ts` and the relay stay as they are; only the delivery changes.
 - **Verified so far:** update 0.2.0 → 0.3.0 installed through HA, the relay works end to end in tests, and `play_stream` registers the stream in HA's go2rtc.
+
+### Milestone 8 result and roadmap additions (2026-10-21)
+- **Pull model verified on the QN800C:** `play_stream` queues the command and opens the app over REST. The app reads it from `/session` and polls every 2 s. Settings from HA (light theme) also arrive.
+- **Streaming fix:** HA starts its go2rtc without the `mp4` module, so go2rtc ignores MSE requests (the TV got 0 KB). HA now runs `ffmpeg -c copy` from go2rtc's local RTSP restream to fragmented MP4 while a TV watches, sent in go2rtc's MSE WebSocket format. First data after about 1.2 s, no transcoding.
+- **Overlay redesign (0.5.0):**
+  - a glass status pill (pulsing LIVE badge, camera name, clock) that folds to the badge after 5 s;
+  - HA's message as a floating card;
+  - fit mode as a short chip at the top.
+- **16. Notifications and media from HA** (after milestone 11, reusing its wake / switch / return flow):
+  - **16a. Full-screen message:** `samstream.show_message` with title, body, optional icon and severity (info / warning / alert), duration or "until dismissed", and Arabic RTL. It is shown on its own screen, with no camera.
+  - **16b. Message with sound:** an optional `media` field (a chime file, HA `media-source://` item or URL) or `tts` text. HA resolves it to a signed URL (TTS through HA's `tts` integration); the app plays it with an `<audio>` element while the message shows.
+  - **16c. Videos from HA's media library:** make the Samstream media player browsable (`browse_media`) and support `play_media` with `media-source://` IDs. HA resolves them to a signed local URL, and the app plays MP4 / HLS with `<video>` (AVPlay as fallback). This also gives a "send to TV" option in HA's media browser.
+- **17. PiP spike (camera over what you are watching):**
+  - **Limit:** a Tizen web app cannot draw over another app. When Samstream comes to the front, Netflix / YouTube / Shahid move to the background (and usually pause). True PiP over streaming apps is not possible for a sideloaded app.
+  - **What can work:** Samsung's TV Window API (`tizen.tvwindow`, privilege `http://tizen.org/privilege/tv.window`) shows the TV's own source (Live TV tuner or an HDMI input) inside our app. If you are watching Live TV or an HDMI device (receiver, console), Samstream can open with that source full screen and the camera in a corner, which looks the same as PiP. The spike checks whether Tizen 9 still allows it for our certificate level.
+  - **For streaming apps:** the closest option is a "peek" mode. Samstream opens with the camera in a corner card over a dimmed still, then returns to the app and resumes after N seconds (milestone 11's flow). Motion triggers would use it with a short duration and a cooldown.
