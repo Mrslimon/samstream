@@ -90,6 +90,8 @@ async function boot(): Promise<void> {
   // Commands from HA (play_stream / stop_stream), pulled because Samsung TVs drop
   // launch data for sideloaded apps.
   let seq = session?.seq ?? 0;
+  // The play command on screen; its first frame starts HA's `duration`.
+  let playSeq: number | undefined;
   const apply = (command: unknown): void => {
     const action = (command as { action?: unknown } | null)?.action;
     if (action === "stop") {
@@ -100,7 +102,13 @@ async function boot(): Promise<void> {
     const payload = action === "play" ? parsePayload(command, haUrl) : undefined;
     if (payload) {
       app.debug(`HA: play ${payload.stream.label || "camera"}`);
+      playSeq = seq;
       app.playPayload(payload);
+    }
+  };
+  app.onFirstFrame = () => {
+    if (config && playSeq !== undefined) {
+      fetchSession(xhrFetch, config, seq, playSeq).catch(() => undefined);
     }
   };
   if (session?.command) apply(session.command);

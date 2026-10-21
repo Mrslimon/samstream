@@ -21,8 +21,9 @@ from homeassistant.components.media_player.const import (
     MediaType,
 )
 from homeassistant.const import CONF_MAC
-from homeassistant.core import CALLBACK_TYPE, HomeAssistant, ServiceResponse
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, ServiceResponse, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.util.json import JsonValueType
@@ -33,7 +34,7 @@ from .coordinator import SamstreamCoordinator
 from .entity import SamstreamEntity
 from .installer import async_install_package, resolve_package_path
 from .stream_relay import async_publish_stream, tv_stream_url
-from .tv_session import current_command, set_command
+from .tv_session import current_command, set_command, signal_playing
 from .tv_settings import ensure_tv_secret
 
 _LOGGER = logging.getLogger(__name__)
@@ -46,6 +47,9 @@ LAUNCH_ATTEMPTS = 5
 LAUNCH_RETRY_SECONDS = 2
 # After reopening the previous app, wait before pressing Play to resume it.
 RESUME_DELAY_SECONDS = 3
+# `duration` counts from the first frame; if the app never reports one (a
+# stream error, an old app), the return still comes this much later.
+FIRST_FRAME_WAIT_SECONDS = 30
 # First source in the list: presses the remote's Home key.
 SOURCE_HOME = "Home"
 
@@ -94,6 +98,22 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         super().__init__(coordinator, "media_player")
         self._interruption: _Interruption | None = None
         self._cancel_return: CALLBACK_TYPE | None = None
+        # The camera on screen: its play command, stream, and whether a frame showed.
+        self._play_seq: int | None = None
+        self._stream_url: str | None = None
+        self._frame_seen = False
+        self._duration: float | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Listen for the TV app reporting its first frame."""
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                signal_playing(self.coordinator.config_entry.entry_id),
+                self._on_first_frame,
+            )
+        )
 
     async def async_will_remove_from_hass(self) -> None:
         """Drop a pending timed return."""
@@ -275,18 +295,15 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         entry = self.coordinator.config_entry
         ensure_tv_secret(self.hass, entry)
         name = await async_publish_stream(self.hass, entry, source)
+        stream_url = tv_stream_url(self.hass, entry, name)
         # The app pulls this when it starts (or within ~2 s if already open):
         # Samsung TVs ignore launch data for sideloaded apps.
-        set_command(
+        seq = set_command(
             self.hass,
             entry,
             {
                 "action": "play",
-                "stream": {
-                    "label": label or "",
-                    "url": tv_stream_url(self.hass, entry, name),
-                    "type": "mse",
-                },
+                "stream": {"label": label or "", "url": stream_url, "type": "mse"},
                 "message": message or "",
             },
         )
@@ -304,11 +321,14 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         except HomeAssistantError:
             self._interruption = None
             raise
+        # The same camera already on screen only changes its text: no new frame.
+        if not (self._frame_seen and stream_url == self._stream_url):
+            self._frame_seen = False
+        self._play_seq, self._stream_url, self._duration = seq, stream_url, duration
         self._cancel_timed_return()
         if duration:
-            self._cancel_return = async_call_later(
-                self.hass, duration, self._async_timed_return
-            )
+            wait = 0 if self._frame_seen else FIRST_FRAME_WAIT_SECONDS
+            self._schedule_return(duration + wait)
 
     async def async_update_message(self, message: str) -> None:
         """Change the text over the camera on screen (the `update_message` action).
@@ -328,6 +348,7 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
     async def async_stop_stream(self) -> None:
         """Leave the camera (the `stop_stream` action): back to what was before."""
         self._cancel_timed_return()
+        self._play_seq, self._stream_url, self._frame_seen = None, None, False
         interruption, self._interruption = self._interruption, None
         returning = interruption is not None and interruption.return_to_previous
         # Look before the app sees "stop": it closes itself then.
@@ -376,6 +397,21 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         except SamstreamError:
             return True  # Unknown: act as asked.
         return status is None or status.visible
+
+    @callback
+    def _on_first_frame(self, seq: int) -> None:
+        """Start `duration` now: the TV shows the camera."""
+        if self._play_seq is None or seq < self._play_seq or self._frame_seen:
+            return
+        self._frame_seen = True
+        if self._duration and self._cancel_return is not None:
+            self._cancel_timed_return()
+            self._schedule_return(self._duration)
+
+    def _schedule_return(self, delay: float) -> None:
+        self._cancel_return = async_call_later(
+            self.hass, delay, self._async_timed_return
+        )
 
     def _cancel_timed_return(self) -> None:
         if self._cancel_return is not None:

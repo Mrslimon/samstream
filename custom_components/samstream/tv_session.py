@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from aiohttp import web
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.http import KEY_HASS, HomeAssistantView
 
 from .const import CONF_TV_SECRET, DOMAIN
@@ -29,6 +30,11 @@ _SESSIONS = f"{DOMAIN}_sessions"
 # (the TV may need to wake up first); later ones are history, not a request.
 COMMAND_TTL = 120.0
 _CORS = {"Access-Control-Allow-Origin": "*"}
+
+
+def signal_playing(entry_id: str) -> str:
+    """Dispatcher signal: the TV showed the first frame of play command `seq`."""
+    return f"{DOMAIN}_playing_{entry_id}"
 
 
 @dataclass
@@ -84,12 +90,19 @@ class SamstreamTvSessionView(HomeAssistantView):
     async def get(self, request: web.Request, secret: str) -> web.Response:
         """Return settings and any newer command for the TV owning `secret`."""
         hass = request.app[KEY_HASS]
-        try:
-            since = int(request.query.get("since", "0"))
-        except ValueError:
-            since = 0
+        since = _int_query(request, "since") or 0
+        playing = _int_query(request, "playing")
         for entry in hass.config_entries.async_entries(DOMAIN):
             known = entry.data.get(CONF_TV_SECRET)
             if known and secrets.compare_digest(str(known), secret):
+                if playing is not None:
+                    async_dispatcher_send(hass, signal_playing(entry.entry_id), playing)
                 return self.json(session_answer(hass, entry, since), headers=_CORS)
         return self.json_message("Unknown TV", HTTPStatus.NOT_FOUND, headers=_CORS)
+
+
+def _int_query(request: web.Request, name: str) -> int | None:
+    try:
+        return int(request.query[name])
+    except KeyError, ValueError:
+        return None

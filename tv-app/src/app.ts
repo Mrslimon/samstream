@@ -69,6 +69,8 @@ export class App {
   // Opened by HA for a camera: Back and HA's stop close the app, so the TV
   // returns to what was on before. Opened from the TV's app list: Back goes home.
   private fromHa = false;
+  /** Called when a stream shows its first frame. */
+  onFirstFrame: (() => void) | undefined;
   // Text from Home Assistant shown over the video until the next stream.
   private message = "";
 
@@ -89,11 +91,13 @@ export class App {
 
     const callbacks: PlayerCallbacks = {
       onStatus: (state) => this.log(`${this.streamLabel()}: ${state}`),
-      onFirstFrame: (elapsed, info) =>
+      onFirstFrame: (elapsed, info) => {
         this.log(
           `${this.streamLabel()}: FIRST FRAME ${elapsed} ms` +
             (info ? `  ${info.codec} ${info.width}x${info.height}` : ""),
-        ),
+        );
+        this.onFirstFrame?.();
+      },
       onError: (message) => this.log(`${this.streamLabel()}: ERROR ${message}`),
     };
     const avplay = globalThis.webapis?.avplay;

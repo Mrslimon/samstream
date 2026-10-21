@@ -87,13 +87,18 @@ function sessionUrl(config: PackageConfig, since: number): string {
   return `${base}/api/samstream/tv/${encodeURIComponent(config.tv_secret)}/session?since=${since}`;
 }
 
-/** Ask HA for settings and any command newer than `since`. */
+/**
+ * Ask HA for settings and any command newer than `since`; `playing` tells HA the
+ * first frame of that play command is on screen (its `duration` starts then).
+ */
 export async function fetchSession(
   fetchText: Fetch,
   config: PackageConfig,
   since: number,
+  playing?: number,
 ): Promise<{ settings: Partial<TvSettings>; session: Session }> {
-  const raw = JSON.parse(await fetchText(sessionUrl(config, since), HA_TIMEOUT_MS)) as {
+  const url = sessionUrl(config, since) + (playing === undefined ? "" : `&playing=${playing}`);
+  const raw = JSON.parse(await fetchText(url, HA_TIMEOUT_MS)) as {
     settings?: unknown;
     seq?: unknown;
     command?: unknown;

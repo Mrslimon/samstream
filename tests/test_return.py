@@ -9,11 +9,12 @@ import pytest
 from aiosamstream import SAMSTREAM_APP_ID, SamstreamConnectionError
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.samstream.const import DOMAIN
-from custom_components.samstream.tv_session import session_answer
+from custom_components.samstream.tv_session import session_answer, signal_playing
 
 from .conftest import YOUTUBE
 
@@ -47,6 +48,17 @@ def watching_youtube(mock_tv: MagicMock) -> MagicMock:
     return mock_tv
 
 
+def first_frame(hass: HomeAssistant) -> None:
+    """The TV app reports the first frame of the latest play command."""
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    seq = session_answer(hass, entry, 0)["seq"]
+    async_dispatcher_send(hass, signal_playing(entry.entry_id), seq)
+
+
+def later(hass: HomeAssistant, seconds: float) -> None:
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=seconds))
+
+
 def keys(tv: MagicMock) -> list[str]:
     return [call.args[0][0] for call in tv.send_keys.await_args_list]
 
@@ -72,12 +84,56 @@ async def test_pause_then_resume_after_duration(
     assert keys(tv) == ["KEY_PAUSE"]
     tv.launch_app.assert_awaited_once_with(SAMSTREAM_APP_ID)
 
+    # The camera is not on screen yet: the countdown has not started.
+    later(hass, 31)
+    await hass.async_block_till_done()
+    assert tv.launch_app.await_count == 1
+
+    first_frame(hass)
     with patch(SLEEP, AsyncMock()):
-        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=31))
+        later(hass, 31 + 31)
         await hass.async_block_till_done()
 
     tv.launch_app.assert_awaited_with(YOUTUBE.app_id)
     assert keys(tv) == ["KEY_PAUSE", "KEY_PLAY"]
+
+
+async def test_returns_without_a_first_frame(
+    hass: HomeAssistant, watching_youtube: MagicMock
+) -> None:
+    tv = watching_youtube
+    await play(hass, duration=10)
+    with patch(SLEEP, AsyncMock()):
+        later(hass, 10 + 31)
+        await hass.async_block_till_done()
+    tv.launch_app.assert_awaited_with(YOUTUBE.app_id)
+
+
+async def test_same_camera_counts_from_now(
+    hass: HomeAssistant, watching_youtube: MagicMock
+) -> None:
+    """A second trigger for the camera on screen (no reload) needs no new frame."""
+    tv = watching_youtube
+    await play(hass)
+    first_frame(hass)
+    first_frame(hass)  # Reported twice: ignored.
+    await play(hass, duration=10)
+    with patch(SLEEP, AsyncMock()):
+        later(hass, 11)
+        await hass.async_block_till_done()
+    tv.launch_app.assert_awaited_with(YOUTUBE.app_id)
+
+
+async def test_old_first_frame_is_ignored(
+    hass: HomeAssistant, watching_youtube: MagicMock
+) -> None:
+    tv = watching_youtube
+    await play(hass, duration=10)
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    async_dispatcher_send(hass, signal_playing(entry.entry_id), 0)
+    later(hass, 11)
+    await hass.async_block_till_done()
+    assert tv.launch_app.await_count == 1
 
 
 async def test_new_trigger_keeps_the_original_app(
@@ -174,9 +230,10 @@ async def test_timed_return_failure_is_logged(
 ) -> None:
     tv = watching_youtube
     await play(hass, duration=5)
+    first_frame(hass)
     tv.launch_app = AsyncMock(side_effect=SamstreamConnectionError("down"))
     with patch(SLEEP, AsyncMock()):
-        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=6))
+        later(hass, 6)
         await hass.async_block_till_done()
     assert "Could not return from the camera" in caplog.text
 

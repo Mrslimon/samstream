@@ -15,12 +15,13 @@ from aiosamstream import SAMSTREAM_APP_ID, SamstreamConnectionError
 from homeassistant.core import HomeAssistant
 from homeassistant.core_config import async_process_ha_core_config
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.typing import ClientSessionGenerator
 
 from custom_components.samstream.const import CONF_TV_SECRET, DOMAIN
 from custom_components.samstream.stream_relay import mse_codec, stream_name
-from custom_components.samstream.tv_session import session_answer
+from custom_components.samstream.tv_session import session_answer, signal_playing
 
 # The fake go2rtc is a real local aiohttp server.
 pytestmark = pytest.mark.enable_socket
@@ -366,6 +367,12 @@ async def test_session_view(
     assert stop["seq"] == first["seq"] + 1
 
     assert (await client.get("/api/samstream/tv/nope/session")).status == 404
+
+    reports: list[int] = []
+    async_dispatcher_connect(hass, signal_playing(setup_entry.entry_id), reports.append)
+    await client.get(f"/api/samstream/tv/{secret}/session?since=9&playing=7")
+    await client.get(f"/api/samstream/tv/{secret}/session?since=x&playing=y")
+    assert reports == [7]
 
 
 async def test_old_command_expires(
