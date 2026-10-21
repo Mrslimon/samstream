@@ -411,6 +411,40 @@ html[lang="en"] .live {
   }
 }
 
+/* ---- Picture in picture over Live TV --------------------------------- */
+
+/* The TV window draws behind the page: everything but the corner is clear. */
+html.pip,
+body.pip {
+  background: transparent;
+}
+
+body.pip #mse-video {
+  inset: auto;
+  inset-block-end: 64px;
+  inset-inline-end: var(--gutter);
+  width: 640px;
+  height: 360px;
+  border-radius: 20px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+  outline: 2px solid rgba(255, 255, 255, 0.35);
+}
+
+body.pip #overlay {
+  left: auto;
+  right: auto;
+  inset-inline-end: var(--gutter);
+  inset-block-end: 448px;
+  width: 640px;
+}
+
+body.pip #overlay > p {
+  padding-block: 16px;
+  padding-inline: 24px;
+  font-size: 28px;
+  max-height: 30vh;
+}
+
 /* ---- Full-screen message --------------------------------------------- */
 
 #notice {

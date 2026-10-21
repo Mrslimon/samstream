@@ -87,6 +87,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 vol.Coerce(float), vol.Range(min=1, max=86400)
             ),
             vol.Optional("return_to_previous", default=True): cv.boolean,
+            vol.Optional("pip", default=False): cv.boolean,
         },
         func="async_play_stream",
     )
