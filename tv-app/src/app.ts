@@ -124,6 +124,11 @@ export class App {
     this.play(0);
   }
 
+  /** Back to the home screen (HA's `stop_stream`). */
+  goHome(): void {
+    if (this.playing) this.showHome();
+  }
+
   /** Line for the debug panel (Yellow key). */
   debug(line: string): void {
     this.log(line);

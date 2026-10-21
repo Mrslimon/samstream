@@ -10,7 +10,7 @@ import "./styles.css";
 import { App, type AppElements, type Connection } from "./app";
 import { parsePayload, readLaunchPayload } from "./launch";
 import { resolveLanguage, strings } from "./i18n";
-import { loadSettings, xhrFetch } from "./settings";
+import { fetchSession, loadSettings, xhrFetch } from "./settings";
 import { parseStreams } from "./streams";
 
 function byId<T extends HTMLElement>(id: string): T {
@@ -20,6 +20,8 @@ function byId<T extends HTMLElement>(id: string): T {
   }
   return element as T;
 }
+
+const POLL_MS = 2_000;
 
 function storage(): Storage | undefined {
   try {
@@ -39,7 +41,7 @@ function lastStream(haUrl: string | undefined) {
 }
 
 async function boot(): Promise<void> {
-  const { settings, source, config } = await loadSettings(xhrFetch, storage());
+  const { settings, source, config, session } = await loadSettings(xhrFetch, storage());
   const language = resolveLanguage(settings.language, navigator.language);
   document.documentElement.dataset.theme = settings.theme;
   console.log(`[samstream] settings from ${source}: ${JSON.stringify(settings)}`);
@@ -80,6 +82,38 @@ async function boot(): Promise<void> {
   app.start();
   app.debug(`settings: ${source} ${JSON.stringify(settings)}`);
   app.debug(`home assistant: ${haUrl ? haUrl.replace(/\/\/.*@/, "//") : "not set (not installed by HA)"}`);
+
+  // Commands from HA (play_stream / stop_stream), pulled because Samsung TVs drop
+  // launch data for sideloaded apps.
+  let seq = session?.seq ?? 0;
+  const apply = (command: unknown): void => {
+    const action = (command as { action?: unknown } | null)?.action;
+    if (action === "stop") {
+      app.debug("HA: stop");
+      app.goHome();
+      return;
+    }
+    const payload = action === "play" ? parsePayload(command, haUrl) : undefined;
+    if (payload) {
+      app.debug(`HA: play ${payload.stream.label || "camera"}`);
+      app.playPayload(payload);
+    }
+  };
+  if (session?.command) apply(session.command);
+  if (config) {
+    setInterval(() => {
+      if (document.hidden) return;
+      fetchSession(xhrFetch, config, seq).then(
+        (answer) => {
+          if (answer.session.seq !== seq) {
+            seq = answer.session.seq;
+            if (answer.session.command) apply(answer.session.command);
+          }
+        },
+        () => undefined, // HA briefly unreachable: try again next round.
+      );
+    }, POLL_MS);
+  }
 
   const launch = readLaunchPayload(haUrl);
   app.debug(launch ? `launched by HA: ${launch.stream.label || "camera"}` : "plain launch");

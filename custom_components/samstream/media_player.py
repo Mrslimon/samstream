@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from dataclasses import replace
 from typing import Any
 
@@ -30,6 +29,7 @@ from .coordinator import SamstreamCoordinator
 from .entity import SamstreamEntity
 from .installer import async_install_package, resolve_package_path
 from .stream_relay import async_publish_stream, tv_stream_url
+from .tv_session import set_command
 from .tv_settings import ensure_tv_secret
 
 PARALLEL_UPDATES = 1
@@ -231,26 +231,29 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         entry = self.coordinator.config_entry
         ensure_tv_secret(self.hass, entry)
         name = await async_publish_stream(self.hass, entry, source)
-        payload = {
-            "v": 1,
-            "stream": {
-                "label": label or "",
-                "url": tv_stream_url(self.hass, entry, name),
-                "type": "mse",
+        # The app pulls this when it starts (or within ~2 s if already open):
+        # Samsung TVs ignore launch data for sideloaded apps.
+        set_command(
+            self.hass,
+            entry,
+            {
+                "action": "play",
+                "stream": {
+                    "label": label or "",
+                    "url": tv_stream_url(self.hass, entry, name),
+                    "type": "mse",
+                },
+                "message": message or "",
             },
-            "message": message or "",
-        }
+        )
         if not self.coordinator.data.is_on:
             await self.async_turn_on()
             await self._async_wait_until_on()
-        await self._async_call(
-            self.coordinator.tv.launch_app(
-                SAMSTREAM_APP_ID, meta_tag=json.dumps(payload, ensure_ascii=False)
-            )
-        )
+        await self._async_call(self.coordinator.tv.launch_app(SAMSTREAM_APP_ID))
 
     async def async_stop_stream(self) -> None:
         """Close Samstream (the `stop_stream` action)."""
+        set_command(self.hass, self.coordinator.config_entry, {"action": "stop"})
         await self.async_close_app(SAMSTREAM_APP_ID)
 
     async def _async_wait_until_on(self) -> None:

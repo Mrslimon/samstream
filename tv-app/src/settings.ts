@@ -69,10 +69,39 @@ function readCache(store: SettingsStore | undefined): Partial<TvSettings> {
   }
 }
 
+/** Command HA queued for this TV (`samstream.play_stream` / `stop_stream`). */
+export interface Session {
+  seq: number;
+  command: unknown;
+}
+
 export interface LoadedSettings {
   settings: TvSettings;
   config: PackageConfig | undefined;
   source: "home-assistant" | "cache" | "package" | "default";
+  session?: Session;
+}
+
+function sessionUrl(config: PackageConfig, since: number): string {
+  const base = config.ha_url.replace(/\/+$/, "");
+  return `${base}/api/samstream/tv/${encodeURIComponent(config.tv_secret)}/session?since=${since}`;
+}
+
+/** Ask HA for settings and any command newer than `since`. */
+export async function fetchSession(
+  fetchText: Fetch,
+  config: PackageConfig,
+  since: number,
+): Promise<{ settings: Partial<TvSettings>; session: Session }> {
+  const raw = JSON.parse(await fetchText(sessionUrl(config, since), HA_TIMEOUT_MS)) as {
+    settings?: unknown;
+    seq?: unknown;
+    command?: unknown;
+  };
+  return {
+    settings: normalizeSettings(raw.settings),
+    session: { seq: typeof raw.seq === "number" ? raw.seq : since, command: raw.command ?? null },
+  };
 }
 
 export async function loadSettings(
@@ -82,15 +111,14 @@ export async function loadSettings(
   const config = await fetchText("samstream.json", HA_TIMEOUT_MS).then(parseConfig, () => undefined);
   const base = { ...DEFAULT_SETTINGS, ...config?.settings };
   if (config?.ha_url && config.tv_secret) {
-    const url = `${config.ha_url.replace(/\/+$/, "")}/api/samstream/tv/${encodeURIComponent(config.tv_secret)}/settings`;
     try {
-      const remote = normalizeSettings(JSON.parse(await fetchText(url, HA_TIMEOUT_MS)));
+      const { settings: remote, session } = await fetchSession(fetchText, config, 0);
       try {
         store?.setItem(CACHE_KEY, JSON.stringify(remote));
       } catch {
         // Storage unavailable: still use the answer this time.
       }
-      return { settings: { ...base, ...remote }, config, source: "home-assistant" };
+      return { settings: { ...base, ...remote }, config, source: "home-assistant", session };
     } catch {
       // HA unreachable: fall through to the cached answer.
     }

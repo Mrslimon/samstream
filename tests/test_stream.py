@@ -1,6 +1,7 @@
 """play_stream / stop_stream and the go2rtc WebSocket relay to the TV."""
 
 import json
+import time
 from collections.abc import AsyncIterator
 from types import SimpleNamespace
 from typing import Any
@@ -18,6 +19,7 @@ from pytest_homeassistant_custom_component.typing import ClientSessionGenerator
 
 from custom_components.samstream.const import CONF_TV_SECRET, DOMAIN
 from custom_components.samstream.stream_relay import stream_name
+from custom_components.samstream.tv_session import session_answer
 
 # The fake go2rtc is a real local aiohttp server.
 pytestmark = pytest.mark.enable_socket
@@ -70,10 +72,13 @@ async def internal_url(hass: HomeAssistant) -> None:
     )
 
 
-def launched_payload(tv: MagicMock) -> dict[str, Any]:
-    app_id = tv.launch_app.await_args.args[0]
-    assert app_id == SAMSTREAM_APP_ID
-    return json.loads(tv.launch_app.await_args.kwargs["meta_tag"])
+def launched_payload(hass: HomeAssistant, tv: MagicMock) -> dict[str, Any]:
+    """The command queued for the app, after a plain REST launch."""
+    tv.launch_app.assert_awaited_with(SAMSTREAM_APP_ID)
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    command = session_answer(hass, entry, 0)["command"]
+    assert command is not None
+    return command
 
 
 @pytest.mark.usefixtures("go2rtc")
@@ -97,10 +102,10 @@ async def test_play_camera(
 
     name = stream_name(RTSP)
     assert go2rtc.streams == {name: RTSP}
-    payload = launched_payload(mock_tv)
+    payload = launched_payload(hass, mock_tv)
     secret = setup_entry.data[CONF_TV_SECRET]
     assert payload == {
-        "v": 1,
+        "action": "play",
         "stream": {
             "label": "Front door",
             "url": f"ws://192.168.1.5:8123/api/samstream/tv/{secret}/stream/{name}",
@@ -109,7 +114,7 @@ async def test_play_camera(
         "message": "شخص عند الباب",
     }
     # No credentials in what the TV receives.
-    assert "pass" not in mock_tv.launch_app.await_args.kwargs["meta_tag"]
+    assert "pass" not in json.dumps(payload)
 
 
 @pytest.mark.usefixtures("setup_entry", "go2rtc")
@@ -128,7 +133,7 @@ async def test_play_url_and_wake_tv(hass: HomeAssistant, mock_tv: MagicMock) -> 
         )
 
     mock_tv.power_on.assert_awaited_once()
-    assert launched_payload(mock_tv)["stream"]["label"] == "Gate"
+    assert launched_payload(hass, mock_tv)["stream"]["label"] == "Gate"
 
 
 @pytest.mark.usefixtures("setup_entry", "go2rtc")
@@ -204,7 +209,7 @@ async def test_relay(
     await hass.services.async_call(
         DOMAIN, "play_stream", {"entity_id": TV, "url": RTSP}, blocking=True
     )
-    path = launched_payload(mock_tv)["stream"]["url"].split("8123", 1)[1]
+    path = launched_payload(hass, mock_tv)["stream"]["url"].split("8123", 1)[1]
     client = await hass_client_no_auth()
 
     async with client.ws_connect(path) as socket:
@@ -234,3 +239,59 @@ async def test_relay_rejects_wrong_secret_and_unknown_stream(
     assert wrong.status == 404
     unknown = await client.get(f"/api/samstream/tv/{secret}/stream/samstream_other")
     assert unknown.status == 404
+
+
+async def test_session_view(
+    hass: HomeAssistant,
+    setup_entry: MockConfigEntry,
+    mock_tv: MagicMock,
+    go2rtc: FakeGo2rtc,
+    hass_client_no_auth: ClientSessionGenerator,
+) -> None:
+    await hass.services.async_call(
+        DOMAIN,
+        "play_stream",
+        {"entity_id": TV, "url": RTSP, "label": "Gate"},
+        blocking=True,
+    )
+    secret = setup_entry.data[CONF_TV_SECRET]
+    client = await hass_client_no_auth()
+
+    first = await (
+        await client.get(f"/api/samstream/tv/{secret}/session?since=0")
+    ).json()
+    assert first["settings"] == {"language": "auto", "theme": "light"}
+    assert first["command"]["action"] == "play"
+    assert first["command"]["stream"]["label"] == "Gate"
+
+    seen = await (
+        await client.get(f"/api/samstream/tv/{secret}/session?since={first['seq']}")
+    ).json()
+    assert seen["command"] is None
+
+    await hass.services.async_call(
+        DOMAIN, "stop_stream", {"entity_id": TV}, blocking=True
+    )
+    stop = await (
+        await client.get(f"/api/samstream/tv/{secret}/session?since={first['seq']}")
+    ).json()
+    assert stop["command"] == {"action": "stop"}
+    assert stop["seq"] == first["seq"] + 1
+
+    assert (await client.get("/api/samstream/tv/nope/session")).status == 404
+
+
+async def test_old_command_expires(
+    hass: HomeAssistant,
+    setup_entry: MockConfigEntry,
+    mock_tv: MagicMock,
+    go2rtc: FakeGo2rtc,
+) -> None:
+    await hass.services.async_call(
+        DOMAIN, "play_stream", {"entity_id": TV, "url": RTSP}, blocking=True
+    )
+    later = time.monotonic() + 600
+    with patch(
+        "custom_components.samstream.tv_session.time.monotonic", return_value=later
+    ):
+        assert session_answer(hass, setup_entry, 0)["command"] is None

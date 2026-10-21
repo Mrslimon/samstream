@@ -6,7 +6,7 @@ const CONFIG = JSON.stringify({
   tv_secret: "s3cr3t",
   settings: { language: "en", theme: "dark" },
 });
-const SETTINGS_URL = "http://192.168.1.5:8123/api/samstream/tv/s3cr3t/settings";
+const SETTINGS_URL = "http://192.168.1.5:8123/api/samstream/tv/s3cr3t/session?since=0";
 
 function fakeFetch(answers: Record<string, string | Error>): Fetch {
   return async (url) => {
@@ -36,11 +36,20 @@ describe("loadSettings", () => {
   it("uses Home Assistant's answer and caches it", async () => {
     const store = memoryStore();
     const loaded = await loadSettings(
-      fakeFetch({ "samstream.json": CONFIG, [SETTINGS_URL]: '{"language":"ar","theme":"light"}' }),
+      fakeFetch({
+        "samstream.json": CONFIG,
+        [SETTINGS_URL]: JSON.stringify({
+          settings: { language: "ar", theme: "light" },
+          seq: 3,
+          command: { action: "play", stream: { url: "ws://192.168.1.5:8123/x" } },
+        }),
+      }),
       store,
     );
     expect(loaded.source).toBe("home-assistant");
     expect(loaded.settings).toEqual({ language: "ar", theme: "light" });
+    expect(loaded.session?.seq).toBe(3);
+    expect((loaded.session?.command as { action: string }).action).toBe("play");
     expect(JSON.parse(store.data["samstream.settings"])).toEqual({ language: "ar", theme: "light" });
   });
 

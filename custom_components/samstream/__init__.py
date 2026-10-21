@@ -24,6 +24,7 @@ from .coordinator import SamstreamCoordinator
 from .installer import async_bundled_version
 from .signin import SamstreamSignInView
 from .stream_relay import SamstreamStreamView
+from .tv_session import SamstreamTvSessionView
 from .tv_settings import SamstreamTvSettingsView
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -58,6 +59,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.http.register_view(SamstreamSignInView())
     hass.http.register_view(SamstreamTvSettingsView())
     hass.http.register_view(SamstreamStreamView())
+    hass.http.register_view(SamstreamTvSessionView())
     app_schema: VolDictType = {vol.Required(ATTR_APP_ID): cv.string}
     for name, method in (
         ("launch_app", "async_launch_app"),
