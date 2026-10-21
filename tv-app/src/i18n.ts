@@ -70,6 +70,11 @@ const STRINGS: Record<Language, Strings> = {
   },
 };
 
+/** HA's choice wins; "auto" follows the TV's locale. */
+export function resolveLanguage(setting: "auto" | Language, locale: string | undefined): Language {
+  return setting === "auto" ? detectLanguage(locale) : setting;
+}
+
 /** `ar_AE`, `ar-EG`, `ar` → Arabic; anything else → English. */
 export function detectLanguage(locale: string | undefined): Language {
   return (locale ?? "").toLowerCase().startsWith("ar") ? "ar" : "en";

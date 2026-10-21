@@ -1,5 +1,7 @@
 """Installing the Samstream TV app over sdb from Home Assistant."""
 
+import io
+import zipfile
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
@@ -38,7 +40,8 @@ def package(hass: HomeAssistant, tmp_path: Path) -> Path:
     """A .wgt in an allowed directory."""
     hass.config.allowlist_external_dirs = {str(tmp_path)}
     wgt = tmp_path / "Samstream.wgt"
-    wgt.write_bytes(b"PK signed wgt")
+    with zipfile.ZipFile(wgt, "w") as archive:
+        archive.writestr("config.xml", '<widget version="0.1.0"/>')
     return wgt
 
 
@@ -76,7 +79,13 @@ async def test_install_reports_log_and_rescans(
     response = await _install(hass, str(package))
 
     assert response == {TV: {"app_id": SAMSTREAM_APP_ID, "log": LOG}}
-    sdb.install.assert_awaited_once_with(b"PK signed wgt", SAMSTREAM_APP_ID)
+    pushed, app_id = sdb.install.await_args.args
+    assert app_id == SAMSTREAM_APP_ID
+    # Not signed (no signing set up), but HA's settings file was added.
+    assert sorted(zipfile.ZipFile(io.BytesIO(pushed)).namelist()) == [
+        "config.xml",
+        "samstream.json",
+    ]
     host, key = sdb.factory.call_args.args
     assert host == "192.168.1.11"
     assert key.startswith(b"-----BEGIN PRIVATE KEY-----")
@@ -150,6 +159,16 @@ async def test_reinstalls_over_other_author(
     sdb.uninstall.assert_awaited_once_with("SmStrm0001.Samstream")
     assert sdb.install.await_count == 2
     assert response[TV]["log"] == LOG
+
+
+@pytest.mark.usefixtures("setup_entry", "sdb")
+async def test_not_a_package(hass: HomeAssistant, tmp_path: Path) -> None:
+    hass.config.allowlist_external_dirs = {str(tmp_path)}
+    junk = tmp_path / "junk.wgt"
+    junk.write_bytes(b"not a zip")
+    with pytest.raises(ServiceValidationError) as err:
+        await _install(hass, str(junk))
+    assert "not a .wgt" in err.value.translation_placeholders["error"]
 
 
 @pytest.mark.usefixtures("setup_entry")

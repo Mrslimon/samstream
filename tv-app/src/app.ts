@@ -1,7 +1,7 @@
 import { FIT_LABELS, loadFit, nextFit, saveFit } from "./fit";
 import { FocusRow } from "./focus";
 import { renderHelp } from "./help";
-import { applyLanguage, detectLanguage, strings, type Strings } from "./i18n";
+import { applyLanguage, strings, type Language, type Strings } from "./i18n";
 import { MsePlayer } from "./mse";
 import { showOverlay } from "./overlay";
 import { Player, type PlayerCallbacks, type StreamPlayer } from "./player";
@@ -57,9 +57,8 @@ export class App {
     private readonly el: AppElements,
     private readonly streams: CameraStream[],
     version: string,
-    locale: string | undefined,
+    language: Language,
   ) {
-    const language = detectLanguage(locale);
     applyLanguage(document.documentElement, language);
     this.text = strings(language);
     this.rtl = language === "ar";

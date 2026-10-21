@@ -42,6 +42,9 @@ from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
     TextSelector,
     TextSelectorConfig,
     TextSelectorType,
@@ -52,9 +55,15 @@ from .const import (
     CONF_AUTHOR_P12,
     CONF_DISTRIBUTOR_P12,
     CONF_EXTRA_APPS,
+    CONF_LANGUAGE,
+    CONF_THEME,
     CONF_TOKEN,
     CONF_WOL_TARGET,
+    DEFAULT_LANGUAGE,
+    DEFAULT_THEME,
     DOMAIN,
+    LANGUAGES,
+    THEMES,
 )
 from .coordinator import default_wol_target, parse_app_ids
 from .installer import (
@@ -282,7 +291,43 @@ class SamstreamOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Choose what to configure."""
         return self.async_show_menu(
-            step_id="init", menu_options=["network", "app_signing"]
+            step_id="init", menu_options=["tv_app", "network", "app_signing"]
+        )
+
+    async def async_step_tv_app(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Language and theme of the Samstream app on the TV."""
+        if user_input is not None:
+            return self.async_create_entry(
+                data={**self.config_entry.options, **user_input}
+            )
+        options = self.config_entry.options
+        return self.async_show_form(
+            step_id="tv_app",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_LANGUAGE,
+                        default=options.get(CONF_LANGUAGE, DEFAULT_LANGUAGE),
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=list(LANGUAGES),
+                            translation_key=CONF_LANGUAGE,
+                            mode=SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                    vol.Required(
+                        CONF_THEME, default=options.get(CONF_THEME, DEFAULT_THEME)
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=list(THEMES),
+                            translation_key=CONF_THEME,
+                            mode=SelectSelectorMode.LIST,
+                        )
+                    ),
+                }
+            ),
         )
 
     async def async_step_network(
@@ -299,7 +344,11 @@ class SamstreamOptionsFlow(OptionsFlow):
             else:
                 extra = " ".join(parse_app_ids(user_input.get(CONF_EXTRA_APPS, "")))
                 return self.async_create_entry(
-                    data={CONF_WOL_TARGET: target, CONF_EXTRA_APPS: extra}
+                    data={
+                        **self.config_entry.options,
+                        CONF_WOL_TARGET: target,
+                        CONF_EXTRA_APPS: extra,
+                    }
                 )
         current = self.config_entry.options.get(CONF_WOL_TARGET) or default_wol_target(
             self.config_entry.data[CONF_HOST]

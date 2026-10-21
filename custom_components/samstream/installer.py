@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import zipfile
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -47,6 +48,7 @@ from .app_signing import (
     async_save_signing,
 )
 from .const import DOMAIN
+from .tv_settings import add_package_settings, package_settings
 
 if TYPE_CHECKING:
     from . import SamstreamConfigEntry
@@ -192,6 +194,16 @@ async def _async_install(
             translation_domain=DOMAIN,
             translation_key="file_not_found",
             translation_placeholders={"path": str(package)},
+        ) from err
+    # HA's URL, the TV secret and the current settings travel with the package.
+    payload = package_settings(hass, entry)
+    try:
+        wgt = await hass.async_add_executor_job(add_package_settings, wgt, payload)
+    except zipfile.BadZipFile as err:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="install_failed",
+            translation_placeholders={"error": f"{package.name} is not a .wgt package"},
         ) from err
     if setup is not None:
         try:

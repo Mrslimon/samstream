@@ -1,17 +1,41 @@
-/* Samstream TV UI: dark security theme, 1920x1080, D-pad only. */
+/* Samstream TV UI, 1920x1080, D-pad only. Theme set from Home Assistant. */
 
+/* Light (default): cool off-white with white cards. */
 :root {
-  --bg: #0b1420;
-  --surface: #1a2636;
-  --accent: #3a9bd9;
-  --text: #e8ecf0;
-  --muted: #8a9bae;
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --well: #e9edf2;
+  --accent: #2e86d6;
+  --accent-soft: rgba(46, 134, 214, 0.2);
+  --on-accent: #ffffff;
+  --text: #18202b;
+  --muted: #667487;
+  --line: rgba(24, 32, 43, 0.08);
+  --shadow: 0 12px 32px rgba(24, 32, 43, 0.08), 0 2px 6px rgba(24, 32, 43, 0.06);
+  --well-shadow: inset 0 2px 12px rgba(24, 32, 43, 0.08);
+  --bar: rgba(243, 245, 248, 0.94);
   --alert: #dc0014;
   --radius-card: 14px;
   --radius-button: 12px;
   --gutter: 96px;
   font-family: "Readex Pro", sans-serif;
   color: var(--text);
+}
+
+/* Dark security theme. */
+:root[data-theme="dark"] {
+  --bg: #0b1420;
+  --surface: #1a2636;
+  --well: #0b1420;
+  --accent: #3a9bd9;
+  --accent-soft: rgba(58, 155, 217, 0.2);
+  --on-accent: #0b1420;
+  --text: #e8ecf0;
+  --muted: #8a9bae;
+  --line: rgba(58, 155, 217, 0.12);
+  --shadow: inset 0 0 0 1px rgba(58, 155, 217, 0.12), inset 0 24px 60px rgba(0, 0, 0, 0.35);
+  --well-shadow: inset 0 0 40px rgba(0, 0, 0, 0.6);
+  --bar: rgba(11, 20, 32, 0.96);
 }
 
 html,
@@ -69,7 +93,7 @@ body.playing {
   display: flex;
   gap: 48px;
   padding: 56px;
-  box-shadow: inset 0 0 0 1px rgba(58, 155, 217, 0.12), inset 0 24px 60px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow);
 }
 
 .hero-text {
@@ -112,7 +136,7 @@ h1 {
 
 .dot.ready {
   background: var(--accent);
-  box-shadow: 0 0 0 6px rgba(58, 155, 217, 0.2);
+  box-shadow: 0 0 0 6px var(--accent-soft);
 }
 
 .preview {
@@ -120,8 +144,8 @@ h1 {
   aspect-ratio: 16 / 9;
   align-self: center;
   border-radius: var(--radius-card);
-  background: var(--bg);
-  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.6);
+  background: var(--well);
+  box-shadow: var(--well-shadow);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -138,6 +162,7 @@ h1 {
 }
 
 .info {
+  box-shadow: var(--shadow);
   padding-block: 40px;
   padding-inline: 56px;
 }
@@ -169,8 +194,8 @@ h1 {
   display: flex;
   align-items: center;
   gap: 24px;
-  background: rgba(11, 20, 32, 0.96);
-  border-block-start: 1px solid rgba(58, 155, 217, 0.2);
+  background: var(--bar);
+  border-block-start: 1px solid var(--line);
 }
 
 button {
@@ -186,7 +211,7 @@ button {
 
 button.primary {
   background: var(--accent);
-  color: var(--bg);
+  color: var(--on-accent);
 }
 
 button.secondary {
@@ -284,7 +309,7 @@ button:focus {
   padding: 16px 24px;
   font: 400 22px/1.4 "Readex Pro", sans-serif;
   white-space: pre-wrap;
-  color: var(--text);
+  color: #e8ecf0;
   background: rgba(11, 20, 32, 0.85);
   border-radius: var(--radius-card);
 }

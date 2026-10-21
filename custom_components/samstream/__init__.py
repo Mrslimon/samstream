@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 import voluptuous as vol
 from aiosamstream import SamsungTV
@@ -22,6 +23,7 @@ from .const import ATTR_APP_ID, ATTR_PATH, CERT_CHECK_INTERVAL, CONF_TOKEN, DOMA
 from .coordinator import SamstreamCoordinator
 from .installer import async_bundled_version
 from .signin import SamstreamSignInView
+from .tv_settings import SamstreamTvSettingsView
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -43,6 +45,8 @@ class SamstreamData:
     coordinator: SamstreamCoordinator
     # Version of the TV app bundled with the integration (the update target).
     bundled_version: str | None = None
+    # Options at setup: a data-only update (e.g. the TV secret) must not reload.
+    options: dict[str, Any] = field(default_factory=dict)
 
 
 type SamstreamConfigEntry = ConfigEntry[SamstreamData]
@@ -51,6 +55,7 @@ type SamstreamConfigEntry = ConfigEntry[SamstreamData]
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Register the actions and the sign-in hand-off view once."""
     hass.http.register_view(SamstreamSignInView())
+    hass.http.register_view(SamstreamTvSettingsView())
     app_schema: VolDictType = {vol.Required(ATTR_APP_ID): cv.string}
     for name, method in (
         ("launch_app", "async_launch_app"),
@@ -93,6 +98,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SamstreamConfigEntry) ->
         tv=tv,
         coordinator=coordinator,
         bundled_version=await async_bundled_version(hass),
+        options=dict(entry.options),
     )
 
     connections = set()
@@ -123,7 +129,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: SamstreamConfigEntry) ->
 async def _async_options_updated(
     hass: HomeAssistant, entry: SamstreamConfigEntry
 ) -> None:
-    await hass.config_entries.async_reload(entry.entry_id)
+    """Reload for new options; ignore data-only updates (TV secret, token)."""
+    if dict(entry.options) != entry.runtime_data.options:
+        await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: SamstreamConfigEntry) -> bool:

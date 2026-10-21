@@ -64,6 +64,7 @@
       "init": {
         "title": "Samstream options",
         "menu_options": {
+          "tv_app": "TV app: language and theme",
           "network": "Network: Wake-on-LAN and extra apps",
           "app_signing": "App signing: certificates for installing Samstream"
         }
@@ -103,6 +104,18 @@
           "author_p12": "Path relative to the config folder, for example samstream/author.p12.",
           "distributor_p12": "Path relative to the config folder, for example samstream/distributor.p12.",
           "password": "Password of the .p12 files."
+        }
+      },
+      "tv_app": {
+        "title": "Samstream TV app",
+        "description": "Applied the next time Samstream opens on the TV. Needs the app installed or updated by Home Assistant at least once.",
+        "data": {
+          "language": "Language",
+          "theme": "Theme"
+        },
+        "data_description": {
+          "language": "Automatic follows the TV's own language.",
+          "theme": "Colors of the home screen; video always plays on black."
         }
       }
     },
@@ -245,6 +258,21 @@
     "certificate_expired": {
       "title": "Samstream signing certificates expired on {date}",
       "description": "Home Assistant can no longer install or update the Samstream TV app. Open Samstream → Configure → App signing and sign in with Samsung again to renew the certificates. The app already on your TVs keeps working."
+    }
+  },
+  "selector": {
+    "language": {
+      "options": {
+        "auto": "Automatic (TV language)",
+        "ar": "العربية (Arabic)",
+        "en": "English"
+      }
+    },
+    "theme": {
+      "options": {
+        "light": "Light",
+        "dark": "Dark"
+      }
     }
   }
 }

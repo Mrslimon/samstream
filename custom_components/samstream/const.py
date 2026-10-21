@@ -10,6 +10,14 @@ CONF_TV_SECRET: Final = "tv_secret"
 CONF_WOL_TARGET: Final = "wol_target"
 CONF_HA_URL: Final = "ha_url"
 CONF_EXTRA_APPS: Final = "extra_apps"
+CONF_LANGUAGE: Final = "language"
+CONF_THEME: Final = "theme"
+
+# TV app UI: "auto" follows the TV's own language.
+LANGUAGES: Final = ("auto", "ar", "en")
+THEMES: Final = ("light", "dark")
+DEFAULT_LANGUAGE: Final = "auto"
+DEFAULT_THEME: Final = "light"
 CONF_AUTHOR_P12: Final = "author_p12"
 CONF_DISTRIBUTOR_P12: Final = "distributor_p12"
 
