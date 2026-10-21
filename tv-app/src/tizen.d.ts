@@ -52,6 +52,7 @@ declare global {
             type: "MAIN",
           ): void;
           hide(success: () => void, error: () => void, type: "MAIN"): void;
+          getSource(type: "MAIN"): { type: string; number: number };
         };
         application: {
           getCurrentApplication(): {

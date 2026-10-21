@@ -2,13 +2,26 @@ import { FIT_LABELS, loadFit, nextFit, saveFit } from "./fit";
 import { FocusRow } from "./focus";
 import { renderHelp } from "./help";
 import { applyLanguage, strings, type Language, type Strings } from "./i18n";
+import { MjpegPlayer } from "./mjpeg";
 import { MsePlayer } from "./mse";
 import { scrollWhenLong, showOverlay } from "./overlay";
-import { cornerRect, hideTvWindow, holeClipPath, showTvWindow, type Corner } from "./pip";
+import {
+  cornerRect,
+  hideTvWindow,
+  holeClipPath,
+  showTvWindow,
+  tvSource,
+  type Corner,
+} from "./pip";
 import { Player, type PlayerCallbacks, type StreamPlayer } from "./player";
 import type { LaunchPayload } from "./launch";
 import type { MediaItem, Notice } from "./notice";
-import { MediaScreen, NoticeScreen, type MediaElements, type NoticeElements } from "./screens";
+import {
+  MediaScreen,
+  NoticeScreen,
+  type MediaElements,
+  type NoticeElements,
+} from "./screens";
 import { redactUrl, type CameraStream } from "./streams";
 
 /** How the app reached Home Assistant at start. */
@@ -34,6 +47,7 @@ export interface AppElements {
   noticeClock: HTMLElement;
   toast: HTMLElement;
   tvFrame: HTMLElement;
+  mjpeg: HTMLImageElement;
   help: HTMLElement;
   debug: HTMLElement;
   video: HTMLVideoElement;
@@ -70,6 +84,7 @@ export class App {
   private readonly focusRow: FocusRow;
   private readonly native: Player | undefined;
   private readonly mse: MsePlayer;
+  private readonly mjpeg: MjpegPlayer;
   private active: StreamPlayer | undefined;
   private playing = false;
   private current = 0;
@@ -87,6 +102,8 @@ export class App {
   onEnded: (() => void) | undefined;
   /** Called before Back closes the app HA opened; resolves when HA has heard. */
   onClosing: (() => Promise<void>) | undefined;
+  /** The input in the corner ("TV1", "HDMI2"), reported to HA with the first frame. */
+  tvSourceShown: string | undefined;
   private readonly noticeScreen: NoticeScreen;
   private readonly mediaScreen: MediaScreen;
   // A notice or a media file on screen instead of home / camera.
@@ -123,6 +140,7 @@ export class App {
     const avplay = globalThis.webapis?.avplay;
     this.native = avplay ? new Player(avplay, callbacks) : undefined;
     this.mse = new MsePlayer(el.video, callbacks);
+    this.mjpeg = new MjpegPlayer(el.mjpeg, callbacks);
     this.noticeScreen = new NoticeScreen(el.notice, el.sound);
     this.mediaScreen = new MediaScreen(el.media, {
       onStart: () => {
@@ -163,8 +181,7 @@ export class App {
       if (document.hidden) {
         this.active?.stop();
         this.mediaScreen.pause();
-      }
-      else if (this.playing) this.play(this.current);
+      } else if (this.playing) this.play(this.current);
     });
     this.el.playButton.addEventListener("click", () => {
       this.fromHa = false;
@@ -183,7 +200,10 @@ export class App {
   playPayload(payload: LaunchPayload): void {
     this.fromHa = true;
     this.message = payload.message;
-    if (this.playing && this.streams[this.current]?.url === payload.stream.url) {
+    if (
+      this.playing &&
+      this.streams[this.current]?.url === payload.stream.url
+    ) {
       // Same camera already on screen: only the text changes, no reload.
       this.showMessage();
       return;
@@ -294,7 +314,9 @@ export class App {
     }
     // Let HA know (it resumes the app underneath), but never hang on it.
     const told = this.onClosing?.() ?? Promise.resolve();
-    const timeout = new Promise<void>((resolve) => setTimeout(resolve, CLOSE_REPORT_MS));
+    const timeout = new Promise<void>((resolve) =>
+      setTimeout(resolve, CLOSE_REPORT_MS),
+    );
     void Promise.race([told, timeout]).then(() => this.exit());
   }
 
@@ -323,7 +345,14 @@ export class App {
     }
     this.current = (index + this.streams.length) % this.streams.length;
     const stream = this.streams[this.current];
-    const player = stream.type === "mse" ? this.mse : this.native;
+    // Corner mode: pictures, since a playing video would take the TV's layer.
+    const corner =
+      stream.tvCorner && stream.mjpegUrl ? stream.tvCorner : undefined;
+    const player = corner
+      ? this.mjpeg
+      : stream.type === "mse"
+        ? this.mse
+        : this.native;
     this.active?.stop();
     this.leaveScreen();
     this.playing = true;
@@ -340,8 +369,12 @@ export class App {
     );
     this.showMessage();
     this.showHud(stream.label ?? "");
-    this.setTvCorner(stream.tvCorner);
-    player.play(stream.url, stream.lowLatency === true, stream.audio === true);
+    this.setTvCorner(corner);
+    player.play(
+      corner ? (stream.mjpegUrl as string) : stream.url,
+      stream.lowLatency === true,
+      stream.audio === true,
+    );
   }
 
   /**
@@ -354,6 +387,7 @@ export class App {
     const clear = () => {
       document.documentElement.classList.remove("tv-corner");
       video.style.clipPath = "";
+      this.el.mjpeg.style.clipPath = "";
       frame.hidden = true;
       this.el.hud.style.top = "";
       this.el.overlay.style.bottom = "";
@@ -367,17 +401,29 @@ export class App {
     // The TV window draws behind the whole page: nothing opaque may cover it.
     document.documentElement.classList.add("tv-corner");
     video.style.clipPath = holeClipPath(rect);
+    this.el.mjpeg.style.clipPath = holeClipPath(rect);
     frame.style.left = `${rect.left}px`;
     frame.style.top = `${rect.top}px`;
     frame.style.width = `${rect.width}px`;
     frame.style.height = `${rect.height}px`;
     frame.hidden = false;
     const hudSide = this.rtl ? "right" : "left";
-    if (corner === `top_${hudSide}`) this.el.hud.style.top = `${rect.top + rect.height + 24}px`;
-    if (corner.startsWith("bottom")) this.el.overlay.style.bottom = `${1080 - rect.top + 24}px`;
+    if (corner === `top_${hudSide}`)
+      this.el.hud.style.top = `${rect.top + rect.height + 24}px`;
+    if (corner.startsWith("bottom"))
+      this.el.overlay.style.bottom = `${1080 - rect.top + 24}px`;
     void showTvWindow(rect, (line) => this.log(line)).then((shown) => {
-      this.log(shown ? `tv corner: ${corner}` : "tv corner: not available, camera only");
-      if (!shown) clear();
+      this.log(
+        shown
+          ? `tv corner: ${corner}`
+          : "tv corner: not available, camera only",
+      );
+      if (!shown) {
+        clear();
+        return;
+      }
+      this.tvSourceShown = tvSource();
+      this.log(`tv corner source: ${this.tvSourceShown ?? "?"}`);
     });
   }
 
@@ -415,13 +461,14 @@ export class App {
   }
 
   private updateClock(): void {
-    this.el.hudClock.textContent = this.el.noticeClock.textContent = new Date().toLocaleTimeString(
-      document.documentElement.lang || undefined,
-      {
-        hour: "2-digit",
-        minute: "2-digit",
-      },
-    );
+    this.el.hudClock.textContent = this.el.noticeClock.textContent =
+      new Date().toLocaleTimeString(
+        document.documentElement.lang || undefined,
+        {
+          hour: "2-digit",
+          minute: "2-digit",
+        },
+      );
   }
 
   /** Brief chip at the top (fit mode); the HA message stays where it is. */
@@ -458,7 +505,9 @@ export class App {
   }
 
   private players(): StreamPlayer[] {
-    return this.native ? [this.native, this.mse] : [this.mse];
+    return this.native
+      ? [this.native, this.mse, this.mjpeg]
+      : [this.mse, this.mjpeg];
   }
 
   private exit(): void {

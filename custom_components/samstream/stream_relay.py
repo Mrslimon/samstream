@@ -110,6 +110,12 @@ def tv_stream_url(hass: HomeAssistant, entry: SamstreamConfigEntry, name: str) -
     return f"{scheme}://{parsed.netloc}/api/samstream/tv/{secret}/stream/{name}"
 
 
+def tv_mjpeg_url(hass: HomeAssistant, entry: SamstreamConfigEntry, name: str) -> str:
+    """HTTP URL of the picture stream (MJPEG) the TV app shows in corner mode."""
+    ws = tv_stream_url(hass, entry, name)
+    return ws.replace("ws", "http", 1).replace("/stream/", "/mjpeg/", 1)
+
+
 class SamstreamStreamView(HomeAssistantView):
     """Serve a published stream to the TV as go2rtc-style WebSocket MSE."""
 
@@ -170,6 +176,85 @@ async def _wait_for_request(socket: web.WebSocketResponse) -> bool:
     with contextlib.suppress(ValueError):
         return bool(json.loads(message.data).get("type") == "mse")
     return False
+
+
+class SamstreamMjpegView(HomeAssistantView):
+    """Serve a published stream as MJPEG, for the TV's corner mode.
+
+    A <video> on the TV takes the hardware video layer the TV window needs; an
+    image stream does not. This transcodes (unlike the MSE view), so it only
+    runs while a TV shows a camera with its own picture in a corner.
+    """
+
+    url = "/api/samstream/tv/{secret}/mjpeg/{name}"
+    name = "api:samstream:tv_mjpeg"
+    requires_auth = False
+
+    async def get(
+        self, request: web.Request, secret: str, name: str
+    ) -> web.StreamResponse:
+        """Stream JPEG frames until the TV stops reading."""
+        hass = request.app[KEY_HASS]
+        if not _allowed(hass, name, secret):
+            return web.Response(status=HTTPStatus.NOT_FOUND)
+        source = await _restream_url(hass, name)
+        process = await asyncio.create_subprocess_exec(
+            *mjpeg_args(source),
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        response = web.StreamResponse(
+            headers={
+                "Content-Type": f"multipart/x-mixed-replace;boundary={MJPEG_BOUNDARY}",
+                "Cache-Control": "no-cache",
+                "Access-Control-Allow-Origin": "*",
+            }
+        )
+        try:
+            await response.prepare(request)
+            stdout = process.stdout
+            while stdout is not None and (chunk := await stdout.read(65536)):
+                await response.write(chunk)
+        except ConnectionError, aiohttp.ClientError:
+            pass  # The TV went away.
+        finally:
+            with contextlib.suppress(ProcessLookupError):
+                process.kill()
+            await process.wait()
+            _LOGGER.debug("TV picture stream from %s ended", source)
+        return response
+
+
+MJPEG_BOUNDARY = "ffmpeg"  # ffmpeg's mpjpeg muxer default
+
+
+def mjpeg_args(source: str) -> list[str]:
+    """Decode the restream to 10 JPEG frames a second at 720p (multipart)."""
+    return [
+        _FFMPEG,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-fflags",
+        "nobuffer",
+        "-probesize",
+        "500000",
+        "-analyzeduration",
+        "1000000",
+        "-rtsp_transport",
+        "tcp",
+        "-i",
+        source,
+        "-an",
+        "-vf",
+        "fps=10,scale=-2:720",
+        "-q:v",
+        "6",
+        "-f",
+        "mpjpeg",
+        "pipe:1",
+    ]
 
 
 def ffmpeg_args(source: str) -> list[str]:

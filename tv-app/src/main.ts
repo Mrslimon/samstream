@@ -68,6 +68,7 @@ async function boot(): Promise<void> {
     hudClock: byId("hud-clock"),
     toast: byId("toast"),
     tvFrame: byId("tv-frame"),
+    mjpeg: byId<HTMLImageElement>("mjpeg-image"),
     noticeClock: byId("notice-clock"),
     notice: {
       root: byId("notice"),
@@ -152,7 +153,11 @@ async function boot(): Promise<void> {
       : Promise.resolve();
   app.onFirstFrame = () => {
     if (config && playSeq !== undefined) {
-      fetchSession(xhrFetch, config, seq, { playing: playSeq }).catch(() => undefined);
+      // With the input under Samstream, so HA can switch back to it afterwards.
+      fetchSession(xhrFetch, config, seq, {
+        playing: playSeq,
+        ...(app.tvSourceShown ? { source: app.tvSourceShown } : {}),
+      }).catch(() => undefined);
     }
   };
   if (session?.command) apply(session.command);

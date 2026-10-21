@@ -40,13 +40,14 @@ from .coordinator import SamstreamCoordinator
 from .entity import SamstreamEntity
 from .installer import async_install_package, resolve_package_path
 from .keys import normalize_key
-from .stream_relay import async_publish_stream, tv_stream_url
+from .stream_relay import async_publish_stream, tv_mjpeg_url, tv_stream_url
 from .tv_session import (
     current_command,
     set_command,
     signal_closed,
     signal_ended,
     signal_playing,
+    signal_source,
 )
 from .tv_settings import ensure_tv_secret
 
@@ -80,6 +81,8 @@ class _Interruption:
     return_to_previous: bool
     # Press Play when going back: False when the app was already paused.
     resume: bool = True
+    # The input under Samstream, as the TV app reported it ("TV1", "HDMI2").
+    tv_source: str | None = None
 
 
 FEATURES = (
@@ -141,6 +144,11 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass, signal_closed(entry_id), self._on_closed
+            )
+        )
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass, signal_source(entry_id), self._on_tv_source
             )
         )
 
@@ -423,10 +431,18 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         ensure_tv_secret(self.hass, entry)
         name = await async_publish_stream(self.hass, entry, source)
         stream_url = tv_stream_url(self.hass, entry, name)
+        stream: dict[str, Any] = {
+            "label": label or "",
+            "url": stream_url,
+            "type": "mse",
+        }
+        if tv_corner != "off":
+            # Pictures, not video: the TV's picture needs the video layer.
+            stream["mjpeg_url"] = tv_mjpeg_url(self.hass, entry, name)
         await self._async_take_over(
             {
                 "action": "play",
-                "stream": {"label": label or "", "url": stream_url, "type": "mse"},
+                "stream": stream,
                 "message": message or "",
                 # Live TV / HDMI keeps playing in this corner (TV Window API).
                 "tv_corner": None if tv_corner == "off" else tv_corner,
@@ -574,8 +590,12 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
                 with contextlib.suppress(SamstreamError):
                     await self.coordinator.tv.send_keys(["KEY_PLAY"])
         else:
-            # Home or Live TV was underneath; closing the app returns there.
+            # Home or Live TV was underneath: closing the app returns to Home,
+            # so press the input's key when the TV app reported it.
             await self.async_close_app(SAMSTREAM_APP_ID)
+            if key := source_key(interruption.tv_source):
+                with contextlib.suppress(SamstreamError):
+                    await self.coordinator.tv.send_keys([key])
         await self.coordinator.async_request_refresh()
 
     async def _async_remember_screen(self, *, pause: bool) -> _Interruption:
@@ -632,6 +652,12 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
             return
         self._cancel_timed_return()
         self.hass.async_create_task(self._async_timed_return(None))
+
+    @callback
+    def _on_tv_source(self, seq: int, source: str) -> None:
+        """Remember the input under Samstream (corner mode) to return to it."""
+        if seq == self._play_seq and self._interruption is not None:
+            self._interruption.tv_source = source
 
     @callback
     def _on_closed(self, seq: int) -> None:
@@ -767,3 +793,14 @@ def _title_from(media_id: str) -> str:
     """File name without folders, query or extension, as a fallback title."""
     name = media_id.split("?", 1)[0].rstrip("/").rsplit("/", 1)[-1]
     return name.rsplit(".", 1)[0] if "." in name else name
+
+
+def source_key(source: str | None) -> str | None:
+    """Remote key for an input the TV app reported ("TV1" -> KEY_TV)."""
+    if not source:
+        return None
+    if source.startswith("TV"):
+        return "KEY_TV"
+    if source.startswith("HDMI") and source[4:].isdigit():
+        return f"KEY_HDMI{source[4:]}"
+    return None

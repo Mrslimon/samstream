@@ -12,6 +12,8 @@ export interface CameraStream {
   audio?: boolean;
   /** Keep the TV's own picture (Live TV / HDMI) in this corner. */
   tvCorner?: Corner;
+  /** Corner mode: the same camera as a picture stream (no video layer). */
+  mjpegUrl?: string;
 }
 
 /**

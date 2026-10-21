@@ -30,6 +30,8 @@ _SESSIONS = f"{DOMAIN}_sessions"
 # (the TV may need to wake up first); later ones are history, not a request.
 COMMAND_TTL = 120.0
 _CORS = {"Access-Control-Allow-Origin": "*"}
+# Input names the TV app reports ("TV1", "HDMI2"); anything longer is junk.
+_MAX_SOURCE = 16
 
 
 def signal_playing(entry_id: str) -> str:
@@ -40,6 +42,11 @@ def signal_playing(entry_id: str) -> str:
 def signal_closed(entry_id: str) -> str:
     """Dispatcher signal: the viewer pressed Back on command `seq`; Samstream closes."""
     return f"{DOMAIN}_closed_{entry_id}"
+
+
+def signal_source(entry_id: str) -> str:
+    """Dispatcher signal: (seq, input) the TV showed under command `seq`."""
+    return f"{DOMAIN}_source_{entry_id}"
 
 
 def signal_ended(entry_id: str) -> str:
@@ -113,6 +120,15 @@ class SamstreamTvSessionView(HomeAssistantView):
                     async_dispatcher_send(hass, signal_ended(entry.entry_id), ended)
                 if closed is not None:
                     async_dispatcher_send(hass, signal_closed(entry.entry_id), closed)
+                source = request.query.get("source", "")
+                if (
+                    playing is not None
+                    and source.isalnum()
+                    and len(source) <= _MAX_SOURCE
+                ):
+                    async_dispatcher_send(
+                        hass, signal_source(entry.entry_id), playing, source
+                    )
                 return self.json(session_answer(hass, entry, since), headers=_CORS)
         return self.json_message("Unknown TV", HTTPStatus.NOT_FOUND, headers=_CORS)
 

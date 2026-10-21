@@ -71,6 +71,16 @@ export function showTvWindow(rect: Rect, log: (line: string) => void): Promise<b
   });
 }
 
+/** The input the TV window shows ("TV1", "HDMI2"), if the TV says. */
+export function tvSource(): string | undefined {
+  try {
+    const source = globalThis.tizen?.tvwindow?.getSource("MAIN");
+    return source ? `${source.type}${source.number}` : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function hideTvWindow(): void {
   try {
     globalThis.tizen?.tvwindow?.hide(

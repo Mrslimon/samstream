@@ -42,7 +42,11 @@ export function parsePayload(raw: unknown, haUrl?: string): LaunchPayload | unde
   if (typeof stream !== "object" || stream === null) {
     return undefined;
   }
-  const { url, label } = stream as { url?: unknown; label?: unknown };
+  const { url, label, mjpeg_url } = stream as {
+    url?: unknown;
+    label?: unknown;
+    mjpeg_url?: unknown;
+  };
   if (typeof url !== "string" || !/^wss?:\/\//.test(url)) {
     return undefined;
   }
@@ -55,6 +59,11 @@ export function parsePayload(raw: unknown, haUrl?: string): LaunchPayload | unde
       url,
       type: "mse",
       ...(CORNERS.includes(tv_corner as Corner) ? { tvCorner: tv_corner as Corner } : {}),
+      ...(typeof mjpeg_url === "string" &&
+      /^https?:\/\//.test(mjpeg_url) &&
+      (!haUrl || hostOf(mjpeg_url) === hostOf(haUrl))
+        ? { mjpegUrl: mjpeg_url }
+        : {}),
     },
     message: typeof message === "string" ? message : "",
   };

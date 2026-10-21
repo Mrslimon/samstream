@@ -476,4 +476,43 @@ async def test_tv_corner(hass: HomeAssistant, mock_tv: MagicMock) -> None:
         {"entity_id": TV, "url": RTSP, "tv_corner": "bottom_right"},
         blocking=True,
     )
-    assert launched_payload(hass, mock_tv)["tv_corner"] == "bottom_right"
+    payload = launched_payload(hass, mock_tv)
+    assert payload["tv_corner"] == "bottom_right"
+    # Pictures, not video, in corner mode (the TV window needs the video layer).
+    secret = hass.config_entries.async_entries(DOMAIN)[0].data[CONF_TV_SECRET]
+    assert payload["stream"]["mjpeg_url"] == (
+        f"http://192.168.1.5:8123/api/samstream/tv/{secret}/mjpeg/{stream_name(RTSP)}"
+    )
+
+
+async def test_mjpeg_relay(
+    hass: HomeAssistant,
+    setup_entry: MockConfigEntry,
+    mock_tv: MagicMock,
+    go2rtc: FakeGo2rtc,
+    hass_client_no_auth: ClientSessionGenerator,
+) -> None:
+    await hass.services.async_call(
+        DOMAIN,
+        "play_stream",
+        {"entity_id": TV, "url": RTSP, "tv_corner": "top_left"},
+        blocking=True,
+    )
+    url = launched_payload(hass, mock_tv)["stream"]["mjpeg_url"]
+    path = url.split("8123", 1)[1]
+    client = await hass_client_no_auth()
+    frames = b"--ffmpeg\r\nContent-type: image/jpeg\r\nContent-length: 3\r\n\r\nJPG\r\n"
+    ffmpeg = FakeFfmpeg(frames)
+
+    with patch(SUBPROCESS, ffmpeg):
+        response = await client.get(path)
+        assert response.status == 200
+        boundary = "multipart/x-mixed-replace;boundary=ffmpeg"
+        assert response.headers["Content-Type"] == boundary
+        assert (await response.content.read(len(frames))) == frames
+        response.close()
+        await asyncio.wait_for(ffmpeg.killed.wait(), 5)
+    assert "-q:v" in ffmpeg.args  # pictures: the one path that transcodes
+
+    wrong = await client.get(path.replace(setup_entry.data[CONF_TV_SECRET], "nope"))
+    assert wrong.status == 404

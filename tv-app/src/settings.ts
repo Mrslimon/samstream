@@ -95,6 +95,8 @@ export interface SessionReport {
   ended?: number;
   /** The viewer pressed Back and Samstream closes. */
   closed?: number;
+  /** With `playing`: the input shown in the corner ("TV1", "HDMI2"). */
+  source?: string;
 }
 
 /** Ask HA for settings and any command newer than `since`. */
