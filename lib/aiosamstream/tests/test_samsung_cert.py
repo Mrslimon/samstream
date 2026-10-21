@@ -134,6 +134,29 @@ def test_parse_callback() -> None:
     assert parse_callback(callback_body(), "s1") == ACCOUNT
 
 
+def test_parse_callback_without_state() -> None:
+    """The shape of a real sign-in answer: no state at all."""
+    payload = {
+        "access_token": "token-abc",
+        "token_type": "bearer",
+        "userId": "user-1",
+        "client_id": "v285zxnl3h",
+        "inputEmailID": "me@example.com",
+        "close": True,
+        "closedAction": "signInSuccess",
+    }
+    body = urlencode({"code": json.dumps(payload)})
+    assert parse_callback(body, "s1") == ACCOUNT
+
+
+def test_parse_callback_state_as_form_field() -> None:
+    account = {"access_token": "t", "userId": "u", "inputEmailID": "e"}
+    body = urlencode({"code": json.dumps(account), "state": "s1"})
+    assert parse_callback(body, "s1").user_id == "u"
+    with pytest.raises(SamsungCertError, match="does not belong"):
+        parse_callback(body, "other")
+
+
 @pytest.mark.parametrize(
     ("body", "message"),
     [
@@ -141,6 +164,7 @@ def test_parse_callback() -> None:
         (callback_body(access_token=""), "no access token|did not return"),
         (callback_body(inputEmailID=""), "no email"),
         ("code=not-json", "no account data"),
+        ("code=%5B1%5D", "no account data"),
         ("", "no account data"),
     ],
 )

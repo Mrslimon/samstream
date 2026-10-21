@@ -84,7 +84,7 @@
           "code": "رمز تسجيل الدخول"
         },
         "data_description": {
-          "code": "قيمة code من طلب callback (تبدأ بـ {\"access_token\" أو %7B)."
+          "code": "قيمة code من طلب callback. تبدأ بقوس معقوف يليه \"access_token\" (أو بـ %7B إذا اخترت \"view URL-encoded\"). يمكنك أيضًا لصق Payload كاملًا مع state."
         }
       },
       "signing_failed": {

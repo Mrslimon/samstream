@@ -92,14 +92,23 @@ def sign_in_url(state: str) -> str:
 
 
 def parse_callback(body: str, expected_state: str) -> SamsungAccount:
-    """Read the form body SignInGate POSTs to the callback URL."""
-    code = parse_qs(body).get("code", [""])[0]
+    """Read the form body SignInGate POSTs to the callback URL.
+
+    Samsung does not always echo `state` (a real sign-in in October 2026 did
+    not), so it is only checked when present.
+    """
+    fields = parse_qs(body)
+    code = fields.get("code", [""])[0]
     try:
         payload = json.loads(code)
     except json.JSONDecodeError as err:
         msg = "Samsung sign-in sent no account data"
         raise SamsungCertError(msg) from err
-    if payload.get("state") != expected_state:
+    if not isinstance(payload, dict):
+        msg = "Samsung sign-in sent no account data"
+        raise SamsungCertError(msg)
+    returned_state = fields.get("state", [payload.get("state")])[0]
+    if returned_state is not None and returned_state != expected_state:
         msg = "Samsung sign-in answer does not belong to this request"
         raise SamsungCertError(msg)
     account = SamsungAccount(

@@ -464,15 +464,43 @@ class SamstreamOptionsFlow(OptionsFlow):
 
 
 def callback_body(pasted: str) -> str:
-    """Accept what users copy from DevTools: the `code` value or the whole payload."""
+    """Accept what users copy from DevTools: the `code` value or the whole payload.
+
+    The whole payload (`code=...&state=...`, any order) is kept as is, so its
+    `state` is checked against this sign-in.
+    """
     text = pasted.strip()
-    if text.startswith("code="):
+    if text.startswith("code=") or "&code=" in text:
         return text
-    if "code=" in text and "&" in text:
-        return text[text.index("code=") :]
+    if fields := _devtools_fields(text):
+        return urlencode(fields)
     # The bare value, decoded (DevTools "view parsed") or still URL-encoded.
     value = unquote(text) if text.startswith("%7B") else text
     return urlencode({"code": value})
+
+
+def _devtools_fields(text: str) -> dict[str, str]:
+    """Parse DevTools' "Payload" view: `name` and `value` on separate lines.
+
+    Firefox-style `name: value` lines are accepted too.
+    """
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    fields: dict[str, str] = {}
+    index = 0
+    while index < len(lines):
+        name, sep, value = lines[index].partition(":")
+        if sep and name in _CALLBACK_FIELDS and value.strip():
+            fields[name] = value.strip()
+            index += 1
+        elif lines[index] in _CALLBACK_FIELDS and index + 1 < len(lines):
+            fields[lines[index]] = lines[index + 1]
+            index += 2
+        else:
+            index += 1
+    return fields if "code" in fields else {}
+
+
+_CALLBACK_FIELDS = ("code", "state")
 
 
 def _error_key(err: BaseException) -> str:

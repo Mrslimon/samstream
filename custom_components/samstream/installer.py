@@ -50,6 +50,8 @@ _LOGGER = logging.getLogger(__name__)
 _KEY_STORE_VERSION = 1
 _KEY_STORE = f"{DOMAIN}.sdb_key"
 BUNDLED_PACKAGE = Path(__file__).parent / "bundled" / "samstream.wgt"
+# What vd_appinstall reports when the installed copy has another author.
+AUTHOR_MISMATCH = "Author certificate not match"
 
 
 def ha_lan_host(hass: HomeAssistant) -> str | None:
@@ -179,7 +181,7 @@ async def async_install_package(
 
     async with _sdb(hass, entry) as sdb:
         try:
-            result = await sdb.install(wgt, SAMSTREAM_APP_ID)
+            result = await _install_replacing_other_author(sdb, wgt, entry)
         except SdbError as err:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
@@ -189,6 +191,28 @@ async def async_install_package(
     _LOGGER.info("Installed %s on %s", SAMSTREAM_APP_ID, entry.title)
     await entry.runtime_data.coordinator.async_rescan_apps()
     return result
+
+
+async def _install_replacing_other_author(
+    sdb: SdbClient, wgt: bytes, entry: SamstreamConfigEntry
+) -> InstallResult:
+    """Install; if the TV has Samstream from another author, remove it first.
+
+    Tizen only upgrades an app signed by the same author certificate. A copy
+    installed earlier with another tool (Tizen Studio, Apps2Samsung) is replaced:
+    it is our own app and holds no data worth keeping.
+    """
+    try:
+        return await sdb.install(wgt, SAMSTREAM_APP_ID)
+    except SdbError as err:
+        if AUTHOR_MISMATCH not in str(err):
+            raise
+    _LOGGER.warning(
+        "Samstream on %s was signed by another author certificate; reinstalling",
+        entry.title,
+    )
+    await sdb.uninstall(SAMSTREAM_APP_ID)
+    return await sdb.install(wgt, SAMSTREAM_APP_ID)
 
 
 async def async_obtain_samsung_certificates(

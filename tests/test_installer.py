@@ -134,6 +134,25 @@ async def test_unreachable_sdb_raises_repair_issue(
 
 
 @pytest.mark.usefixtures("setup_entry")
+async def test_reinstalls_over_other_author(
+    hass: HomeAssistant, sdb: MagicMock, package: Path
+) -> None:
+    sdb.uninstall = AsyncMock(return_value="uninstall completed")
+    sdb.install.side_effect = [
+        SdbError(
+            f"Install of {SAMSTREAM_APP_ID} failed: Author certificate not match :"
+        ),
+        InstallResult(SAMSTREAM_APP_ID, LOG),
+    ]
+
+    response = await _install(hass, str(package))
+
+    sdb.uninstall.assert_awaited_once_with("SmStrm0001.Samstream")
+    assert sdb.install.await_count == 2
+    assert response[TV]["log"] == LOG
+
+
+@pytest.mark.usefixtures("setup_entry")
 async def test_rejected_package(
     hass: HomeAssistant, sdb: MagicMock, package: Path
 ) -> None:

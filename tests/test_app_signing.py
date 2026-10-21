@@ -247,14 +247,22 @@ async def test_sign_in_by_paste(
         )
         assert result["errors"] == {"base": "sign_in_failed"}
 
-        pasted = json.dumps(
+        account = json.dumps(
             {
                 "access_token": "token",
                 "userId": "user-1",
                 "inputEmailID": "me@example.com",
-                "state": state,
             }
         )
+        # Whole payload with somebody else's state: refused.
+        wrong = urlencode({"code": account, "state": "not-this-sign-in"})
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"code": wrong}
+        )
+        assert result["errors"] == {"base": "sign_in_failed"}
+
+        # Whole payload with this sign-in's state.
+        pasted = urlencode({"code": account, "state": state})
         result = await hass.config_entries.options.async_configure(
             result["flow_id"], {"code": pasted}
         )
@@ -270,10 +278,28 @@ async def test_sign_in_by_paste(
         "%7B%22a%22%3A%201%7D",
         "code=%7B%22a%22%3A%201%7D",
         "state=x&code=%7B%22a%22%3A%201%7D",
+        "code=%7B%22a%22%3A%201%7D&state=x",
     ],
 )
 def test_callback_body_accepts_devtools_formats(pasted: str) -> None:
     assert parse_qs(callback_body(pasted))["code"] == ['{"a": 1}']
+
+
+def test_callback_body_devtools_payload_view() -> None:
+    """Chrome's parsed Payload view, as copied by a user."""
+    pasted = 'state\ns-123\ncode\n{"access_token":"t","userId":"u"}\n'
+    fields = parse_qs(callback_body(pasted))
+    assert fields["state"] == ["s-123"]
+    assert fields["code"] == ['{"access_token":"t","userId":"u"}']
+
+
+def test_callback_body_firefox_view() -> None:
+    fields = parse_qs(callback_body('state: s-1\ncode: {"a": 1}'))
+    assert fields == {"state": ["s-1"], "code": ['{"a": 1}']}
+
+
+def test_callback_body_keeps_state() -> None:
+    assert parse_qs(callback_body("state=x&code=%7B%7D"))["state"] == ["x"]
 
 
 async def test_import_certificates(

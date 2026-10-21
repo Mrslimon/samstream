@@ -84,7 +84,7 @@
           "code": "Sign-in code"
         },
         "data_description": {
-          "code": "The `code` value from the callback request (starts with {\"access_token\" or %7B)."
+          "code": "The code value from the callback request. It starts with a curly bracket and \"access_token\" (or with %7B if you chose \"view URL-encoded\"). You can also paste the whole Payload, state included."
         }
       },
       "signing_failed": {

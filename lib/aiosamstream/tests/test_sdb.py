@@ -151,9 +151,9 @@ async def test_uninstall_and_app_list(sdbd: Any) -> None:
     sdbd.shell["0 vd_applist"] = ["apps count: 23\n"]
     async with client(sdbd) as sdb:
         assert "apps count: 23" in await sdb.app_list()
-        await sdb.uninstall("SmStrm0001")
+        await sdb.uninstall("SmStrm0001.Samstream")
 
-    assert sdbd.commands == ["0 vd_applist", "0 vd_appuninstall SmStrm0001"]
+    assert sdbd.commands == ["0 vd_applist", "0 vd_appuninstall SmStrm0001.Samstream"]
 
 
 async def test_retries_dropped_handshake(sdbd: Any) -> None:

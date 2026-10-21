@@ -287,9 +287,12 @@ class SdbClient:
             raise SdbError(msg)
         return InstallResult(app_id=app_id, lines=lines)
 
-    async def uninstall(self, package_id: str) -> str:
-        """Remove a package (the 10-character part of the app ID)."""
-        return await self.shell(f"0 vd_appuninstall {package_id}")
+    async def uninstall(self, app_id: str) -> str:
+        """Remove an app; sdbd needs the full app ID (`SmStrm0001.Samstream`).
+
+        With only the package ID the TV answers "was get app info failed".
+        """
+        return await self.shell(f"0 vd_appuninstall {app_id}")
 
     async def app_list(self) -> str:
         """Raw `vd_applist` listing (parsed in milestone 7c)."""
