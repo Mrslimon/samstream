@@ -30,6 +30,9 @@
     "button": {
       "install_app": {
         "default": "mdi:package-down"
+      },
+      "download_logos": {
+        "default": "mdi:image-multiple"
       }
     }
   },

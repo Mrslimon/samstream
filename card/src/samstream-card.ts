@@ -2,6 +2,7 @@ import { LitElement, css, html, nothing, type PropertyValues, type TemplateResul
 import {
   SECTIONS,
   cameraList,
+  deviceButtons,
   friendlyName,
   initials,
   remoteEntity,
@@ -59,7 +60,7 @@ export class SamstreamCard extends LitElement {
   camera = "";
   feedback = "";
   severity: Severity = "info";
-  private appsFor: string | null | undefined;
+  private appsFor: string | undefined;
   private feedbackTimer: ReturnType<typeof setTimeout> | undefined;
   private holdTimer: ReturnType<typeof setTimeout> | undefined;
   private repeatTimer: ReturnType<typeof setInterval> | undefined;
@@ -126,10 +127,12 @@ export class SamstreamCard extends LitElement {
 
   protected updated(changed: PropertyValues): void {
     if (!changed.has("hass") || !this.hass || !this.config) return;
-    // Refresh the app list when the app on screen changes (logos may have been added).
+    // Refresh the app list when the app on screen changes, or a TV button was
+    // pressed (a button's state is its last press: "Download app logos").
     const appId = (this.hass.states[this.config.entity]?.attributes.app_id as string) ?? null;
-    if (this.apps === undefined || appId !== this.appsFor) {
-      this.appsFor = appId;
+    const key = `${appId}|${deviceButtons(this.hass, this.config.entity)}`;
+    if (this.apps === undefined || key !== this.appsFor) {
+      this.appsFor = key;
       this.loadApps();
     }
   }

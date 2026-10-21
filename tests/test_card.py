@@ -6,14 +6,17 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from aiosamstream import SAMSTREAM_APP_ID
 from homeassistant.components import media_source
 from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL
 from homeassistant.components.media_player import BrowseMedia, MediaClass
 from homeassistant.components.media_player.const import MediaType
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
 from homeassistant.util import slugify
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
+from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 from pytest_homeassistant_custom_component.typing import (
     ClientSessionGenerator,
     WebSocketGenerator,
@@ -21,7 +24,12 @@ from pytest_homeassistant_custom_component.typing import (
 
 from custom_components.samstream.const import DOMAIN
 from custom_components.samstream.frontend import CARD_FILE, URL_BASE
-from custom_components.samstream.logos import match_logos
+from custom_components.samstream.logos import (
+    async_download_logos,
+    logo_site,
+    match_logos,
+    png_size,
+)
 
 from .conftest import NETFLIX, YOUTUBE
 
@@ -155,3 +163,82 @@ async def test_card_is_served(
     assert response.status == 200
     assert "samstream-card" in await response.text()
     assert DOMAIN == "samstream"
+
+
+def _png(width: int) -> bytes:
+    return (
+        bytes.fromhex("89504e470d0a1a0a0000000d49484452")
+        + width.to_bytes(4, "big")
+        + bytes(8)
+    )
+
+
+@pytest.mark.parametrize(
+    ("name", "site"),
+    [
+        ("YouTube", "youtube.com"),
+        ("Spotify - Music and Podcasts", "spotify.com"),
+        ("شاهد MBC", "shahid.mbc.net"),
+        ("TOD by beIN", "tod.tv"),
+        ("Today's news", None),
+        ("SmartThings", "samsung.com"),
+        ("2R2", None),
+    ],
+)
+def test_logo_site(name: str, site: str | None) -> None:
+    assert logo_site(name) == site
+
+
+def test_png_size() -> None:
+    assert png_size(_png(180)) == 180
+    assert png_size(b"<html>") == 0
+
+
+# The HTTP mock must exist before setup creates HA's client session.
+@pytest.mark.usefixtures("aioclient_mock", "setup_entry")
+async def test_download_logos_button(
+    hass: HomeAssistant, logo_folder: Path, aioclient_mock: AiohttpClientMocker
+) -> None:
+    (logo_folder / "netflix.svg").unlink()
+    (logo_folder / f"{YOUTUBE.app_id}.png").unlink()
+    # Netflix: the favicon service is small, the site's touch icon is bigger.
+    aioclient_mock.get(
+        "https://www.google.com/s2/favicons?domain=netflix.com&sz=256", content=_png(64)
+    )
+    aioclient_mock.get("https://netflix.com/apple-touch-icon.png", content=_png(180))
+    # YouTube: nothing usable anywhere.
+    aioclient_mock.get(
+        "https://www.google.com/s2/favicons?domain=youtube.com&sz=256",
+        content=b"<html>",
+    )
+    aioclient_mock.get("https://youtube.com/apple-touch-icon.png", status=404)
+
+    await hass.services.async_call(
+        "button",
+        "press",
+        {"entity_id": "button.65_neo_qled_8k_download_app_logos"},
+        blocking=True,
+    )
+
+    saved = logo_folder / f"{NETFLIX.app_id}.png"
+    assert png_size(saved.read_bytes()) == 180
+    assert not (logo_folder / f"{YOUTUBE.app_id}.png").exists()
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data.coordinator
+    assert coordinator.logos == {
+        NETFLIX.app_id: f"/local/samstream/apps/{NETFLIX.app_id}.png"
+    }
+
+
+@pytest.mark.usefixtures("aioclient_mock", "logo_folder", "setup_entry")
+async def test_download_keeps_own_logos_and_adds_samstream(
+    hass: HomeAssistant, logo_folder: Path, aioclient_mock: AiohttpClientMocker
+) -> None:
+    apps = {YOUTUBE.app_id: "YouTube", SAMSTREAM_APP_ID: "Samstream", "x": "2R2"}
+    results = await async_download_logos(hass, apps, async_get_clientsession(hass))
+    assert results == {
+        YOUTUBE.app_id: "kept",
+        SAMSTREAM_APP_ID: "downloaded",
+        "x": "unknown",
+    }
+    assert (logo_folder / f"{YOUTUBE.app_id}.png").read_bytes() == b"png"
+    assert aioclient_mock.call_count == 0

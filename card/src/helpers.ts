@@ -47,6 +47,16 @@ export function remoteEntity(hass: Hass, mediaPlayer: string): string | undefine
   return hass.states[guess] ? guess : undefined;
 }
 
+/** Last-press times of the buttons on the media player's device, as one string. */
+export function deviceButtons(hass: Hass, mediaPlayer: string): string {
+  const device = hass.entities?.[mediaPlayer]?.device_id;
+  if (!device) return "";
+  return Object.values(hass.entities ?? {})
+    .filter((entry) => entry.device_id === device && entry.entity_id.startsWith("button."))
+    .map((entry) => hass.states[entry.entity_id]?.state ?? "")
+    .join(",");
+}
+
 /** Cameras to offer: the configured ones, else every camera in HA. */
 export function cameraList(hass: Hass, configured: string[] | undefined): string[] {
   if (configured && configured.length > 0) return configured.filter((id) => hass.states[id]);

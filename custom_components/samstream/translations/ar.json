@@ -175,6 +175,9 @@
     "button": {
       "install_app": {
         "name": "تثبيت تطبيق Samstream"
+      },
+      "download_logos": {
+        "name": "تنزيل شعارات التطبيقات"
       }
     },
     "update": {

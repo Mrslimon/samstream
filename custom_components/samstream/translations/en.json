@@ -175,6 +175,9 @@
     "button": {
       "install_app": {
         "name": "Install Samstream app"
+      },
+      "download_logos": {
+        "name": "Download app logos"
       }
     },
     "update": {
