@@ -54,6 +54,7 @@ from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
 from .app_signing import SigningSetup, async_load_signing
 from .const import (
     CONF_AUTHOR_P12,
+    CONF_AUTO_UPDATE,
     CONF_DISTRIBUTOR_P12,
     CONF_EXTRA_APPS,
     CONF_LANGUAGE,
@@ -333,7 +334,7 @@ class SamstreamOptionsFlow(OptionsFlow):
     async def async_step_tv_app(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Language and theme of the Samstream app on the TV."""
+        """Language, theme and automatic updates of the Samstream app on the TV."""
         if user_input is not None:
             return self.async_create_entry(
                 data={**self.config_entry.options, **user_input}
@@ -362,6 +363,9 @@ class SamstreamOptionsFlow(OptionsFlow):
                             mode=SelectSelectorMode.LIST,
                         )
                     ),
+                    vol.Required(
+                        CONF_AUTO_UPDATE, default=options.get(CONF_AUTO_UPDATE, True)
+                    ): bool,
                 }
             ),
         )

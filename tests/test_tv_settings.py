@@ -40,7 +40,7 @@ async def test_options_step_defaults_and_save(
     result = await _tv_app_options(hass, setup_entry)
     assert result["type"] is FlowResultType.FORM
     defaults = result["data_schema"]({})
-    assert defaults == {CONF_LANGUAGE: "auto", CONF_THEME: "light"}
+    assert defaults == {CONF_LANGUAGE: "auto", CONF_THEME: "light", "auto_update": True}
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {CONF_LANGUAGE: "ar", CONF_THEME: "dark"}

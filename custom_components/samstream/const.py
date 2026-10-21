@@ -12,6 +12,8 @@ CONF_HA_URL: Final = "ha_url"
 CONF_EXTRA_APPS: Final = "extra_apps"
 CONF_LANGUAGE: Final = "language"
 CONF_THEME: Final = "theme"
+# Install newer bundled TV apps by themselves (when the TV is on and idle).
+CONF_AUTO_UPDATE: Final = "auto_update"
 
 # TV app UI: "auto" follows the TV's own language.
 LANGUAGES: Final = ("auto", "ar", "en")

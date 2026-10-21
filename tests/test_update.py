@@ -2,14 +2,21 @@
 
 import asyncio
 import zipfile
+from dataclasses import replace
+from datetime import timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from aiosamstream import SAMSTREAM_APP_ID, AppStatus
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import issue_registry as ir
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 
 from custom_components.samstream import installer
 from custom_components.samstream.app_signing import (
@@ -188,3 +195,82 @@ async def test_bundled_version(hass: HomeAssistant, tmp_path: Path) -> None:
         assert await installer.async_bundled_version(hass) == "0.2.0"
     with patch.object(installer, "BUNDLED_PACKAGE", tmp_path / "missing.wgt"):
         assert await installer.async_bundled_version(hass) is None
+
+
+async def _poll(hass: HomeAssistant) -> None:
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=11))
+    await hass.async_block_till_done()
+
+
+@pytest.fixture
+def signing(hass: HomeAssistant) -> None:
+    """App signing is set up (certificates for the test TV)."""
+    hass.async_create_task(async_save_signing(hass, setup_for([DUID])))
+
+
+async def test_auto_update_installs_newer_app_once(
+    hass: HomeAssistant, mock_entry: MockConfigEntry, mock_tv: MagicMock, signing: None
+) -> None:
+    with patch(
+        "custom_components.samstream.update.async_install_package",
+        AsyncMock(side_effect=HomeAssistantError("TV busy")),
+    ) as install:
+        await _setup(hass, mock_entry, mock_tv, installed="0.0.1")
+        await _poll(hass)
+        await _poll(hass)
+    # Tried once for 0.1.0; a failure leaves it to the update entity.
+    install.assert_awaited_once()
+    assert hass.states.get(UPDATE).state == "on"
+
+
+async def test_auto_update_waits_while_samstream_is_on_screen(
+    hass: HomeAssistant, mock_entry: MockConfigEntry, mock_tv: MagicMock, signing: None
+) -> None:
+    mock_tv.foreground_app.return_value = replace(samstream("0.0.1"), visible=True)
+    with patch(
+        "custom_components.samstream.update.async_install_package", AsyncMock()
+    ) as install:
+        await _setup(hass, mock_entry, mock_tv, installed="0.0.1")
+        await _poll(hass)
+        install.assert_not_awaited()
+
+        mock_tv.foreground_app.return_value = None
+        await _poll(hass)
+    install.assert_awaited_once()
+
+
+@pytest.mark.parametrize(
+    ("installed", "options"),
+    [
+        ("0.0.1", {"auto_update": False}),  # Switched off.
+        ("0.1.0", {}),  # Up to date.
+        ("0.2.0", {}),  # Newer than the bundle (dev build): never downgrade.
+        (None, {}),  # Not installed: first installs stay manual.
+    ],
+)
+@pytest.mark.usefixtures("signing")
+async def test_auto_update_skipped(
+    hass: HomeAssistant,
+    mock_entry: MockConfigEntry,
+    mock_tv: MagicMock,
+    installed: str | None,
+    options: dict,
+) -> None:
+    hass.config_entries.async_update_entry(mock_entry, options=options)
+    with patch(
+        "custom_components.samstream.update.async_install_package", AsyncMock()
+    ) as install:
+        await _setup(hass, mock_entry, mock_tv, installed=installed)
+        await _poll(hass)
+    install.assert_not_awaited()
+
+
+async def test_auto_update_needs_signing(
+    hass: HomeAssistant, mock_entry: MockConfigEntry, mock_tv: MagicMock
+) -> None:
+    with patch(
+        "custom_components.samstream.update.async_install_package", AsyncMock()
+    ) as install:
+        await _setup(hass, mock_entry, mock_tv, installed="0.0.1")
+        await _poll(hass)
+    install.assert_not_awaited()
