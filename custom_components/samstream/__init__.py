@@ -13,6 +13,7 @@ from homeassistant.const import CONF_HOST, CONF_MAC, CONF_MODEL, CONF_NAME, Plat
 from homeassistant.core import HomeAssistant, SupportsResponse
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import service
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_time_interval
@@ -34,7 +35,6 @@ PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
     Platform.BUTTON,
     Platform.MEDIA_PLAYER,
-    Platform.REMOTE,
     Platform.SENSOR,
     Platform.UPDATE,
 ]
@@ -127,6 +127,25 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     service.async_register_platform_entity_service(
         hass,
         DOMAIN,
+        "send_keys",
+        entity_domain=MEDIA_PLAYER_DOMAIN,
+        schema={
+            vol.Required("keys"): vol.All(cv.ensure_list, [cv.string]),
+            vol.Optional("repeats", default=1): vol.All(
+                vol.Coerce(int), vol.Range(min=1, max=50)
+            ),
+            vol.Optional("delay", default=0.4): vol.All(
+                vol.Coerce(float), vol.Range(min=0, max=5)
+            ),
+            vol.Optional("hold", default=0): vol.All(
+                vol.Coerce(float), vol.Range(min=0, max=30)
+            ),
+        },
+        func="async_send_keys",
+    )
+    service.async_register_platform_entity_service(
+        hass,
+        DOMAIN,
         "send_text",
         entity_domain=MEDIA_PLAYER_DOMAIN,
         schema={
@@ -190,6 +209,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SamstreamConfigEntry) ->
     A TV that is off is a normal state, not a setup failure: the device and
     entities come from what the config flow stored, and show "off".
     """
+    _remove_old_remote(hass, entry)
     tv = SamsungTV(
         entry.data[CONF_HOST],
         async_get_clientsession(hass),
@@ -243,3 +263,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: SamstreamConfigEntry) -
     if unloaded:
         await entry.runtime_data.tv.close()
     return unloaded
+
+
+def _remove_old_remote(hass: HomeAssistant, entry: SamstreamConfigEntry) -> None:
+    """Remove the remote entity of earlier versions (keys: samstream.send_keys)."""
+    registry = er.async_get(hass)
+    unique_id = f"{entry.unique_id or entry.entry_id}_remote"
+    if entity_id := registry.async_get_entity_id("remote", DOMAIN, unique_id):
+        registry.async_remove(entity_id)

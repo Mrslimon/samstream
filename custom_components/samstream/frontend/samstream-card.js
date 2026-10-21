@@ -512,30 +512,22 @@ ye?.({ LitElement: G }), (W.litElementVersions ??= []).push("4.2.2");
 //#region src/helpers.ts
 function be(e, t) {
 	let n = e.entities?.[t]?.device_id;
-	if (n) {
-		for (let t of Object.values(e.entities ?? {})) if (t.device_id === n && t.entity_id.startsWith("remote.")) return t.entity_id;
-	}
-	let r = `remote.${t.split(".", 2)[1]}`;
-	return e.states[r] ? r : void 0;
-}
-function xe(e, t) {
-	let n = e.entities?.[t]?.device_id;
 	return n ? Object.values(e.entities ?? {}).filter((e) => e.device_id === n && e.entity_id.startsWith("button.")).map((t) => e.states[t.entity_id]?.state ?? "").join(",") : "";
 }
-function Se(e, t) {
+function xe(e, t) {
 	return t && t.length > 0 ? t.filter((t) => e.states[t]) : Object.keys(e.states).filter((e) => e.startsWith("camera.")).sort((t, n) => K(e, t).localeCompare(K(e, n)));
 }
 function K(e, t) {
 	let n = e.states[t]?.attributes.friendly_name;
 	return typeof n == "string" && n ? n : t;
 }
-function Ce(e) {
+function Se(e) {
 	let t = e.trim().split(/\s+/).filter(Boolean);
 	if (t.length === 0) return "?";
 	let n = Array.from(t[0])[0] ?? "?";
 	return (n + (/^[A-Za-z0-9]/.test(n) && t.length > 1 ? Array.from(t[1])[0] ?? "" : "")).toUpperCase();
 }
-function we(e) {
+function Ce(e) {
 	let t = 0;
 	for (let n of e) t = t * 31 + (n.codePointAt(0) ?? 0) | 0;
 	return `hsl(${Math.abs(t) % 360} 55% 46%)`;
@@ -550,7 +542,7 @@ var q = [
 	"keyboard",
 	"touchpad"
 ];
-function Te(e) {
+function we(e) {
 	if (Array.isArray(e.sections)) {
 		let t = e.sections.filter((e) => q.includes(e));
 		return t.filter((e, n) => t.indexOf(e) === n);
@@ -558,9 +550,9 @@ function Te(e) {
 	let t = ["tv"];
 	return e.show_cameras !== !1 && t.push("cameras"), e.show_message !== !1 && t.push("message"), e.show_apps !== !1 && t.push("apps"), e.show_remote !== !1 && t.push("remote", "media"), t;
 }
-var J = 2.5, Ee = 6, De = 300, Oe = 600;
-function ke(e, t) {
-	return e > Ee ? "move" : t <= De ? "click" : t >= Oe ? "right" : "move";
+var J = 2.5, Te = 6, Ee = 300, De = 600;
+function Oe(e, t) {
+	return e > Te ? "move" : t <= Ee ? "click" : t >= De ? "right" : "move";
 }
 //#endregion
 //#region src/strings.ts
@@ -657,17 +649,17 @@ var Y = {
 function X(e) {
 	return e?.toLowerCase().startsWith("ar") ? "ar" : "en";
 }
-function Ae(e) {
+function ke(e) {
 	return Y[e];
 }
 Object.keys(Y);
 //#endregion
 //#region src/samstream-card.ts
-var Z, je = [
+var Z, Ae = [
 	"info",
 	"warning",
 	"alert"
-], Me = 3e3, Ne = 400, Pe = 150, Fe = 600, Ie = 1.5, Le = 16, Q = (e) => e.preventDefault(), $ = class extends G {
+], je = 3e3, Me = 400, Ne = 150, Pe = 600, Fe = 1.5, Ie = 16, Q = (e) => e.preventDefault(), $ = class extends G {
 	constructor(...e) {
 		super(...e), this.camera = "", this.feedback = "", this.severity = "info", this.held = !1, this.pending = {
 			x: 0,
@@ -682,7 +674,7 @@ var Z, je = [
 		return 8;
 	}
 	static getConfigForm() {
-		let e = (e) => Ae(X(e?.locale?.language ?? e?.language));
+		let e = (e) => ke(X(e?.locale?.language ?? e?.language));
 		return {
 			schema: [
 				{
@@ -701,7 +693,7 @@ var Z, je = [
 						mode: "list",
 						options: q.map((t) => ({
 							value: t,
-							label: e()[Re(t)]
+							label: e()[Le(t)]
 						}))
 					} }
 				},
@@ -734,14 +726,14 @@ var Z, je = [
 		};
 	}
 	get text() {
-		return Ae(X(this.hass?.locale?.language ?? this.hass?.language));
+		return ke(X(this.hass?.locale?.language ?? this.hass?.language));
 	}
 	get rtl() {
 		return X(this.hass?.locale?.language ?? this.hass?.language) === "ar";
 	}
 	updated(e) {
 		if (!e.has("hass") || !this.hass || !this.config) return;
-		let t = `${this.hass.states[this.config.entity]?.attributes.app_id ?? null}|${xe(this.hass, this.config.entity)}`;
+		let t = `${this.hass.states[this.config.entity]?.attributes.app_id ?? null}|${be(this.hass, this.config.entity)}`;
 		(this.apps === void 0 || t !== this.appsFor) && (this.appsFor = t, this.loadApps());
 	}
 	loadApps() {
@@ -758,7 +750,7 @@ var Z, je = [
 		if (!this.hass || !this.config) return I;
 		let e = this.hass.states[this.config.entity];
 		if (!e) return P`<ha-card><div class="empty">${this.config.entity}?</div></ha-card>`;
-		let t = e.state !== "off" && e.state !== "unavailable", n = Te(this.config), r = t ? n : n.includes("tv") ? ["tv"] : [];
+		let t = e.state !== "off" && e.state !== "unavailable", n = we(this.config), r = t ? n : n.includes("tv") ? ["tv"] : [];
 		return P`
       <ha-card dir=${this.rtl ? "rtl" : "ltr"}>
         ${t || r.length > 0 ? I : this.renderPowerOnly()}
@@ -809,7 +801,7 @@ var Z, je = [
     `;
 	}
 	renderCameras() {
-		let e = this.text, t = Se(this.hass, this.config.cameras);
+		let e = this.text, t = xe(this.hass, this.config.cameras);
 		if (t.length === 0) return P`<section><h3>${e.cameras}</h3><p class="hint">${e.noCameras}</p></section>`;
 		let n = t.includes(this.camera) ? this.camera : t[0];
 		return P`
@@ -855,7 +847,7 @@ var Z, je = [
         <textarea id="notice-message" dir="auto" rows="2" placeholder=${e.messagePlaceholder}></textarea>
         <div class="row">
           <div class="chips">
-            ${je.map((e) => P`<button
+            ${Ae.map((e) => P`<button
                 class="chip ${e} ${e === this.severity ? "selected" : ""}"
                 @click=${() => this.severity = e}
               >
@@ -1029,14 +1021,14 @@ var Z, je = [
 		return {
 			down: (i) => {
 				i.currentTarget.setPointerCapture?.(i.pointerId), r(), this.held = !1, t === "repeat" ? (e(), this.holdTimer = setTimeout(() => {
-					this.repeatTimer = setInterval(e, Pe);
-				}, Ne)) : this.holdTimer = setTimeout(() => {
+					this.repeatTimer = setInterval(e, Ne);
+				}, Me)) : this.holdTimer = setTimeout(() => {
 					this.held = !0, n && this.call("samstream", "hold_key", {
 						entity_id: this.config.entity,
 						key: n,
-						seconds: Ie
+						seconds: Fe
 					}, !1);
-				}, Fe);
+				}, Pe);
 			},
 			up: () => {
 				r(), t === "hold" && !this.held && e(), this.held = !1;
@@ -1058,12 +1050,12 @@ var Z, je = [
 		let t = this.touch;
 		if (!t) return;
 		let n = e.clientX - t.x, r = e.clientY - t.y;
-		t.x = e.clientX, t.y = e.clientY, t.travel += Math.abs(n) + Math.abs(r), this.pending.x += n * J, this.pending.y += r * J, !this.flushTimer && !this.pointerBusy && (this.flushTimer = setTimeout(() => this.flushPointer(), Le));
+		t.x = e.clientX, t.y = e.clientY, t.travel += Math.abs(n) + Math.abs(r), this.pending.x += n * J, this.pending.y += r * J, !this.flushTimer && !this.pointerBusy && (this.flushTimer = setTimeout(() => this.flushPointer(), Ie));
 	}
 	touchEnd() {
 		let e = this.touch;
 		if (this.touch = void 0, !e) return;
-		let t = ke(e.travel, Date.now() - e.at);
+		let t = Oe(e.travel, Date.now() - e.at);
 		t === "click" ? this.pointer({ click: "left" }) : t === "right" && this.pointer({ click: "right" });
 	}
 	flushPointer() {
@@ -1087,8 +1079,8 @@ var Z, je = [
 		}, !1);
 	}
 	tile(e, t) {
-		return e.logo ? P`<div class="tile ${t}"><img src=${e.logo} alt="" loading="lazy" /></div>` : P`<div class="tile ${t} letter" style="background:${we(e.name)}">
-      ${Ce(e.name)}
+		return e.logo ? P`<div class="tile ${t}"><img src=${e.logo} alt="" loading="lazy" /></div>` : P`<div class="tile ${t} letter" style="background:${Ce(e.name)}">
+      ${Se(e.name)}
     </div>`;
 	}
 	value(e) {
@@ -1133,10 +1125,9 @@ var Z, je = [
 		});
 	}
 	sendKey(e) {
-		let t = be(this.hass, this.config.entity);
-		t && this.call("remote", "send_command", {
-			entity_id: t,
-			command: e
+		this.call("samstream", "send_keys", {
+			entity_id: this.config.entity,
+			keys: [e]
 		}, !1);
 	}
 	toggleMute() {
@@ -1150,7 +1141,7 @@ var Z, je = [
 		this.hass.callService(e, t, n).then(() => r && t !== "toggle" && this.flash(this.text.sent), (e) => this.flash(`${this.text.failed}: ${e?.message ?? String(e)}`));
 	}
 	flash(e) {
-		this.feedback = e, clearTimeout(this.feedbackTimer), this.feedbackTimer = setTimeout(() => this.feedback = "", Me);
+		this.feedback = e, clearTimeout(this.feedbackTimer), this.feedbackTimer = setTimeout(() => this.feedback = "", je);
 	}
 };
 Z = $, Z.properties = {
@@ -1455,7 +1446,7 @@ Z = $, Z.properties = {
       text-align: center;
     }
   `;
-function Re(e) {
+function Le(e) {
 	return e;
 }
 customElements.get("samstream-card") || (customElements.define("samstream-card", $), (window.customCards ??= []).push({

@@ -151,11 +151,6 @@
     }
   },
   "entity": {
-    "remote": {
-      "remote": {
-        "name": "جهاز التحكم"
-      }
-    },
     "binary_sensor": {
       "developer_mode": {
         "name": "وضع المطوّر"
@@ -365,6 +360,28 @@
         "message": {
           "name": "الرسالة",
           "description": "النص الجديد؛ الفارغ يخفي البطاقة."
+        }
+      }
+    },
+    "send_keys": {
+      "name": "ضغط أزرار جهاز التحكم",
+      "description": "يضغط أزرار جهاز تحكم التلفاز بالترتيب، مثل KEY_HOME وKEY_DOWN وKEY_ENTER (أو HOME وDOWN وENTER).",
+      "fields": {
+        "keys": {
+          "name": "الأزرار",
+          "description": "الأزرار المطلوب ضغطها بالترتيب."
+        },
+        "repeats": {
+          "name": "التكرار",
+          "description": "عدد مرات ضغط القائمة كاملة."
+        },
+        "delay": {
+          "name": "الفاصل",
+          "description": "التوقف بين ضغطات الأزرار."
+        },
+        "hold": {
+          "name": "الضغط المطوّل",
+          "description": "مدة الضغط على كل زر (0: ضغطة عادية)."
         }
       }
     },

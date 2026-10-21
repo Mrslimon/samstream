@@ -5,7 +5,6 @@ import {
   deviceButtons,
   friendlyName,
   initials,
-  remoteEntity,
   sectionsOf,
   tileColor,
   type AppsAnswer,
@@ -597,8 +596,7 @@ export class SamstreamCard extends LitElement {
   }
 
   private sendKey(command: string): void {
-    const remote = remoteEntity(this.hass, this.config.entity);
-    if (remote) this.call("remote", "send_command", { entity_id: remote, command }, false);
+    this.call("samstream", "send_keys", { entity_id: this.config.entity, keys: [command] }, false);
   }
 
   private toggleMute(): void {

@@ -9,8 +9,6 @@ CONF_TOKEN: Final = "token"
 CONF_TV_SECRET: Final = "tv_secret"
 # The TV's DUID (read over sdb once, kept for certificates covering every TV).
 CONF_DUID: Final = "duid"
-# Entry data flag: remotes made before "hidden by default" were hidden once.
-REMOTE_HIDDEN: Final = "remote_hidden"
 CONF_WOL_TARGET: Final = "wol_target"
 CONF_HA_URL: Final = "ha_url"
 CONF_EXTRA_APPS: Final = "extra_apps"

@@ -126,6 +126,44 @@ update_message:
         text:
           multiline: true
 
+send_keys:
+  target:
+    entity:
+      integration: samstream
+      domain: media_player
+  fields:
+    keys:
+      required: true
+      example: '["KEY_HOME", "KEY_DOWN", "KEY_ENTER"]'
+      selector:
+        text:
+          multiple: true
+    repeats:
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    delay:
+      default: 0.4
+      selector:
+        number:
+          min: 0
+          max: 5
+          step: 0.1
+          unit_of_measurement: s
+          mode: box
+    hold:
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 30
+          step: 0.1
+          unit_of_measurement: s
+          mode: box
+
 send_text:
   target:
     entity:

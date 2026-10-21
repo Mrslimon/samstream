@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   cameraList,
   initials,
-  remoteEntity,
   sectionsOf,
   tileColor,
   touchGesture,
@@ -23,25 +22,6 @@ const state = (entity_id: string, name?: string) => ({
   entity_id,
   state: "on",
   attributes: name ? { friendly_name: name } : {},
-});
-
-describe("remoteEntity", () => {
-  it("finds the remote on the same device", () => {
-    const h = hass({
-      entities: {
-        "media_player.tv": { entity_id: "media_player.tv", device_id: "d1" },
-        "remote.other": { entity_id: "remote.other", device_id: "d2" },
-        "remote.living_room": { entity_id: "remote.living_room", device_id: "d1" },
-      },
-    });
-    expect(remoteEntity(h, "media_player.tv")).toBe("remote.living_room");
-  });
-
-  it("falls back to the same object ID", () => {
-    const h = hass({ states: { "remote.tv": state("remote.tv") } });
-    expect(remoteEntity(h, "media_player.tv")).toBe("remote.tv");
-    expect(remoteEntity(hass({}), "media_player.tv")).toBeUndefined();
-  });
 });
 
 describe("cameraList", () => {

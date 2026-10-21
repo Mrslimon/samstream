@@ -151,11 +151,6 @@
     }
   },
   "entity": {
-    "remote": {
-      "remote": {
-        "name": "Remote"
-      }
-    },
     "binary_sensor": {
       "developer_mode": {
         "name": "Developer mode"
@@ -365,6 +360,28 @@
         "message": {
           "name": "Message",
           "description": "New text to show; empty hides the card."
+        }
+      }
+    },
+    "send_keys": {
+      "name": "Press remote keys",
+      "description": "Presses TV remote keys in order, for example KEY_HOME, KEY_DOWN, KEY_ENTER (or just HOME, DOWN, ENTER).",
+      "fields": {
+        "keys": {
+          "name": "Keys",
+          "description": "Keys to press, in order."
+        },
+        "repeats": {
+          "name": "Repeats",
+          "description": "How many times to press the whole list."
+        },
+        "delay": {
+          "name": "Delay",
+          "description": "Pause between key presses."
+        },
+        "hold": {
+          "name": "Hold",
+          "description": "Hold each key this long (0: a normal press)."
         }
       }
     },

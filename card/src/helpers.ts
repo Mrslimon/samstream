@@ -34,21 +34,6 @@ export interface AppsAnswer {
   apps: TvApp[];
 }
 
-/** The remote entity on the same device as the media player (for key presses). */
-export function remoteEntity(hass: Hass, mediaPlayer: string): string | undefined {
-  const device = hass.entities?.[mediaPlayer]?.device_id;
-  if (device) {
-    for (const entry of Object.values(hass.entities ?? {})) {
-      if (entry.device_id === device && entry.entity_id.startsWith("remote.")) {
-        return entry.entity_id;
-      }
-    }
-  }
-  // Same object ID is the integration's naming (media_player.x / remote.x).
-  const guess = `remote.${mediaPlayer.split(".", 2)[1]}`;
-  return hass.states[guess] ? guess : undefined;
-}
-
 /** Last-press times of the buttons on the media player's device, as one string. */
 export function deviceButtons(hass: Hass, mediaPlayer: string): string {
   const device = hass.entities?.[mediaPlayer]?.device_id;

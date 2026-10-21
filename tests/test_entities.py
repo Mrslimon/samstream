@@ -1,4 +1,4 @@
-"""Media player, remote and diagnostic entities driving the mocked TV."""
+"""Media player and diagnostic entities driving the mocked TV."""
 
 from dataclasses import replace
 from datetime import timedelta
@@ -10,7 +10,6 @@ from homeassistant.components.media_player import (
     ATTR_MEDIA_VOLUME_LEVEL,
     ATTR_MEDIA_VOLUME_MUTED,
 )
-from homeassistant.components.remote import ATTR_COMMAND, ATTR_NUM_REPEATS
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -23,12 +22,11 @@ from pytest_homeassistant_custom_component.common import (
 
 from custom_components.samstream.const import DOMAIN
 from custom_components.samstream.coordinator import default_wol_target
-from custom_components.samstream.remote import normalize_key
+from custom_components.samstream.keys import normalize_key
 
 from .conftest import MAC, TV_INFO
 
 TV = "media_player.65_neo_qled_8k"
-REMOTE = "remote.65_neo_qled_8k_remote"
 DEV_MODE = "binary_sensor.65_neo_qled_8k_developer_mode"
 DEV_HOST = "sensor.65_neo_qled_8k_developer_host"
 
@@ -45,7 +43,6 @@ async def test_states_when_on(hass: HomeAssistant) -> None:
     assert tv.attributes["volume_level"] == 0.38
     assert tv.attributes["is_volume_muted"] is False
     assert tv.attributes["device_class"] == "tv"
-    assert hass.states.get(REMOTE).state == "on"
     assert hass.states.get(DEV_MODE).state == "on"
     assert hass.states.get(DEV_HOST).state == "192.168.1.5"
 
@@ -59,7 +56,6 @@ async def test_standby_then_unreachable(
 
     assert hass.states.get(TV).state == "off"
     assert "volume_level" not in hass.states.get(TV).attributes
-    assert hass.states.get(REMOTE).state == "off"
     mock_tv.close.assert_awaited_once()
 
     mock_tv.device_info.side_effect = SamstreamConnectionError("gone")
@@ -145,17 +141,15 @@ async def test_play_pause_toggles(hass: HomeAssistant, mock_tv: MagicMock) -> No
     assert await toggle() == "KEY_PLAY"
 
 
-@pytest.mark.parametrize("entity_id", [TV, REMOTE])
 @pytest.mark.usefixtures("setup_entry")
-async def test_power(hass: HomeAssistant, mock_tv: MagicMock, entity_id: str) -> None:
-    domain = entity_id.split(".", maxsplit=1)[0]
+async def test_power(hass: HomeAssistant, mock_tv: MagicMock) -> None:
     await hass.services.async_call(
-        domain, "turn_on", {ATTR_ENTITY_ID: entity_id}, blocking=True
+        "media_player", "turn_on", {ATTR_ENTITY_ID: TV}, blocking=True
     )
     mock_tv.power_on.assert_awaited_once_with(MAC, "192.168.1.255")
 
     await hass.services.async_call(
-        domain, "turn_off", {ATTR_ENTITY_ID: entity_id}, blocking=True
+        "media_player", "turn_off", {ATTR_ENTITY_ID: TV}, blocking=True
     )
     mock_tv.power_off.assert_awaited_once()
 
@@ -169,20 +163,21 @@ async def test_turn_off_is_optimistic(hass: HomeAssistant) -> None:
 
 
 @pytest.mark.usefixtures("setup_entry")
-async def test_remote_send_command(hass: HomeAssistant, mock_tv: MagicMock) -> None:
+async def test_send_keys(hass: HomeAssistant, mock_tv: MagicMock) -> None:
     await hass.services.async_call(
-        "remote",
-        "send_command",
-        {
-            ATTR_ENTITY_ID: REMOTE,
-            ATTR_COMMAND: ["home", "KEY_VOLUP"],
-            ATTR_NUM_REPEATS: 2,
-        },
+        DOMAIN,
+        "send_keys",
+        {ATTR_ENTITY_ID: TV, "keys": ["home", "KEY_VOLUP"], "repeats": 2},
         blocking=True,
     )
     mock_tv.send_keys.assert_awaited_once_with(
         ["KEY_HOME", "KEY_VOLUP"], repeats=2, delay=0.4, hold=0
     )
+    # One key as plain text works too.
+    await hass.services.async_call(
+        DOMAIN, "send_keys", {ATTR_ENTITY_ID: TV, "keys": "enter"}, blocking=True
+    )
+    assert mock_tv.send_keys.await_args.args[0] == ["KEY_ENTER"]
 
 
 @pytest.mark.usefixtures("setup_entry")
@@ -273,33 +268,15 @@ async def test_developer_host_disabled_by_default(hass: HomeAssistant) -> None:
     assert hass.states.get(DEV_HOST) is None
 
 
-@pytest.mark.usefixtures("setup_entry")
-async def test_remote_hidden_by_default(hass: HomeAssistant) -> None:
-    """The media player has the power button; the remote is for key presses."""
-    entry = er.async_get(hass).async_get(REMOTE)
-    assert entry is not None
-    assert entry.hidden_by is er.RegistryEntryHider.INTEGRATION
-    assert hass.states.get(REMOTE).state == "on"
-
-
-async def test_remote_made_before_is_hidden_once(
+async def test_old_remote_entity_is_removed(
     hass: HomeAssistant, mock_entry: MockConfigEntry, mock_tv: MagicMock
 ) -> None:
-    """Remotes registered before "hidden by default" are hidden once."""
+    """Earlier versions made a remote; it goes (keys are samstream.send_keys)."""
     registry = er.async_get(hass)
-    registry.async_get_or_create(
+    old = registry.async_get_or_create(
         "remote", DOMAIN, f"{mock_entry.unique_id}_remote", config_entry=mock_entry
     )
     assert await hass.config_entries.async_setup(mock_entry.entry_id)
     await hass.async_block_till_done()
-    entity_id = registry.async_get_entity_id(
-        "remote", DOMAIN, f"{mock_entry.unique_id}_remote"
-    )
-    assert registry.async_get(entity_id).hidden_by is er.RegistryEntryHider.INTEGRATION
-    assert mock_entry.data["remote_hidden"] is True
-
-    # The user shows it again: it stays shown after a reload.
-    registry.async_update_entity(entity_id, hidden_by=None)
-    await hass.config_entries.async_reload(mock_entry.entry_id)
-    await hass.async_block_till_done()
-    assert registry.async_get(entity_id).hidden_by is None
+    assert registry.async_get(old.entity_id) is None
+    assert not hass.states.async_entity_ids("remote")

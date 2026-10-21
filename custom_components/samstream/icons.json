@@ -1,10 +1,5 @@
 {
   "entity": {
-    "remote": {
-      "remote": {
-        "default": "mdi:remote-tv"
-      }
-    },
     "binary_sensor": {
       "developer_mode": {
         "default": "mdi:code-braces-box",
@@ -69,6 +64,9 @@
     },
     "pointer": {
       "service": "mdi:cursor-default-click"
+    },
+    "send_keys": {
+      "service": "mdi:remote"
     }
   }
 }

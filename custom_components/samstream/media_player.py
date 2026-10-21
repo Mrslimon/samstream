@@ -39,7 +39,7 @@ from .const import CONF_RESUME, DOMAIN, SOURCE_HOME, SOURCE_KEYS
 from .coordinator import SamstreamCoordinator
 from .entity import SamstreamEntity
 from .installer import async_install_package, resolve_package_path
-from .remote import normalize_key
+from .keys import normalize_key
 from .stream_relay import async_publish_stream, tv_stream_url
 from .tv_session import (
     current_command,
@@ -721,6 +721,19 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
     async def async_send_text(self, *, text: str, done: bool = True) -> None:
         """Type into the TV's on-screen keyboard (the `send_text` action)."""
         await self._async_call(self.coordinator.tv.send_text(text, done=done))
+
+    async def async_send_keys(
+        self, *, keys: list[str], repeats: int = 1, delay: float = 0.4, hold: float = 0
+    ) -> None:
+        """Press remote keys in order (the `send_keys` action)."""
+        await self._async_call(
+            self.coordinator.tv.send_keys(
+                [normalize_key(key) for key in keys],
+                repeats=repeats,
+                delay=delay,
+                hold=hold,
+            )
+        )
 
     async def async_hold_key(self, key: str, seconds: float) -> None:
         """Press and hold a remote key (the `hold_key` action)."""
