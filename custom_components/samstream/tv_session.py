@@ -56,6 +56,13 @@ def set_command(
     return session.seq
 
 
+def current_command(
+    hass: HomeAssistant, entry: SamstreamConfigEntry
+) -> dict[str, Any] | None:
+    """Return the latest command given to this TV, if any."""
+    return _session(hass, entry.entry_id).command
+
+
 def session_answer(
     hass: HomeAssistant, entry: SamstreamConfigEntry, since: int
 ) -> dict[str, Any]:

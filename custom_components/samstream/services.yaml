@@ -53,11 +53,36 @@ play_stream:
       selector:
         text:
           multiline: true
+    duration:
+      example: 30
+      selector:
+        number:
+          min: 1
+          max: 3600
+          unit_of_measurement: s
+          mode: box
+    return_to_previous:
+      default: true
+      selector:
+        boolean:
     url:
       advanced: true
       example: "rtsp://user:pass@192.168.1.6:554/Streaming/channels/101"
       selector:
         text:
+
+update_message:
+  target:
+    entity:
+      integration: samstream
+      domain: media_player
+  fields:
+    message:
+      required: true
+      example: "A courier is holding a parcel"
+      selector:
+        text:
+          multiline: true
 
 stop_stream:
   target:

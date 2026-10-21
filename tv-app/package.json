@@ -1,7 +1,7 @@
 {
   "name": "samstream-tv-app",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Samstream Tizen TV player (AVPlay RTSP/HLS with Arabic-ready overlay)",
   "type": "module",
   "scripts": {

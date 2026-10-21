@@ -145,6 +145,11 @@ class SamstreamCoordinator(DataUpdateCoordinator[SamstreamState]):
             app_name=app_name,
         )
 
+    async def async_current_app(self) -> str | None:
+        """App on screen right now (fresh check); None for home or Live TV."""
+        status = await self._async_foreground(self.data)
+        return status.app_id if status is not None else None
+
     async def _async_foreground(
         self, previous: SamstreamState | None
     ) -> AppStatus | None:

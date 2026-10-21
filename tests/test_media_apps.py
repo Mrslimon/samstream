@@ -42,7 +42,7 @@ async def test_sources_and_app_on_screen(
     hass: HomeAssistant, mock_tv: MagicMock
 ) -> None:
     state = hass.states.get(TV)
-    assert state.attributes["source_list"] == ["Netflix", "YouTube"]
+    assert state.attributes["source_list"] == ["Home", "Netflix", "YouTube"]
     assert "source" not in state.attributes
     assert hass.states.get(CURRENT_APP).state == "other"
 
@@ -97,6 +97,21 @@ async def test_select_source_launches_app(
 
     mock_tv.launch_app.assert_awaited_once_with("111299001912")
     assert hass.states.get(TV).attributes["source"] == "YouTube"
+
+
+@pytest.mark.usefixtures("setup_entry")
+async def test_select_home_presses_home(
+    hass: HomeAssistant, mock_tv: MagicMock
+) -> None:
+    await hass.services.async_call(
+        "media_player",
+        "select_source",
+        {ATTR_ENTITY_ID: TV, ATTR_INPUT_SOURCE: "Home"},
+        blocking=True,
+    )
+
+    mock_tv.send_keys.assert_awaited_once_with(["KEY_HOME"])
+    mock_tv.launch_app.assert_not_awaited()
 
 
 @pytest.mark.usefixtures("setup_entry")
@@ -222,8 +237,10 @@ async def test_full_app_list_from_sdb(
     assert coordinator.app_versions["111477000821"] == "6.68.1"
     # Only the extra ID the TV did not list is probed over REST.
     mock_tv.installed_apps.assert_awaited_once_with(["my.extra"])
-    assert hass.states.get(TV).attributes["source_list"] == ["YouTube", "شاهد MBC"]
+    state = hass.states.get(TV)
+    assert state.attributes["source_list"] == ["Home", "YouTube", "شاهد MBC"]
     # Every app is known, so "no app in front" means home / live TV.
+    assert state.attributes["source"] == "Home"
     sensor = hass.states.get(CURRENT_APP)
     assert sensor.state == "home"
     assert sensor.attributes["options"] == ["YouTube", "شاهد MBC", "home", "other"]

@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import replace
+import contextlib
+import logging
+from dataclasses import dataclass, replace
+from datetime import datetime
 from typing import Any
 
-from aiosamstream import SAMSTREAM_APP_ID, SamstreamConnectionError
+from aiosamstream import SAMSTREAM_APP_ID, SamstreamConnectionError, SamstreamError
 from homeassistant.components.camera import async_get_stream_source
 from homeassistant.components.media_player import (
     MediaPlayerDeviceClass,
@@ -18,9 +21,10 @@ from homeassistant.components.media_player.const import (
     MediaType,
 )
 from homeassistant.const import CONF_MAC
-from homeassistant.core import HomeAssistant, ServiceResponse
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, ServiceResponse
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.event import async_call_later
 from homeassistant.util.json import JsonValueType
 
 from . import SamstreamConfigEntry
@@ -29,15 +33,31 @@ from .coordinator import SamstreamCoordinator
 from .entity import SamstreamEntity
 from .installer import async_install_package, resolve_package_path
 from .stream_relay import async_publish_stream, tv_stream_url
-from .tv_session import set_command
+from .tv_session import current_command, set_command
 from .tv_settings import ensure_tv_secret
+
+_LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 1
 # Wake-on-LAN to a launchable TV usually takes 5-15 s.
 WAKE_WAIT_SECONDS = 25
-# The TV's REST server drops out for a few seconds after an install.
+# The TV's REST server drops out now and then (for a few seconds after an install).
 LAUNCH_ATTEMPTS = 5
 LAUNCH_RETRY_SECONDS = 2
+# After reopening the previous app, wait before pressing Play to resume it.
+RESUME_DELAY_SECONDS = 3
+# First source in the list: presses the remote's Home key.
+SOURCE_HOME = "Home"
+
+
+@dataclass
+class _Interruption:
+    """What the TV showed before Samstream took over, to go back to."""
+
+    was_on: bool
+    previous_app: str | None
+    return_to_previous: bool
+
 
 FEATURES = (
     MediaPlayerEntityFeature.TURN_ON
@@ -72,6 +92,13 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
     def __init__(self, coordinator: SamstreamCoordinator) -> None:
         """Create the media player for the coordinator's TV."""
         super().__init__(coordinator, "media_player")
+        self._interruption: _Interruption | None = None
+        self._cancel_return: CALLBACK_TYPE | None = None
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Drop a pending timed return."""
+        self._cancel_timed_return()
+        await super().async_will_remove_from_hass()
 
     @property
     def state(self) -> MediaPlayerState:
@@ -92,13 +119,16 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
 
     @property
     def source(self) -> str | None:
-        """The app on screen, as a source."""
-        return self.coordinator.data.app_name
+        """The app on screen, as a source; Home when the TV listed all its apps."""
+        data = self.coordinator.data
+        if data.app_name is None and data.is_on and self.coordinator.app_source == "tv":
+            return SOURCE_HOME
+        return data.app_name
 
     @property
     def source_list(self) -> list[str]:
-        """Installed apps the TV told us about."""
-        return sorted(self.coordinator.apps.values(), key=str.casefold)
+        """Home, then the installed apps the TV told us about."""
+        return [SOURCE_HOME, *sorted(self.coordinator.apps.values(), key=str.casefold)]
 
     @property
     def volume_level(self) -> float | None:
@@ -165,7 +195,10 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         await self._async_key("KEY_STOP")
 
     async def async_select_source(self, source: str) -> None:
-        """Launch the app with this name."""
+        """Launch the app with this name (Home presses the Home key)."""
+        if source == SOURCE_HOME:
+            await self._async_call(self.coordinator.tv.send_keys(["KEY_HOME"]))
+            return
         for app_id, name in self.coordinator.apps.items():
             if name == source:
                 await self.async_launch_app(app_id)
@@ -208,14 +241,22 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
                 replace(self.coordinator.data, app_id=None, app_name=None)
             )
 
-    async def async_play_stream(
+    async def async_play_stream(  # noqa: PLR0913 - one argument per action field
         self,
+        *,
         camera: str | None = None,
         url: str | None = None,
         label: str | None = None,
         message: str | None = None,
+        duration: float | None = None,
+        return_to_previous: bool = True,
     ) -> None:
-        """Open Samstream on the TV with a camera (the `play_stream` action)."""
+        """Open Samstream on the TV with a camera (the `play_stream` action).
+
+        Remembers what was on screen (pausing that app) so `stop_stream`, or the
+        end of `duration`, returns there. A second call while the camera shows
+        keeps the original place to go back to.
+        """
         source = url
         if camera:
             source = await async_get_stream_source(self.hass, camera)
@@ -249,26 +290,115 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
                 "message": message or "",
             },
         )
-        if not self.coordinator.data.is_on:
-            await self.async_turn_on()
-            await self._async_wait_until_on()
-        await self._async_launch_samstream()
+        if self._interruption is None:
+            self._interruption = await self._async_remember_screen(
+                pause=return_to_previous
+            )
+        else:
+            self._interruption.return_to_previous = return_to_previous
+        try:
+            if not self.coordinator.data.is_on:
+                await self.async_turn_on()
+                await self._async_wait_until_on()
+            await self._async_launch(SAMSTREAM_APP_ID)
+        except HomeAssistantError:
+            self._interruption = None
+            raise
+        self._cancel_timed_return()
+        if duration:
+            self._cancel_return = async_call_later(
+                self.hass, duration, self._async_timed_return
+            )
+
+    async def async_update_message(self, message: str) -> None:
+        """Change the text over the camera on screen (the `update_message` action).
+
+        The camera keeps playing. Without a camera on the TV nothing happens, so
+        a slow automation (an AI description) cannot reopen a closed camera.
+        """
+        command = current_command(self.hass, self.coordinator.config_entry)
+        if command is None or command.get("action") != "play":
+            _LOGGER.debug("No camera on %s; message not shown", self.entity_id)
+            return
+        # Re-sent as the same play: an app that starts late still gets the camera.
+        set_command(
+            self.hass, self.coordinator.config_entry, {**command, "message": message}
+        )
 
     async def async_stop_stream(self) -> None:
-        """Close Samstream (the `stop_stream` action)."""
+        """Leave the camera (the `stop_stream` action): back to what was before."""
+        self._cancel_timed_return()
+        interruption, self._interruption = self._interruption, None
+        returning = interruption is not None and interruption.return_to_previous
+        # Look before the app sees "stop": it closes itself then.
+        in_front = await self._async_samstream_in_front() if returning else True
         set_command(self.hass, self.coordinator.config_entry, {"action": "stop"})
-        await self.async_close_app(SAMSTREAM_APP_ID)
+        if interruption is None or not interruption.return_to_previous:
+            await self.async_close_app(SAMSTREAM_APP_ID)
+            return
+        if not in_front:
+            # The viewer already left (Back, another app): do not pull them back.
+            return
+        if not interruption.was_on:
+            await self.async_turn_off()
+        elif interruption.previous_app is not None:
+            await self._async_launch(interruption.previous_app)
+            await asyncio.sleep(RESUME_DELAY_SECONDS)
+            with contextlib.suppress(SamstreamError):
+                await self.coordinator.tv.send_keys(["KEY_PLAY"])
+        else:
+            # Home or Live TV was underneath; closing the app returns there.
+            await self.async_close_app(SAMSTREAM_APP_ID)
+        await self.coordinator.async_request_refresh()
 
-    async def _async_launch_samstream(self) -> None:
-        """Open the app, retrying while the TV briefly does not answer."""
+    async def _async_remember_screen(self, *, pause: bool) -> _Interruption:
+        """Note what is on screen now and pause it (if it is an app)."""
+        if not self.coordinator.data.is_on:
+            return _Interruption(
+                was_on=False, previous_app=None, return_to_previous=pause
+            )
+        try:
+            previous = await self.coordinator.async_current_app()
+        except SamstreamError:
+            previous = None
+        if previous == SAMSTREAM_APP_ID:
+            previous = None
+        if previous is not None and pause:
+            with contextlib.suppress(SamstreamError):
+                await self.coordinator.tv.send_keys(["KEY_PAUSE"])
+        return _Interruption(
+            was_on=True, previous_app=previous, return_to_previous=pause
+        )
+
+    async def _async_samstream_in_front(self) -> bool:
+        try:
+            status = await self.coordinator.tv.app_status(SAMSTREAM_APP_ID)
+        except SamstreamError:
+            return True  # Unknown: act as asked.
+        return status is None or status.visible
+
+    def _cancel_timed_return(self) -> None:
+        if self._cancel_return is not None:
+            self._cancel_return()
+            self._cancel_return = None
+
+    async def _async_timed_return(self, _now: datetime) -> None:
+        self._cancel_return = None
+        try:
+            await self.async_stop_stream()
+        except HomeAssistantError as err:
+            _LOGGER.warning("Could not return from the camera: %s", err)
+
+    async def _async_launch(self, app_id: str) -> None:
+        """Open an app, retrying while the TV's REST server briefly drops out."""
         for _ in range(LAUNCH_ATTEMPTS - 1):
             try:
-                await self.coordinator.tv.launch_app(SAMSTREAM_APP_ID)
+                await self.coordinator.tv.launch_app(app_id)
             except SamstreamConnectionError:
                 await asyncio.sleep(LAUNCH_RETRY_SECONDS)
             else:
                 return
-        await self._async_call(self.coordinator.tv.launch_app(SAMSTREAM_APP_ID))
+        await self._async_call(self.coordinator.tv.launch_app(app_id))
 
     async def _async_wait_until_on(self) -> None:
         """After waking the TV, give it time to accept the launch."""

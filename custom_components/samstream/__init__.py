@@ -83,8 +83,20 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             vol.Exclusive("url", "source"): cv.string,
             vol.Optional("label"): cv.string,
             vol.Optional("message"): cv.string,
+            vol.Optional("duration"): vol.All(
+                vol.Coerce(float), vol.Range(min=1, max=86400)
+            ),
+            vol.Optional("return_to_previous", default=True): cv.boolean,
         },
         func="async_play_stream",
+    )
+    service.async_register_platform_entity_service(
+        hass,
+        DOMAIN,
+        "update_message",
+        entity_domain=MEDIA_PLAYER_DOMAIN,
+        schema={vol.Required("message"): cv.string},
+        func="async_update_message",
     )
     service.async_register_platform_entity_service(
         hass,

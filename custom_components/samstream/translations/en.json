@@ -283,12 +283,30 @@
         "message": {
           "name": "Message",
           "description": "Text shown over the video, for example who is at the door."
+        },
+        "duration": {
+          "name": "Duration",
+          "description": "Go back to what was on the TV after this many seconds. Leave empty to stay until Stop stream."
+        },
+        "return_to_previous": {
+          "name": "Return to previous",
+          "description": "When the camera ends, reopen the app that was playing and resume it (or turn the TV off again if it was off)."
+        }
+      }
+    },
+    "update_message": {
+      "name": "Update message on TV",
+      "description": "Changes the text over the camera on the TV without reloading it, for example with an AI description that arrives later. Does nothing when no camera is on the TV.",
+      "fields": {
+        "message": {
+          "name": "Message",
+          "description": "New text to show; empty hides the card."
         }
       }
     },
     "stop_stream": {
       "name": "Stop camera on TV",
-      "description": "Closes Samstream on the TV."
+      "description": "Leaves the camera: reopens and resumes the app that was playing, or turns the TV off if Samstream woke it."
     }
   },
   "issues": {

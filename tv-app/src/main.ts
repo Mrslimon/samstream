@@ -94,7 +94,7 @@ async function boot(): Promise<void> {
     const action = (command as { action?: unknown } | null)?.action;
     if (action === "stop") {
       app.debug("HA: stop");
-      app.goHome();
+      app.stop();
       return;
     }
     const payload = action === "play" ? parsePayload(command, haUrl) : undefined;

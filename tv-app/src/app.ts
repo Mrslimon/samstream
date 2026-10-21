@@ -3,7 +3,7 @@ import { FocusRow } from "./focus";
 import { renderHelp } from "./help";
 import { applyLanguage, strings, type Language, type Strings } from "./i18n";
 import { MsePlayer } from "./mse";
-import { showOverlay } from "./overlay";
+import { scrollWhenLong, showOverlay } from "./overlay";
 import { Player, type PlayerCallbacks, type StreamPlayer } from "./player";
 import type { LaunchPayload } from "./launch";
 import { redactUrl, type CameraStream } from "./streams";
@@ -66,6 +66,9 @@ export class App {
   private helpTimer: ReturnType<typeof setTimeout> | undefined;
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
   private hudTimer: ReturnType<typeof setTimeout> | undefined;
+  // Opened by HA for a camera: Back and HA's stop close the app, so the TV
+  // returns to what was on before. Opened from the TV's app list: Back goes home.
+  private fromHa = false;
   // Text from Home Assistant shown over the video until the next stream.
   private message = "";
 
@@ -113,7 +116,10 @@ export class App {
       if (document.hidden) this.active?.stop();
       else if (this.playing) this.play(this.current);
     });
-    this.el.playButton.addEventListener("click", () => this.play(0));
+    this.el.playButton.addEventListener("click", () => {
+      this.fromHa = false;
+      this.play(0);
+    });
     this.el.helpButton.addEventListener("click", () =>
       this.showHelp(this.text.helpHome),
     );
@@ -125,7 +131,13 @@ export class App {
 
   /** Play what Home Assistant sent (at launch, or while already open). */
   playPayload(payload: LaunchPayload): void {
+    this.fromHa = true;
     this.message = payload.message;
+    if (this.playing && this.streams[this.current]?.url === payload.stream.url) {
+      // Same camera already on screen: only the text changes, no reload.
+      this.showMessage();
+      return;
+    }
     this.streams = [
       payload.stream,
       ...this.streams.filter((s) => s.url !== payload.stream.url),
@@ -139,9 +151,10 @@ export class App {
     this.play(0);
   }
 
-  /** Back to the home screen (HA's `stop_stream`). */
-  goHome(): void {
-    if (this.playing) this.showHome();
+  /** HA's `stop_stream`: close if HA opened the camera, else back to home. */
+  stop(): void {
+    if (this.fromHa) this.exit();
+    else if (this.playing) this.showHome();
   }
 
   /** Line for the debug panel (Yellow key). */
@@ -199,7 +212,8 @@ export class App {
       for (const player of this.players()) player.setFit(this.fit);
       this.toast(FIT_LABELS[this.fit]);
     } else if (key === KEY_BACK) {
-      this.showHome();
+      if (this.fromHa) this.exit();
+      else this.showHome();
     }
   }
 
@@ -283,8 +297,9 @@ export class App {
 
   private showMessage(): void {
     if (this.message) {
-      showOverlay(this.el.overlay, this.message);
+      const card = showOverlay(this.el.overlay, this.message);
       this.el.overlay.hidden = false;
+      scrollWhenLong(card);
     } else {
       this.el.overlay.hidden = true;
     }
