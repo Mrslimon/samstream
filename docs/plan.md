@@ -210,3 +210,16 @@ Source: PatrickSt1991/Samsung-Jellyfin-Installer (MIT), `Apps2Samsung.Core/Certi
   - **Problem today:** 2020+ firmware does not answer `ed.installedApp.get`, so milestone 6 probes a catalog of known IDs, plus the user's "Extra app IDs" option, through `GET /api/v2/applications/<id>`. The current app is the one reporting `visible: true` (YouTube was confirmed on the QN800C).
   - **Fix:** once milestone 7's sdb client works, read the real installed list from the TV (`vd_applist` / `pkgcmd`) and feed the scan from it. Drop the catalog to a fallback for TVs without Developer Mode, and remove the need for manual extra IDs.
   - **Also re-check:** whether the full list exposes home / Live TV / HDMI, which are "unknown" today, and whether foreground detection can avoid polling every app ID.
+
+### Roadmap additions (2026-10-21)
+- **End of 7b. TV app UI redesign**, from the user's spec:
+  - **Layout:** a hero card holding the status and stream preview, an info card, and a bottom action bar.
+  - **Palette:** dark security theme, #0B1420 background, #1A2636 surfaces, #3A9BD9 accent, #DC0014 for alerts only.
+  - **Shape and type:** 14 px cards and 12 px buttons, never pill-shaped; Readex Pro 300/400/500/600, bundled locally.
+  - **Remote and direction:** D-pad focus states, Arabic RTL with logical CSS properties.
+  - **Stream overlay:** a bottom gradient (rgba(0,0,0,.6) to transparent).
+  - **Release:** shipped as 0.1.0 through the new update entity.
+- **15. Remote input extras (final milestone):**
+  - **Text input:** `samstream.send_text`, using `SendInputString` + `SendInputEnd` for the TV's on-screen keyboard fields.
+  - **Hold:** a `samstream.hold_key` action for long presses, on top of the existing `remote.send_command` `hold_secs`.
+  - **Mouse:** move, left click and right click through the remote channel's `ProcessMouseDevice` (not wrapped by `samsungtvws`), plus a touchpad-style control in the Lovelace card from milestone 13.
