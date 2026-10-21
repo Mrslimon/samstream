@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- widget version is the single source of truth for the app version reported to Home Assistant -->
 <widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets"
-        id="https://github.com/islamahmady/samstream" version="0.0.1" viewmodes="maximized">
+        id="https://github.com/islamahmady/samstream" version="0.1.0" viewmodes="maximized">
   <tizen:application id="SmStrm0001.Samstream" package="SmStrm0001" required_version="2.3"/>
   <name>Samstream</name>
   <content src="index.html"/>

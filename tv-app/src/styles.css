@@ -1,87 +1,290 @@
+/* Samstream TV UI: dark security theme, 1920x1080, D-pad only. */
+
+:root {
+  --bg: #0b1420;
+  --surface: #1a2636;
+  --accent: #3a9bd9;
+  --text: #e8ecf0;
+  --muted: #8a9bae;
+  --alert: #dc0014;
+  --radius-card: 14px;
+  --radius-button: 12px;
+  --gutter: 96px;
+  font-family: "Readex Pro", sans-serif;
+  color: var(--text);
+}
+
 html,
 body {
   margin: 0;
   width: 1920px;
   height: 1080px;
   overflow: hidden;
-  /* Must stay transparent so the AVPlay video plane shows through */
-  background: transparent;
-  font-family: "Readex Pro", sans-serif;
+  background: var(--bg);
 }
 
-/* Avoid `inset`/logical properties: Tizen 4.0 runs Chromium 56 */
-#av-player {
+/* While a stream plays the page must be transparent: AVPlay draws behind it. */
+body.playing {
+  background: transparent;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+#av-player,
+#mse-video {
   position: absolute;
-  top: 0;
-  left: 0;
+  inset: 0;
   width: 100%;
   height: 100%;
-}
-
-#overlay {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 64px;
-  text-align: center;
-  font-size: 48px;
-  color: #fff;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
-}
-
-#status {
-  position: absolute;
-  top: 32px;
-  left: 32px;
-  max-width: 1200px;
-  margin: 0;
-  padding: 16px 24px;
-  font-family: "Readex Pro", monospace;
-  font-size: 22px;
-  line-height: 1.4;
-  white-space: pre-wrap;
-  color: #fff;
-  background: rgba(0, 0, 0, 0.6);
-  border-radius: 12px;
 }
 
 #mse-video {
   display: none;
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
   background: #000;
   object-fit: contain;
 }
 
-#help {
+/* ---- Home -------------------------------------------------------------- */
+
+#home {
   position: absolute;
-  top: 32px;
-  right: 32px;
-  padding: 16px 28px;
-  font-size: 26px;
-  line-height: 1.5;
-  color: #fff;
-  background: rgba(0, 0, 0, 0.7);
-  border-radius: 12px;
+  inset: 0;
+  box-sizing: border-box;
+  padding-block: 64px 200px;
+  padding-inline: var(--gutter);
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
 }
 
-#help[hidden] {
-  display: none;
+.card {
+  background: var(--surface);
+  border-radius: var(--radius-card);
+}
+
+.hero {
+  flex: 1;
+  display: flex;
+  gap: 48px;
+  padding: 56px;
+  box-shadow: inset 0 0 0 1px rgba(58, 155, 217, 0.12), inset 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+.hero-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.eyebrow {
+  margin: 0;
+  font-weight: 400;
+  font-size: 26px;
+  color: var(--muted);
+}
+
+h1 {
+  margin-block: 8px 24px;
+  font-weight: 600;
+  font-size: 88px;
+  line-height: 1.1;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0;
+  font-weight: 400;
+  font-size: 34px;
+  color: var(--muted);
+}
+
+.dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.dot.ready {
+  background: var(--accent);
+  box-shadow: 0 0 0 6px rgba(58, 155, 217, 0.2);
+}
+
+.preview {
+  width: 720px;
+  aspect-ratio: 16 / 9;
+  align-self: center;
+  border-radius: var(--radius-card);
+  background: var(--bg);
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--accent);
+}
+
+.preview p {
+  margin: 0;
+  font-weight: 300;
+  font-size: 28px;
+  color: var(--muted);
+}
+
+.info {
+  padding-block: 40px;
+  padding-inline: 56px;
+}
+
+.info h2 {
+  margin: 0 0 12px;
+  font-weight: 500;
+  font-size: 44px;
+}
+
+.info p {
+  margin: 0;
+  max-width: 1400px;
+  font-weight: 300;
+  font-size: 32px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* ---- Bottom action bar ------------------------------------------------- */
+
+.action-bar {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: 0;
+  height: 168px;
+  box-sizing: border-box;
+  padding-inline: var(--gutter);
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  background: rgba(11, 20, 32, 0.96);
+  border-block-start: 1px solid rgba(58, 155, 217, 0.2);
+}
+
+button {
+  min-width: 280px;
+  min-height: 88px;
+  padding-inline: 48px;
+  border-radius: var(--radius-button);
+  font: 500 32px "Readex Pro", sans-serif;
+  border: 3px solid var(--accent);
+  outline: none;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+button.primary {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--accent);
+}
+
+/* Focus must be obvious from the sofa. */
+button:focus {
+  transform: scale(1.06);
+  box-shadow: 0 0 0 5px var(--bg), 0 0 0 9px var(--text);
+}
+
+/* ---- Player ------------------------------------------------------------ */
+
+#player {
+  position: absolute;
+  inset: 0;
+}
+
+.live {
+  position: absolute;
+  inset-block-start: 48px;
+  inset-inline-start: var(--gutter);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-block: 10px;
+  padding-inline: 20px;
+  border-radius: var(--radius-button);
+  background: rgba(0, 0, 0, 0.55);
+  font-weight: 500;
+  font-size: 26px;
+}
+
+.live::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--alert);
+}
+
+#overlay {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  padding-block: 140px 72px;
+  padding-inline: var(--gutter);
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent);
+  color: #fff;
+  font-weight: 400;
+  font-size: 46px;
+  text-align: start;
+}
+
+#overlay > * {
+  margin: 0;
+  /* Each message picks its own direction; mixed Arabic/English stays ordered. */
+  unicode-bidi: isolate;
+}
+
+/* ---- Help card and debug panel ----------------------------------------- */
+
+#help {
+  position: absolute;
+  inset-block-start: 64px;
+  inset-inline-end: var(--gutter);
+  width: 760px;
+  padding: 40px 48px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+}
+
+#help h2 {
+  margin: 0 0 20px;
+  font-weight: 500;
+  font-size: 36px;
+  color: var(--accent);
 }
 
 #help p {
   margin: 0;
+  font-weight: 300;
+  font-size: 28px;
+  line-height: 1.7;
   unicode-bidi: isolate;
 }
 
-#status:empty {
-  display: none;
-}
-
-#overlay > * {
-  /* Each message picks its own direction; mixed Arabic/English stays ordered */
-  unicode-bidi: isolate;
+#debug {
+  position: absolute;
+  inset-block-start: 32px;
+  inset-inline-start: 32px;
+  max-width: 1200px;
+  margin: 0;
+  padding: 16px 24px;
+  font: 400 22px/1.4 "Readex Pro", sans-serif;
+  white-space: pre-wrap;
+  color: var(--text);
+  background: rgba(11, 20, 32, 0.85);
+  border-radius: var(--radius-card);
 }

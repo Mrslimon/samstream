@@ -1,17 +1,17 @@
-/** Remote control cheat sheet; each line carries its own direction for mixed Arabic/English. */
-export const HELP_LINES: readonly string[] = [
-  "◀ ▶  البث السابق / التالي · Previous / next stream",
-  "1–9  اختيار بث · Jump to stream",
-  "▲ ▼  طريقة العرض · Fit: fit / fill (crop) / stretch",
-  "OK  إعادة التشغيل · Restart stream",
-  "INFO / الأخضر  إظهار المساعدة · Show this help",
-  "BACK  خروج · Exit",
-];
+/** Remote control cheat sheet card, in the UI language. */
 
-export function renderHelp(container: HTMLElement): void {
+export function renderHelp(
+  container: HTMLElement,
+  title: string,
+  lines: readonly string[],
+): void {
   container.textContent = "";
-  for (const line of HELP_LINES) {
+  const heading = document.createElement("h2");
+  heading.textContent = title;
+  container.appendChild(heading);
+  for (const line of lines) {
     const row = document.createElement("p");
+    // Key names are Latin; let each line pick its own direction.
     row.dir = "auto";
     row.textContent = line;
     container.appendChild(row);

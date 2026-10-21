@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { parseVideoInfo } from "./player";
-import { parseSpikeStreams, redactUrl } from "./spike";
+import { parseStreams, redactUrl } from "./streams";
 
-describe("parseSpikeStreams", () => {
+describe("parseStreams", () => {
   it("keeps well-formed entries only", () => {
     const raw = JSON.stringify([{ label: "a", url: "rtsp://x" }, { label: 1 }, "junk"]);
-    expect(parseSpikeStreams(raw)).toEqual([{ label: "a", url: "rtsp://x" }]);
+    expect(parseStreams(raw)).toEqual([{ label: "a", url: "rtsp://x" }]);
   });
 
   it("returns nothing for missing or invalid JSON", () => {
-    expect(parseSpikeStreams(undefined)).toEqual([]);
-    expect(parseSpikeStreams("{nope")).toEqual([]);
+    expect(parseStreams(undefined)).toEqual([]);
+    expect(parseStreams("{nope")).toEqual([]);
   });
 });
 

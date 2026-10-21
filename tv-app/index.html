@@ -12,9 +12,42 @@
     <object id="av-player" type="application/avplayer"></object>
     <!-- go2rtc MSE streams render here instead of the AVPlay plane -->
     <video id="mse-video" muted playsinline></video>
-    <div id="overlay" aria-live="polite"></div>
-    <pre id="status" dir="ltr"></pre>
-    <div id="help" hidden></div>
+
+    <main id="home">
+      <section class="card hero">
+        <div class="hero-text">
+          <p class="eyebrow" id="version"></p>
+          <h1 id="app-name">Samstream</h1>
+          <p class="status"><span class="dot" id="status-dot"></span><span id="status-text"></span></p>
+        </div>
+        <div class="preview" aria-hidden="true">
+          <svg viewBox="0 0 64 64" width="120" height="120">
+            <rect x="6" y="18" width="38" height="28" rx="6" fill="none" stroke="currentColor" stroke-width="4" />
+            <path d="M44 28 58 20v24l-14-8z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round" />
+          </svg>
+          <p id="preview-text"></p>
+        </div>
+      </section>
+
+      <section class="card info">
+        <h2 id="info-title"></h2>
+        <p id="info-text"></p>
+      </section>
+
+      <nav class="action-bar">
+        <button type="button" class="primary" id="play-button"></button>
+        <button type="button" class="secondary" id="help-button"></button>
+        <button type="button" class="secondary" id="exit-button"></button>
+      </nav>
+    </main>
+
+    <section id="player" hidden>
+      <span class="live" id="live"></span>
+      <div id="overlay" aria-live="polite" hidden></div>
+    </section>
+
+    <aside id="help" class="card" hidden></aside>
+    <pre id="debug" dir="ltr" hidden></pre>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
