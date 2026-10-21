@@ -55,6 +55,10 @@ _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
 # Wake-on-LAN to a launchable TV usually takes 5-15 s.
 WAKE_WAIT_SECONDS = 25
+# While waiting, Wake-on-LAN is sent again this often.
+WOL_REPEAT_SECONDS = 8
+# Standby shows within a few seconds of the Power key.
+OFF_WAIT_SECONDS = 6
 # The TV's REST server drops out now and then (for a few seconds after an install).
 LAUNCH_ATTEMPTS = 5
 LAUNCH_RETRY_SECONDS = 2
@@ -488,6 +492,8 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
             if not self.coordinator.data.is_on:
                 await self.async_turn_on()
                 await self._async_wait_until_on()
+                # Show it as on now, not at the next poll.
+                await self.coordinator.async_request_refresh()
             await self._async_launch(SAMSTREAM_APP_ID)
         except HomeAssistantError:
             self._interruption = None
@@ -553,7 +559,11 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
             # The viewer already left (Back, another app): do not pull them back.
             return
         if not interruption.was_on:
-            await self.async_turn_off()
+            # Close Samstream first: switching apps while turning off can
+            # swallow the Power key.
+            with contextlib.suppress(HomeAssistantError):
+                await self.async_close_app(SAMSTREAM_APP_ID)
+            await self._async_turn_off_verified()
         elif interruption.previous_app is not None:
             await self._async_launch(interruption.previous_app)
             if interruption.resume:
@@ -667,13 +677,33 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
 
     async def _async_wait_until_on(self) -> None:
         """After waking the TV, give it time to accept the launch."""
-        for _ in range(WAKE_WAIT_SECONDS):
-            if await self.coordinator.tv.is_on():
+        coordinator = self.coordinator
+        mac = coordinator.config_entry.data.get(CONF_MAC)
+        for second in range(WAKE_WAIT_SECONDS):
+            if await coordinator.tv.is_on():
                 return
+            if mac and second and second % WOL_REPEAT_SECONDS == 0:
+                # A missed wake-up: Wake-on-LAN again (never turns it off).
+                with contextlib.suppress(SamstreamError, OSError):
+                    await coordinator.tv.wake_on_lan(mac, coordinator.wol_target)
             await asyncio.sleep(1)
         raise HomeAssistantError(
             translation_domain=DOMAIN, translation_key="tv_did_not_wake"
         )
+
+    async def _async_turn_off_verified(self) -> None:
+        """Back to standby (Samstream woke the TV); check it, retry once."""
+        tv = self.coordinator.tv
+        for _attempt in range(2):
+            await self._async_call(tv.power_off())
+            for _ in range(OFF_WAIT_SECONDS):
+                await asyncio.sleep(1)
+                if not await tv.is_on():
+                    self.coordinator.async_set_updated_data(
+                        replace(self.coordinator.data, is_on=False)
+                    )
+                    return
+        _LOGGER.warning("%s did not go back to standby", self.entity_id)
 
     async def async_install_app(self, path: str | None = None) -> ServiceResponse:
         """Install Samstream over sdb (the `install_app` action).

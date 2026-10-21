@@ -56,9 +56,7 @@ Until `aiosamstream` is on PyPI, install it into the HA container with
 
 ## Credits
 
-Samstream was coded with the help of [Claude](https://claude.ai), Anthropic's AI assistant,
-working with the author: Claude wrote most of the code and tests, and the author directed the
-design and tested every step on a real Samsung TV.
+Built with help of [Claude](https://claude.ai).
 
 It builds on the work of others:
 

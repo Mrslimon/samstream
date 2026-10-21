@@ -155,12 +155,22 @@ async def test_power_on_from_standby_presses_power(remote: type[FakeRemote]) -> 
     standby = replace(ON, power_on=False)
     with (
         patch.object(client, "device_info", AsyncMock(return_value=standby)),
-        patch("aiosamstream.tv.send_magic_packet") as wol,
+        patch("aiosamstream.tv.send_magic_packet", AsyncMock()) as wol,
     ):
         await client.power_on("aa:bb:cc:00:11:22")
+        await client.power_on(None)
 
     assert remote.sent[0][0].params["DataOfCmd"] == "KEY_POWER"
-    wol.assert_not_called()
+    # Wake-on-LAN too, in case the TV ignored the key (it never turns it off).
+    wol.assert_awaited_once_with("aa:bb:cc:00:11:22", target="255.255.255.255")
+    assert len(remote.sent) == 2
+
+
+async def test_wake_on_lan_only(remote: type[FakeRemote]) -> None:
+    with patch("aiosamstream.tv.send_magic_packet", AsyncMock()) as wol:
+        await tv().wake_on_lan("aa:bb:cc:00:11:22", "192.168.1.255")
+    wol.assert_awaited_once_with("aa:bb:cc:00:11:22", target="192.168.1.255")
+    assert remote.sent == []
 
 
 async def test_power_on_when_unreachable_uses_wol(remote: type[FakeRemote]) -> None:

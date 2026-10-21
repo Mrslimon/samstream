@@ -12,11 +12,16 @@ from homeassistant.components.remote import (
     DEFAULT_DELAY_SECS,
     RemoteEntity,
 )
+from homeassistant.components.remote import (
+    DOMAIN as REMOTE_DOMAIN,
+)
 from homeassistant.const import CONF_MAC
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import SamstreamConfigEntry
+from .const import DOMAIN, REMOTE_HIDDEN
 from .coordinator import SamstreamCoordinator
 from .entity import SamstreamEntity
 
@@ -35,7 +40,30 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Add the TV remote."""
-    async_add_entities([SamstreamRemote(entry.runtime_data.coordinator)])
+    remote = SamstreamRemote(entry.runtime_data.coordinator)
+    async_add_entities([remote])
+    _hide_once(hass, entry, remote)
+
+
+@callback
+def _hide_once(
+    hass: HomeAssistant, entry: SamstreamConfigEntry, remote: SamstreamRemote
+) -> None:
+    """Hide a remote registered before it was hidden by default; only once."""
+    if entry.data.get(REMOTE_HIDDEN):
+        return
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        REMOTE_DOMAIN, DOMAIN, remote.unique_id or ""
+    )
+    registered = registry.async_get(entity_id) if entity_id else None
+    if registered is not None and registered.hidden_by is None:
+        registry.async_update_entity(
+            registered.entity_id, hidden_by=er.RegistryEntryHider.INTEGRATION
+        )
+    hass.config_entries.async_update_entry(
+        entry, data={**entry.data, REMOTE_HIDDEN: True}
+    )
 
 
 class SamstreamRemote(SamstreamEntity, RemoteEntity):

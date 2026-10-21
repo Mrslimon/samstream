@@ -170,9 +170,39 @@ async def test_tv_was_off_turns_off_again(
         await play(hass)
     mock_tv.power_on.assert_awaited_once()
 
+    # Standby after the Power key.
+    mock_tv.is_on = AsyncMock(return_value=False)
     await stop(hass)
+    mock_tv.close_app.assert_awaited_once_with(SAMSTREAM_APP_ID)
     mock_tv.power_off.assert_awaited_once()
-    mock_tv.close_app.assert_not_awaited()
+
+
+async def test_turn_off_again_is_checked_and_retried(
+    hass: HomeAssistant, mock_tv: MagicMock, caplog: pytest.LogCaptureFixture
+) -> None:
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data.coordinator
+    coordinator.async_set_updated_data(replace(coordinator.data, is_on=False))
+    mock_tv.is_on = AsyncMock(return_value=True)
+    mock_tv.app_status = AsyncMock(return_value=SimpleNamespace(visible=True))
+    with patch(SLEEP, AsyncMock()):
+        await play(hass)
+    # The first Power key is swallowed; the TV stays on.
+    await stop(hass)
+    assert mock_tv.power_off.await_count == 2
+    assert "did not go back to standby" in caplog.text
+
+
+async def test_missed_wake_up_repeats_wake_on_lan(
+    hass: HomeAssistant, mock_tv: MagicMock
+) -> None:
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data.coordinator
+    coordinator.async_set_updated_data(replace(coordinator.data, is_on=False))
+    # On only at the 12th check: one repeat at 8 s.
+    mock_tv.is_on = AsyncMock(side_effect=[False] * 11 + [True] * 50)
+    mock_tv.wake_on_lan = AsyncMock()
+    with patch(SLEEP, AsyncMock()):
+        await play(hass)
+    mock_tv.wake_on_lan.assert_awaited_once()
 
 
 async def test_home_or_live_tv_closes_samstream(

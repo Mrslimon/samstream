@@ -52,6 +52,7 @@ def mock_tv() -> Generator[MagicMock]:
     tv.device_info = AsyncMock(return_value=TV_INFO)
     tv.send_keys = AsyncMock()
     tv.power_on = AsyncMock()
+    tv.wake_on_lan = AsyncMock()
     tv.power_off = AsyncMock()
     tv.close = AsyncMock()
     tv.rendering.get_volume = AsyncMock(return_value=38)

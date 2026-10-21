@@ -282,13 +282,22 @@ class SamsungTV:
         except SamstreamConnectionError:
             info = None
         if info is not None:
-            if info.power_on is False:
-                # 2018+ TVs keep the network up in standby and wake on KEY_POWER.
-                await self.send_keys(["KEY_POWER"])
+            if info.power_on is not False:
+                return
+            # 2018+ TVs keep the network up in standby and wake on KEY_POWER,
+            # but ignore it now and then (e.g. just after going to standby).
+            # Wake-on-LAN never turns a TV off, so it is a safe second try.
+            await self.send_keys(["KEY_POWER"])
+            if mac:
+                await send_magic_packet(mac, target=wol_target)
             return
         if not mac:
             msg = "The TV is off and its MAC address is unknown, cannot wake it"
             raise SamstreamError(msg)
+        await send_magic_packet(mac, target=wol_target)
+
+    async def wake_on_lan(self, mac: str, wol_target: str = DEFAULT_TARGET) -> None:
+        """Send only a Wake-on-LAN packet (safe to repeat; never turns it off)."""
         await send_magic_packet(mac, target=wol_target)
 
     async def close(self) -> None:

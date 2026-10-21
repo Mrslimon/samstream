@@ -280,3 +280,26 @@ async def test_remote_hidden_by_default(hass: HomeAssistant) -> None:
     assert entry is not None
     assert entry.hidden_by is er.RegistryEntryHider.INTEGRATION
     assert hass.states.get(REMOTE).state == "on"
+
+
+async def test_remote_made_before_is_hidden_once(
+    hass: HomeAssistant, mock_entry: MockConfigEntry, mock_tv: MagicMock
+) -> None:
+    """Remotes registered before "hidden by default" are hidden once."""
+    registry = er.async_get(hass)
+    registry.async_get_or_create(
+        "remote", DOMAIN, f"{mock_entry.unique_id}_remote", config_entry=mock_entry
+    )
+    assert await hass.config_entries.async_setup(mock_entry.entry_id)
+    await hass.async_block_till_done()
+    entity_id = registry.async_get_entity_id(
+        "remote", DOMAIN, f"{mock_entry.unique_id}_remote"
+    )
+    assert registry.async_get(entity_id).hidden_by is er.RegistryEntryHider.INTEGRATION
+    assert mock_entry.data["remote_hidden"] is True
+
+    # The user shows it again: it stays shown after a reload.
+    registry.async_update_entity(entity_id, hidden_by=None)
+    await hass.config_entries.async_reload(mock_entry.entry_id)
+    await hass.async_block_till_done()
+    assert registry.async_get(entity_id).hidden_by is None
