@@ -49,7 +49,7 @@
   },
   "options": {
     "step": {
-      "init": {
+      "network": {
         "title": "Wake-on-LAN",
         "description": "Home Assistant wakes the TV with a Wake-on-LAN packet sent to this address. Use your network's broadcast address (for example 192.168.1.255). Inside Docker a global broadcast (255.255.255.255) does not reach the TV.",
         "data": {
@@ -60,10 +60,71 @@
           "wol_target": "IPv4 broadcast address of the TV's network, or the TV's own IP.",
           "extra_apps": "Tizen app IDs missing from the built-in list, separated by spaces or commas. Find an app's ID in the current app sensor while it is open."
         }
+      },
+      "init": {
+        "title": "Samstream options",
+        "menu_options": {
+          "network": "Network: Wake-on-LAN and extra apps",
+          "app_signing": "App signing: certificates for installing Samstream"
+        }
+      },
+      "app_signing": {
+        "title": "App signing",
+        "description": "Samsung TVs (2023 and newer) only install apps signed with a Samsung certificate made for that TV. Home Assistant creates and keeps one for you.\n\nCurrent status: **{status}**",
+        "menu_options": {
+          "samsung_sign_in": "Sign in with Samsung (helper command, recommended)",
+          "samsung_paste": "Sign in with Samsung (paste from the browser)",
+          "import_certificates": "Import existing certificates (.p12)"
+        }
+      },
+      "samsung_paste": {
+        "title": "Sign in with Samsung",
+        "description": "1. Open this link and sign in with your Samsung account: [Samsung sign-in]({url})\n2. Before signing in, open the browser's developer tools (F12) on the **Network** tab.\n3. After signing in, the page fails to load *localhost:4794* (expected). Select the **callback** request, open **Payload**, and copy the value of **code**.\n4. Paste it below.",
+        "data": {
+          "code": "Sign-in code"
+        },
+        "data_description": {
+          "code": "The `code` value from the callback request (starts with {\"access_token\" or %7B)."
+        }
+      },
+      "signing_failed": {
+        "title": "Samsung sign-in failed",
+        "description": "Select Submit to try again."
+      },
+      "import_certificates": {
+        "title": "Import certificates",
+        "description": "Use an existing Samsung author and distributor certificate (from Tizen Studio's Certificate Manager or Apps2Samsung). Copy both files into the Home Assistant config folder first. The distributor certificate must list this TV.",
+        "data": {
+          "author_p12": "Author certificate",
+          "distributor_p12": "Distributor certificate",
+          "password": "Password"
+        },
+        "data_description": {
+          "author_p12": "Path relative to the config folder, for example samstream/author.p12.",
+          "distributor_p12": "Path relative to the config folder, for example samstream/distributor.p12.",
+          "password": "Password of the .p12 files."
+        }
       }
     },
     "error": {
-      "invalid_address": "Enter an IPv4 address such as 192.168.1.255."
+      "invalid_address": "Enter an IPv4 address such as 192.168.1.255.",
+      "sign_in_timeout": "No sign-in arrived within 10 minutes.",
+      "sign_in_failed": "The sign-in answer could not be used. Check that you pasted the whole code value.",
+      "samsung_refused": "Samsung did not issue the certificate. Sign in again; if it keeps failing, see the Home Assistant log.",
+      "sdb_unreachable": "Home Assistant cannot reach the TV over Developer Mode. See Settings → Repairs.",
+      "install_failed": "The TV did not answer as expected. See the Home Assistant log.",
+      "file_not_found": "A file could not be read.",
+      "file_not_allowed": "Files must be inside the Home Assistant config folder.",
+      "bad_certificate": "The certificate files cannot be opened. Check the password.",
+      "duid_not_covered": "This certificate does not list this TV. Create one that includes it, or sign in with Samsung.",
+      "unknown": "Unexpected error, see the Home Assistant log."
+    },
+    "progress": {
+      "samsung_sign_in": "On a computer on your network that has a browser and Node.js, run:\n\n`{command}`\n\nIt opens the Samsung sign-in page. Sign in with your Samsung account; this screen continues by itself. The code works once and expires in 10 minutes."
+    },
+    "abort": {
+      "signing_ready": "App signing is ready: {status}. Use the Install Samstream app button on the TV device.",
+      "unknown": "Unexpected error, see the Home Assistant log."
     }
   },
   "entity": {
@@ -86,6 +147,11 @@
       },
       "current_app": {
         "name": "Current app"
+      }
+    },
+    "button": {
+      "install_app": {
+        "name": "Install Samstream app"
       }
     }
   },
@@ -113,6 +179,18 @@
     },
     "file_not_found": {
       "message": "Cannot read the package {path}."
+    },
+    "signing_not_set_up": {
+      "message": "Set up app signing first: Samstream → Configure → App signing."
+    },
+    "samsung_refused": {
+      "message": "Samsung did not issue the certificate: {error}"
+    },
+    "bad_certificate": {
+      "message": "The certificate files cannot be used: {error}"
+    },
+    "duid_not_covered": {
+      "message": "The certificate does not list this TV (DUID {duid})."
     }
   },
   "services": {
@@ -142,7 +220,7 @@
       "fields": {
         "path": {
           "name": "Package path",
-          "description": "Signed .wgt file, relative to the Home Assistant config folder (for example samstream/Samstream.wgt)."
+          "description": "Optional. A .wgt relative to the config folder. Leave empty to install the Samstream app bundled with the integration, signed with Home Assistant's certificates."
         }
       }
     }

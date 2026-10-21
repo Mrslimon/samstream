@@ -44,6 +44,9 @@ async def test_options_change_reloads(
     hass: HomeAssistant, setup_entry: MockConfigEntry, mock_tv: MagicMock
 ) -> None:
     result = await hass.config_entries.options.async_init(setup_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "network"}
+    )
     assert result["data_schema"]({})[CONF_WOL_TARGET] == "192.168.1.255"
 
     result = await hass.config_entries.options.async_configure(

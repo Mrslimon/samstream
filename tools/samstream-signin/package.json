@@ -1,0 +1,21 @@
+{
+  "name": "samstream-signin",
+  "version": "0.1.0",
+  "description": "Samsung account sign-in helper for the Samstream Home Assistant integration (catches the localhost:4794 callback and forwards it to Home Assistant).",
+  "type": "module",
+  "bin": {
+    "samstream-signin": "index.mjs"
+  },
+  "files": [
+    "index.mjs"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/islamahmady/samstream",
+    "directory": "tools/samstream-signin"
+  }
+}

@@ -29,7 +29,7 @@ install_app:
       domain: media_player
   fields:
     path:
-      required: true
+      required: false
       example: "samstream/Samstream.wgt"
       selector:
         text:

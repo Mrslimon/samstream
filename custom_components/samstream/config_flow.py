@@ -7,6 +7,7 @@ import ipaddress
 import logging
 from collections.abc import Mapping
 from typing import Any
+from urllib.parse import unquote, urlencode
 
 import voluptuous as vol
 from aiosamstream import (
@@ -16,6 +17,12 @@ from aiosamstream import (
     SamstreamTimeoutError,
     SamsungTV,
 )
+from aiosamstream.samsung_cert import (
+    SamsungCertError,
+    new_state,
+    parse_callback,
+    sign_in_url,
+)
 from homeassistant.config_entries import (
     SOURCE_REAUTH,
     ConfigEntry,
@@ -23,12 +30,45 @@ from homeassistant.config_entries import (
     ConfigFlowResult,
     OptionsFlow,
 )
-from homeassistant.const import CONF_HOST, CONF_MAC, CONF_MODEL, CONF_NAME
+from homeassistant.const import (
+    CONF_CODE,
+    CONF_HOST,
+    CONF_MAC,
+    CONF_MODEL,
+    CONF_NAME,
+    CONF_PASSWORD,
+)
 from homeassistant.core import callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import (
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
+)
 
-from .const import CONF_EXTRA_APPS, CONF_TOKEN, CONF_WOL_TARGET, DOMAIN
+from .app_signing import SigningSetup, async_load_signing
+from .const import (
+    CONF_AUTHOR_P12,
+    CONF_DISTRIBUTOR_P12,
+    CONF_EXTRA_APPS,
+    CONF_TOKEN,
+    CONF_WOL_TARGET,
+    DOMAIN,
+)
 from .coordinator import default_wol_target, parse_app_ids
+from .installer import (
+    async_import_certificates,
+    async_obtain_samsung_certificates,
+    resolve_package_path,
+)
+from .signin import (
+    SIGN_IN_TIMEOUT,
+    PendingSignIn,
+    cancel_sign_in,
+    helper_command,
+    start_sign_in,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -218,9 +258,34 @@ class SamstreamConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class SamstreamOptionsFlow(OptionsFlow):
-    """Wake-on-LAN address and extra app IDs."""
+    """Network options and app signing."""
+
+    def __init__(self) -> None:
+        """Start without a sign-in in progress."""
+        self._sign_in: PendingSignIn | None = None
+        self._sign_in_task: asyncio.Task[SigningSetup] | None = None
+        self._paste_state = ""
+        self._setup: SigningSetup | None = None
+        self._error = ""
+        self._retry_form_shown = False
+
+    @callback
+    def async_remove(self) -> None:
+        """Stop a pending sign-in when the flow is closed (invalidates the code)."""
+        if self._sign_in_task is not None:
+            self._sign_in_task.cancel()
+        if self._sign_in is not None:
+            cancel_sign_in(self.hass, self._sign_in)
 
     async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Choose what to configure."""
+        return self.async_show_menu(
+            step_id="init", menu_options=["network", "app_signing"]
+        )
+
+    async def async_step_network(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Ask for the Wake-on-LAN target and apps missing from the catalog."""
@@ -240,7 +305,7 @@ class SamstreamOptionsFlow(OptionsFlow):
             self.config_entry.data[CONF_HOST]
         )
         return self.async_show_form(
-            step_id="init",
+            step_id="network",
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_WOL_TARGET, default=current): str,
@@ -252,3 +317,180 @@ class SamstreamOptionsFlow(OptionsFlow):
             ),
             errors=errors,
         )
+
+    async def async_step_app_signing(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show the signing status; offer Samsung sign-in or certificate import."""
+        setup = await async_load_signing(self.hass)
+        return self.async_show_menu(
+            step_id="app_signing",
+            menu_options=["samsung_sign_in", "samsung_paste", "import_certificates"],
+            description_placeholders={"status": _signing_status(setup)},
+        )
+
+    async def async_step_samsung_sign_in(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Wait while the user signs in through `npx samstream-signin`."""
+        if self._sign_in_task is None:
+            self._sign_in = start_sign_in(self.hass)
+            self._sign_in_task = self.hass.async_create_task(
+                self._async_sign_in(self._sign_in)
+            )
+        pending = self._sign_in
+        if pending is None:  # set together with the task just above
+            return self.async_abort(reason="unknown")
+        if not self._sign_in_task.done():
+            return self.async_show_progress(
+                step_id="samsung_sign_in",
+                progress_action="samsung_sign_in",
+                progress_task=self._sign_in_task,
+                description_placeholders={
+                    "command": helper_command(self.hass, pending.code)
+                },
+            )
+        task, self._sign_in_task = self._sign_in_task, None
+        cancel_sign_in(self.hass, pending)
+        self._error = ""
+        try:
+            self._setup = task.result()
+        except Exception as err:  # noqa: BLE001  # mapped to a form error below
+            self._error = _error_key(err)
+        if self._error:
+            return self.async_show_progress_done(next_step_id="signing_failed")
+        return self.async_show_progress_done(next_step_id="signing_done")
+
+    async def async_step_samsung_paste(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Sign in without the helper: paste the `code` from the browser's DevTools."""
+        errors: dict[str, str] = {}
+        if user_input is not None and self._paste_state:
+            try:
+                account = parse_callback(
+                    callback_body(user_input[CONF_CODE]), self._paste_state
+                )
+                setup = await async_obtain_samsung_certificates(
+                    self.hass, self.config_entry, account
+                )
+            except Exception as err:  # noqa: BLE001  # mapped to a form error
+                errors["base"] = _error_key(err)
+            else:
+                return self.async_abort(
+                    reason="signing_ready",
+                    description_placeholders={"status": _signing_status(setup)},
+                )
+        if not self._paste_state:
+            self._paste_state = new_state()
+        return self.async_show_form(
+            step_id="samsung_paste",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_CODE): TextSelector(
+                        TextSelectorConfig(multiline=True)
+                    )
+                }
+            ),
+            description_placeholders={"url": sign_in_url(self._paste_state)},
+            errors=errors,
+        )
+
+    async def async_step_signing_failed(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Explain the failure and offer another sign-in."""
+        # HA re-runs the step after a progress step with the input that started it;
+        # only a submit of this form means "retry".
+        if user_input is not None and self._retry_form_shown:
+            self._retry_form_shown = False
+            return await self.async_step_samsung_sign_in()
+        self._retry_form_shown = True
+        return self.async_show_form(
+            step_id="signing_failed", errors={"base": self._error}
+        )
+
+    async def async_step_signing_done(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Signing is ready; the options themselves are unchanged."""
+        return self.async_abort(
+            reason="signing_ready",
+            description_placeholders={"status": _signing_status(self._setup)},
+        )
+
+    async def async_step_import_certificates(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Use existing author/distributor .p12 files stored under /config."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                files = (
+                    resolve_package_path(self.hass, user_input[CONF_AUTHOR_P12]),
+                    resolve_package_path(self.hass, user_input[CONF_DISTRIBUTOR_P12]),
+                )
+                setup = await async_import_certificates(
+                    self.hass, self.config_entry, files, user_input[CONF_PASSWORD]
+                )
+            except HomeAssistantError as err:
+                errors["base"] = err.translation_key or "unknown"
+            else:
+                return self.async_abort(
+                    reason="signing_ready",
+                    description_placeholders={"status": _signing_status(setup)},
+                )
+        return self.async_show_form(
+            step_id="import_certificates",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_AUTHOR_P12): str,
+                    vol.Required(CONF_DISTRIBUTOR_P12): str,
+                    vol.Required(CONF_PASSWORD): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                    ),
+                }
+            ),
+            errors=errors,
+        )
+
+    async def _async_sign_in(self, pending: PendingSignIn) -> SigningSetup:
+        async with asyncio.timeout(SIGN_IN_TIMEOUT):
+            body = await pending.callback
+        account = parse_callback(body, pending.state)
+        return await async_obtain_samsung_certificates(
+            self.hass, self.config_entry, account
+        )
+
+
+def callback_body(pasted: str) -> str:
+    """Accept what users copy from DevTools: the `code` value or the whole payload."""
+    text = pasted.strip()
+    if text.startswith("code="):
+        return text
+    if "code=" in text and "&" in text:
+        return text[text.index("code=") :]
+    # The bare value, decoded (DevTools "view parsed") or still URL-encoded.
+    value = unquote(text) if text.startswith("%7B") else text
+    return urlencode({"code": value})
+
+
+def _error_key(err: BaseException) -> str:
+    if isinstance(err, TimeoutError):
+        return "sign_in_timeout"
+    if isinstance(err, SamsungCertError):
+        return "sign_in_failed"
+    if isinstance(err, HomeAssistantError) and err.translation_key:
+        return err.translation_key
+    _LOGGER.error("Unexpected error during Samsung sign-in", exc_info=err)
+    return "unknown"
+
+
+def _signing_status(setup: SigningSetup | None) -> str:
+    if setup is None:
+        return "not set up"
+    who = f" ({setup.email})" if setup.email else ""
+    return (
+        f"{setup.source}{who}, {len(setup.duids)} TV(s), "
+        f"valid until {setup.expires.date().isoformat()}"
+    )

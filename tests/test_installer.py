@@ -47,8 +47,8 @@ def sdb() -> Generator[MagicMock]:
     """SdbClient as used by the installer: an async context manager."""
     client = MagicMock()
     client.install = AsyncMock(return_value=InstallResult(SAMSTREAM_APP_ID, LOG))
-    client.__aenter__ = AsyncMock(return_value=client)
-    client.__aexit__ = AsyncMock(return_value=None)
+    client.connect = AsyncMock()
+    client.close = AsyncMock()
     with patch(
         "custom_components.samstream.installer.SdbClient", return_value=client
     ) as factory:
@@ -113,7 +113,7 @@ async def test_unreachable_sdb_raises_repair_issue(
     )
     # Processing core config resets the allowed directories.
     hass.config.allowlist_external_dirs = {str(package.parent)}
-    sdb.install.side_effect = SdbConnectionError("refused")
+    sdb.connect.side_effect = SdbConnectionError("refused")
 
     with pytest.raises(HomeAssistantError) as err:
         await _install(hass, str(package))
@@ -128,7 +128,7 @@ async def test_unreachable_sdb_raises_repair_issue(
         "developer_host": "192.168.1.5",
     }
 
-    sdb.install.side_effect = None
+    sdb.connect.side_effect = None
     await _install(hass, str(package))
     assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is None
 

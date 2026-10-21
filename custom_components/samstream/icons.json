@@ -26,6 +26,11 @@
       "current_app": {
         "default": "mdi:application"
       }
+    },
+    "button": {
+      "install_app": {
+        "default": "mdi:package-down"
+      }
     }
   },
   "services": {

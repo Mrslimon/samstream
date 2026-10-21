@@ -18,11 +18,13 @@ from homeassistant.helpers.typing import ConfigType, VolDictType
 
 from .const import ATTR_APP_ID, ATTR_PATH, CONF_TOKEN, DOMAIN
 from .coordinator import SamstreamCoordinator
+from .signin import SamstreamSignInView
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
+    Platform.BUTTON,
     Platform.MEDIA_PLAYER,
     Platform.REMOTE,
     Platform.SENSOR,
@@ -41,7 +43,8 @@ type SamstreamConfigEntry = ConfigEntry[SamstreamData]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register the actions once, independent of config entries."""
+    """Register the actions and the sign-in hand-off view once."""
+    hass.http.register_view(SamstreamSignInView())
     app_schema: VolDictType = {vol.Required(ATTR_APP_ID): cv.string}
     for name, method in (
         ("launch_app", "async_launch_app"),
@@ -60,7 +63,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         DOMAIN,
         "install_app",
         entity_domain=MEDIA_PLAYER_DOMAIN,
-        schema={vol.Required(ATTR_PATH): cv.string},
+        schema={vol.Optional(ATTR_PATH): cv.string},
         func="async_install_app",
         supports_response=SupportsResponse.OPTIONAL,
     )

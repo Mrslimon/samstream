@@ -197,9 +197,13 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
                 replace(self.coordinator.data, app_id=None, app_name=None)
             )
 
-    async def async_install_app(self, path: str) -> ServiceResponse:
-        """Install a signed Samstream .wgt over sdb (the `install_app` action)."""
-        package = resolve_package_path(self.hass, path)
+    async def async_install_app(self, path: str | None = None) -> ServiceResponse:
+        """Install Samstream over sdb (the `install_app` action).
+
+        Without `path` the bundled app is signed with HA's certificates; a given
+        package is re-signed when signing is set up, else installed as is.
+        """
+        package = resolve_package_path(self.hass, path) if path else None
         result = await async_install_package(
             self.hass, self.coordinator.config_entry, package
         )
