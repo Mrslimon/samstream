@@ -42,7 +42,12 @@
     </main>
 
     <section id="player" hidden>
-      <span class="live" id="live"></span>
+      <div class="hud" id="hud">
+        <span class="live" id="live"></span>
+        <span class="hud-label" id="hud-label" dir="auto"></span>
+        <span class="hud-clock" id="hud-clock"></span>
+      </div>
+      <div class="chip" id="toast" hidden></div>
       <div id="overlay" aria-live="polite" hidden></div>
     </section>
 

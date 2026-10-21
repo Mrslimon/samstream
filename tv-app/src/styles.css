@@ -11,7 +11,8 @@
   --text: #18202b;
   --muted: #667487;
   --line: rgba(24, 32, 43, 0.08);
-  --shadow: 0 12px 32px rgba(24, 32, 43, 0.08), 0 2px 6px rgba(24, 32, 43, 0.06);
+  --shadow:
+    0 12px 32px rgba(24, 32, 43, 0.08), 0 2px 6px rgba(24, 32, 43, 0.06);
   --well-shadow: inset 0 2px 12px rgba(24, 32, 43, 0.08);
   --bar: rgba(243, 245, 248, 0.94);
   --alert: #dc0014;
@@ -33,7 +34,9 @@
   --text: #e8ecf0;
   --muted: #8a9bae;
   --line: rgba(58, 155, 217, 0.12);
-  --shadow: inset 0 0 0 1px rgba(58, 155, 217, 0.12), inset 0 24px 60px rgba(0, 0, 0, 0.35);
+  --shadow:
+    inset 0 0 0 1px rgba(58, 155, 217, 0.12),
+    inset 0 24px 60px rgba(0, 0, 0, 0.35);
   --well-shadow: inset 0 0 40px rgba(0, 0, 0, 0.6);
   --bar: rgba(11, 20, 32, 0.96);
 }
@@ -203,10 +206,14 @@ button {
   min-height: 88px;
   padding-inline: 48px;
   border-radius: var(--radius-button);
-  font: 500 32px "Readex Pro", sans-serif;
+  font:
+    500 32px "Readex Pro",
+    sans-serif;
   border: 3px solid var(--accent);
   outline: none;
-  transition: transform 120ms ease, box-shadow 120ms ease;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
 }
 
 button.primary {
@@ -222,7 +229,9 @@ button.secondary {
 /* Focus must be obvious from the sofa. */
 button:focus {
   transform: scale(1.06);
-  box-shadow: 0 0 0 5px var(--bg), 0 0 0 9px var(--text);
+  box-shadow:
+    0 0 0 5px var(--bg),
+    0 0 0 9px var(--text);
 }
 
 /* ---- Player ------------------------------------------------------------ */
@@ -232,46 +241,155 @@ button:focus {
   inset: 0;
 }
 
-.live {
+/* Overlays sit on live video of any brightness: dark glass, white text. Plain
+   rgba instead of backdrop-filter, which the TV's video plane does not blur. */
+.hud,
+.chip,
+#overlay > p {
+  background: rgba(14, 18, 26, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+  color: #fff;
+}
+
+.hud {
   position: absolute;
   inset-block-start: 48px;
   inset-inline-start: var(--gutter);
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding-block: 10px;
-  padding-inline: 20px;
-  border-radius: var(--radius-button);
-  background: rgba(0, 0, 0, 0.55);
-  font-weight: 500;
+  padding: 10px;
+  border-radius: 999px;
   font-size: 26px;
+  font-weight: 500;
+  white-space: nowrap;
+  animation: fade-in 400ms ease-out;
+}
+
+.live {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-block: 6px;
+  padding-inline: 16px;
+  border-radius: 999px;
+  background: var(--alert);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+html[lang="en"] .live {
+  /* Tracking breaks Arabic joining, so only for Latin text. */
+  letter-spacing: 0.08em;
 }
 
 .live::before {
   content: "";
-  width: 14px;
-  height: 14px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: var(--alert);
+  background: #fff;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.hud-label,
+.hud-clock {
+  overflow: hidden;
+  max-width: 900px;
+  margin-inline-start: 18px;
+  transition:
+    max-width 500ms ease,
+    margin 500ms ease,
+    opacity 300ms ease;
+}
+
+.hud-clock {
+  margin-inline-end: 12px;
+  padding-inline-start: 18px;
+  border-inline-start: 1px solid rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 400;
+}
+
+.hud-label:empty {
+  display: none;
+}
+
+.hud.compact .hud-label,
+.hud.compact .hud-clock {
+  max-width: 0;
+  margin-inline: 0;
+  padding-inline-start: 0;
+  border: 0;
+  opacity: 0;
+}
+
+.chip {
+  position: absolute;
+  inset-block-start: 48px;
+  inset-inline: 0;
+  width: -webkit-max-content;
+  width: max-content;
+  margin-inline: auto;
+  padding-block: 12px;
+  padding-inline: 28px;
+  border-radius: 999px;
+  font-size: 26px;
+  font-weight: 500;
+}
+
+.chip.show {
+  animation: drop-in 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 #overlay {
   position: absolute;
-  inset-inline: 0;
-  inset-block-end: 0;
-  padding-block: 140px 72px;
-  padding-inline: var(--gutter);
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent);
-  color: #fff;
-  font-weight: 400;
-  font-size: 46px;
-  text-align: start;
+  /* Symmetric, so physical sides (Chromium 56 has no inset-inline). */
+  left: var(--gutter);
+  right: var(--gutter);
+  inset-block-end: 72px;
+  display: flex;
+  justify-content: center;
 }
 
-#overlay > * {
+#overlay > p {
+  max-width: 1400px;
   margin: 0;
+  padding-block: 24px;
+  padding-inline: 40px;
+  border-radius: 24px;
+  font-size: 40px;
+  font-weight: 500;
+  line-height: 1.45;
   /* Each message picks its own direction; mixed Arabic/English stays ordered. */
   unicode-bidi: isolate;
+  animation: rise-in 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
 }
 
 /* ---- Help card and debug panel ----------------------------------------- */
@@ -307,7 +425,9 @@ button:focus {
   max-width: 1200px;
   margin: 0;
   padding: 16px 24px;
-  font: 400 22px/1.4 "Readex Pro", sans-serif;
+  font:
+    400 22px/1.4 "Readex Pro",
+    sans-serif;
   white-space: pre-wrap;
   color: #e8ecf0;
   background: rgba(11, 20, 32, 0.85);

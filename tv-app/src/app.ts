@@ -25,6 +25,10 @@ export interface AppElements {
   player: HTMLElement;
   overlay: HTMLElement;
   live: HTMLElement;
+  hud: HTMLElement;
+  hudLabel: HTMLElement;
+  hudClock: HTMLElement;
+  toast: HTMLElement;
   help: HTMLElement;
   debug: HTMLElement;
   video: HTMLVideoElement;
@@ -43,6 +47,9 @@ const KEY_0 = 48;
 const KEY_9 = 57;
 const HELP_VISIBLE_MS = 10_000;
 const TOAST_MS = 2_500;
+// The camera name and clock fold away after this; the LIVE badge stays.
+const HUD_FULL_MS = 5_000;
+const CLOCK_MS = 10_000;
 
 /** Home screen (cards + action bar) and the full-screen player. */
 export class App {
@@ -58,6 +65,7 @@ export class App {
   private debugLines: string[] = [];
   private helpTimer: ReturnType<typeof setTimeout> | undefined;
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
+  private hudTimer: ReturnType<typeof setTimeout> | undefined;
   // Text from Home Assistant shown over the video until the next stream.
   private message = "";
 
@@ -106,15 +114,22 @@ export class App {
       else if (this.playing) this.play(this.current);
     });
     this.el.playButton.addEventListener("click", () => this.play(0));
-    this.el.helpButton.addEventListener("click", () => this.showHelp(this.text.helpHome));
+    this.el.helpButton.addEventListener("click", () =>
+      this.showHelp(this.text.helpHome),
+    );
     this.el.exitButton.addEventListener("click", () => this.exit());
+    this.updateClock();
+    setInterval(() => this.updateClock(), CLOCK_MS);
     this.showHome();
   }
 
   /** Play what Home Assistant sent (at launch, or while already open). */
   playPayload(payload: LaunchPayload): void {
     this.message = payload.message;
-    this.streams = [payload.stream, ...this.streams.filter((s) => s.url !== payload.stream.url)];
+    this.streams = [
+      payload.stream,
+      ...this.streams.filter((s) => s.url !== payload.stream.url),
+    ];
     this.el.playButton.hidden = false;
     try {
       localStorage.setItem(LAST_STREAM_KEY, JSON.stringify(payload));
@@ -142,7 +157,10 @@ export class App {
       none: ready ? this.text.statusReady : this.text.statusWaiting,
     }[this.connection];
     this.el.statusText.textContent = status;
-    this.el.statusDot.classList.toggle("ready", this.connection === "connected" || ready);
+    this.el.statusDot.classList.toggle(
+      "ready",
+      this.connection === "connected" || ready,
+    );
     this.el.previewText.textContent = this.text.previewIdle;
     this.el.version.textContent = `v${version}`;
     this.el.playButton.textContent = this.text.playCamera;
@@ -202,9 +220,11 @@ export class App {
       return;
     }
     this.active = player;
-    this.log(`▶ [${this.current + 1}/${this.streams.length}] ${redactUrl(stream.url)}`);
+    this.log(
+      `▶ [${this.current + 1}/${this.streams.length}] ${redactUrl(stream.url)}`,
+    );
     this.showMessage();
-    if (stream.label) this.toast(stream.label);
+    this.showHud(stream.label ?? "");
     player.play(stream.url, stream.lowLatency === true, stream.audio === true);
   }
 
@@ -222,15 +242,43 @@ export class App {
     renderHelp(this.el.help, this.text.helpTitle, lines);
     this.el.help.hidden = false;
     clearTimeout(this.helpTimer);
-    this.helpTimer = setTimeout(() => (this.el.help.hidden = true), HELP_VISIBLE_MS);
+    this.helpTimer = setTimeout(
+      () => (this.el.help.hidden = true),
+      HELP_VISIBLE_MS,
+    );
   }
 
-  /** Brief text (camera name, fit mode); then the HA message, if any, returns. */
+  /** Status pill: LIVE, camera name and time; folds to the badge after a while. */
+  private showHud(label: string): void {
+    this.el.hudLabel.textContent = label;
+    this.el.hud.classList.remove("compact");
+    clearTimeout(this.hudTimer);
+    this.hudTimer = setTimeout(
+      () => this.el.hud.classList.add("compact"),
+      HUD_FULL_MS,
+    );
+  }
+
+  private updateClock(): void {
+    this.el.hudClock.textContent = new Date().toLocaleTimeString(
+      document.documentElement.lang || undefined,
+      {
+        hour: "2-digit",
+        minute: "2-digit",
+      },
+    );
+  }
+
+  /** Brief chip at the top (fit mode); the HA message stays where it is. */
   private toast(text: string): void {
-    showOverlay(this.el.overlay, text);
-    this.el.overlay.hidden = false;
+    this.el.toast.textContent = text;
+    this.el.toast.hidden = false;
+    // Restart the entry animation for back-to-back toasts.
+    this.el.toast.classList.remove("show");
+    void this.el.toast.offsetWidth;
+    this.el.toast.classList.add("show");
     clearTimeout(this.toastTimer);
-    this.toastTimer = setTimeout(() => this.showMessage(), TOAST_MS);
+    this.toastTimer = setTimeout(() => (this.el.toast.hidden = true), TOAST_MS);
   }
 
   private showMessage(): void {
