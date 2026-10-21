@@ -65,6 +65,17 @@ play_stream:
       default: true
       selector:
         boolean:
+    tv_corner:
+      default: "off"
+      selector:
+        select:
+          translation_key: tv_corner
+          options:
+            - "off"
+            - top_left
+            - top_right
+            - bottom_left
+            - bottom_right
     url:
       advanced: true
       example: "rtsp://user:pass@192.168.1.6:554/Streaming/channels/101"

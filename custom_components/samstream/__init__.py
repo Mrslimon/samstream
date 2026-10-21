@@ -20,7 +20,14 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.typing import ConfigType, VolDictType
 
 from .app_signing import async_check_certificate_expiry
-from .const import ATTR_APP_ID, ATTR_PATH, CERT_CHECK_INTERVAL, CONF_TOKEN, DOMAIN
+from .const import (
+    ATTR_APP_ID,
+    ATTR_PATH,
+    CERT_CHECK_INTERVAL,
+    CONF_TOKEN,
+    DOMAIN,
+    TV_CORNERS,
+)
 from .coordinator import SamstreamCoordinator
 from .frontend import async_setup_frontend
 from .installer import async_bundled_version
@@ -89,6 +96,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 vol.Coerce(float), vol.Range(min=1, max=86400)
             ),
             vol.Optional("return_to_previous", default=True): cv.boolean,
+            vol.Optional("tv_corner", default="off"): vol.In(TV_CORNERS),
         },
         func="async_play_stream",
     )

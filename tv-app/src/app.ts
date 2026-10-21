@@ -4,6 +4,7 @@ import { renderHelp } from "./help";
 import { applyLanguage, strings, type Language, type Strings } from "./i18n";
 import { MsePlayer } from "./mse";
 import { scrollWhenLong, showOverlay } from "./overlay";
+import { cornerRect, hideTvWindow, holeClipPath, showTvWindow, type Corner } from "./pip";
 import { Player, type PlayerCallbacks, type StreamPlayer } from "./player";
 import type { LaunchPayload } from "./launch";
 import type { MediaItem, Notice } from "./notice";
@@ -32,6 +33,7 @@ export interface AppElements {
   hudClock: HTMLElement;
   noticeClock: HTMLElement;
   toast: HTMLElement;
+  tvFrame: HTMLElement;
   help: HTMLElement;
   debug: HTMLElement;
   video: HTMLVideoElement;
@@ -298,6 +300,7 @@ export class App {
 
   /** Show a notice or media screen; the camera and home make way. */
   private enterScreen(screen: "notice" | "media"): void {
+    this.setTvCorner(undefined);
     this.active?.stop();
     this.active = undefined;
     this.playing = false;
@@ -337,10 +340,49 @@ export class App {
     );
     this.showMessage();
     this.showHud(stream.label ?? "");
+    this.setTvCorner(stream.tvCorner);
     player.play(stream.url, stream.lowLatency === true, stream.audio === true);
   }
 
+  /**
+   * The TV's picture in `corner` (undefined: none). The camera video gets a hole
+   * there, the frame outlines it, and the pill and message move out of its way.
+   */
+  private setTvCorner(corner: Corner | undefined): void {
+    const video = this.el.video;
+    const frame = this.el.tvFrame;
+    const clear = () => {
+      document.documentElement.classList.remove("tv-corner");
+      video.style.clipPath = "";
+      frame.hidden = true;
+      this.el.hud.style.top = "";
+      this.el.overlay.style.bottom = "";
+    };
+    if (!corner) {
+      if (!frame.hidden) hideTvWindow();
+      clear();
+      return;
+    }
+    const rect = cornerRect(corner);
+    // The TV window draws behind the whole page: nothing opaque may cover it.
+    document.documentElement.classList.add("tv-corner");
+    video.style.clipPath = holeClipPath(rect);
+    frame.style.left = `${rect.left}px`;
+    frame.style.top = `${rect.top}px`;
+    frame.style.width = `${rect.width}px`;
+    frame.style.height = `${rect.height}px`;
+    frame.hidden = false;
+    const hudSide = this.rtl ? "right" : "left";
+    if (corner === `top_${hudSide}`) this.el.hud.style.top = `${rect.top + rect.height + 24}px`;
+    if (corner.startsWith("bottom")) this.el.overlay.style.bottom = `${1080 - rect.top + 24}px`;
+    void showTvWindow(rect, (line) => this.log(line)).then((shown) => {
+      this.log(shown ? `tv corner: ${corner}` : "tv corner: not available, camera only");
+      if (!shown) clear();
+    });
+  }
+
   private showHome(): void {
+    this.setTvCorner(undefined);
     this.active?.stop();
     this.leaveScreen();
     this.active = undefined;
@@ -420,6 +462,7 @@ export class App {
   }
 
   private exit(): void {
+    this.setTvCorner(undefined);
     this.active?.stop();
     this.leaveScreen();
     globalThis.tizen?.application.getCurrentApplication().exit();

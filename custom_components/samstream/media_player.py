@@ -396,6 +396,7 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         message: str | None = None,
         duration: float | None = None,
         return_to_previous: bool = True,
+        tv_corner: str = "off",
     ) -> None:
         """Open Samstream on the TV with a camera (the `play_stream` action).
 
@@ -427,6 +428,8 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
                 "action": "play",
                 "stream": {"label": label or "", "url": stream_url, "type": "mse"},
                 "message": message or "",
+                # Live TV / HDMI keeps playing in this corner (TV Window API).
+                "tv_corner": None if tv_corner == "off" else tv_corner,
             },
             duration=duration,
             return_to_previous=return_to_previous,

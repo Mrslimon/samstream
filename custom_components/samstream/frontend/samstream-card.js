@@ -561,6 +561,7 @@ var Y = {
 		off: "Off",
 		home: "Home",
 		liveTv: "Live TV",
+		tvCorner: "Keep Live TV / HDMI in a corner",
 		power: "Power",
 		cameras: "Cameras",
 		showCamera: "Show on TV",
@@ -605,6 +606,7 @@ var Y = {
 		off: "مطفأ",
 		home: "الرئيسية",
 		liveTv: "البث المباشر",
+		tvCorner: "إبقاء البث المباشر / HDMI في الزاوية",
 		power: "التشغيل",
 		cameras: "الكاميرات",
 		showCamera: "اعرض على التلفاز",
@@ -823,6 +825,10 @@ var Z, Ae = [
             ></label
           >
         </div>
+        <label class="check">
+          <input id="camera-tv-corner" type="checkbox" />
+          <span>${e.tvCorner}</span>
+        </label>
         <div class="actions">
           <button class="primary" @click=${() => this.playCamera(n)}>
             <ha-icon icon="mdi:television-play"></ha-icon>${e.showCamera}
@@ -1091,12 +1097,13 @@ var Z, Ae = [
 		return t > 0 ? t : void 0;
 	}
 	playCamera(e) {
-		let t = this.value("camera-message"), n = this.duration("camera-duration");
+		let t = this.value("camera-message"), n = this.duration("camera-duration"), r = this.renderRoot.querySelector("#camera-tv-corner")?.checked;
 		this.call("samstream", "play_stream", {
 			entity_id: this.config.entity,
 			camera: e,
 			...t ? { message: t } : {},
-			...n ? { duration: n } : {}
+			...n ? { duration: n } : {},
+			...r ? { tv_corner: this.rtl ? "top_left" : "top_right" } : {}
 		});
 	}
 	showNotice() {
@@ -1435,6 +1442,16 @@ Z = $, Z.properties = {
       touch-action: manipulation;
       user-select: none;
       -webkit-user-select: none;
+    }
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--secondary-text-color);
+      cursor: pointer;
+    }
+    .check input {
+      width: auto;
     }
     .hint {
       margin: 0;

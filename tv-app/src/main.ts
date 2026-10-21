@@ -67,6 +67,7 @@ async function boot(): Promise<void> {
     hudLabel: byId("hud-label"),
     hudClock: byId("hud-clock"),
     toast: byId("toast"),
+    tvFrame: byId("tv-frame"),
     noticeClock: byId("notice-clock"),
     notice: {
       root: byId("notice"),

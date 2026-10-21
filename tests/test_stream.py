@@ -147,6 +147,7 @@ async def test_play_camera(
             "type": "mse",
         },
         "message": "شخص عند الباب",
+        "tv_corner": None,
     }
     # No credentials in what the TV receives.
     assert "pass" not in json.dumps(payload)
@@ -465,3 +466,14 @@ async def test_one_camera_on_two_tvs(hass: HomeAssistant, go2rtc: FakeGo2rtc) ->
     assert _allowed(hass, name, "secret-living-room")
     assert _allowed(hass, name, "secret-bedroom")
     assert not _allowed(hass, name, "secret-other")
+
+
+@pytest.mark.usefixtures("setup_entry", "go2rtc")
+async def test_tv_corner(hass: HomeAssistant, mock_tv: MagicMock) -> None:
+    await hass.services.async_call(
+        DOMAIN,
+        "play_stream",
+        {"entity_id": TV, "url": RTSP, "tv_corner": "bottom_right"},
+        blocking=True,
+    )
+    assert launched_payload(hass, mock_tv)["tv_corner"] == "bottom_right"

@@ -320,6 +320,10 @@
         "return_to_previous": {
           "name": "Return to previous",
           "description": "When the camera ends, reopen the app that was playing and resume it (or turn the TV off again if it was off)."
+        },
+        "tv_corner": {
+          "name": "TV picture in a corner",
+          "description": "Keep watching Live TV or the HDMI input in a corner while the camera plays (Samsung Tizen TVs from 2023; with streaming apps the corner shows Live TV)."
         }
       }
     },
@@ -487,6 +491,15 @@
       "options": {
         "left": "Left click",
         "right": "Right click"
+      }
+    },
+    "tv_corner": {
+      "options": {
+        "off": "Off",
+        "top_left": "Top left",
+        "top_right": "Top right",
+        "bottom_left": "Bottom left",
+        "bottom_right": "Bottom right"
       }
     }
   }

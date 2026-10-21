@@ -240,6 +240,10 @@ export class SamstreamCard extends LitElement {
             ></label
           >
         </div>
+        <label class="check">
+          <input id="camera-tv-corner" type="checkbox" />
+          <span>${t.tvCorner}</span>
+        </label>
         <div class="actions">
           <button class="primary" @click=${() => this.playCamera(selected)}>
             <ha-icon icon="mdi:television-play"></ha-icon>${t.showCamera}
@@ -563,11 +567,14 @@ export class SamstreamCard extends LitElement {
   private playCamera(camera: string): void {
     const message = this.value("camera-message");
     const duration = this.duration("camera-duration");
+    const corner = this.renderRoot.querySelector<HTMLInputElement>("#camera-tv-corner")?.checked;
     this.call("samstream", "play_stream", {
       entity_id: this.config.entity,
       camera,
       ...(message ? { message } : {}),
       ...(duration ? { duration } : {}),
+      // The top corner away from the TV app's status pill.
+      ...(corner ? { tv_corner: this.rtl ? "top_left" : "top_right" } : {}),
     });
   }
 
@@ -905,6 +912,16 @@ export class SamstreamCard extends LitElement {
       touch-action: manipulation;
       user-select: none;
       -webkit-user-select: none;
+    }
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--secondary-text-color);
+      cursor: pointer;
+    }
+    .check input {
+      width: auto;
     }
     .hint {
       margin: 0;

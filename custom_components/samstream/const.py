@@ -44,6 +44,8 @@ CERT_CHECK_INTERVAL: Final = timedelta(hours=12)
 
 # First media player source: presses the remote's Home key.
 SOURCE_HOME: Final = "Home"
+# Where play_stream can keep the TV's own picture (Live TV / HDMI).
+TV_CORNERS: Final = ("off", "top_left", "top_right", "bottom_left", "bottom_right")
 # Sources before the apps, and the remote key each one presses. The TV keeps
 # its own names for inputs; these keys work whatever the input is called.
 SOURCE_KEYS: Final = {

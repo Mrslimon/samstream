@@ -44,6 +44,15 @@ declare global {
   var tizen:
     | {
         tvinputdevice: { registerKey(keyName: string): void };
+        tvwindow?: {
+          show(
+            success: (rect: string[], type: string) => void,
+            error: (error: { name: string; message: string }) => void,
+            rect: string[],
+            type: "MAIN",
+          ): void;
+          hide(success: () => void, error: () => void, type: "MAIN"): void;
+        };
         application: {
           getCurrentApplication(): {
             exit(): void;

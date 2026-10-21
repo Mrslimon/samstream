@@ -8,6 +8,7 @@
  * '{"values":"<metaTag>"}'; both that and the raw JSON are accepted.
  */
 
+import { CORNERS, type Corner } from "./pip";
 import type { CameraStream } from "./streams";
 
 export interface LaunchPayload {
@@ -33,7 +34,11 @@ export function parsePayload(raw: unknown, haUrl?: string): LaunchPayload | unde
   if (typeof raw !== "object" || raw === null) {
     return undefined;
   }
-  const { stream, message } = raw as { stream?: unknown; message?: unknown };
+  const { stream, message, tv_corner } = raw as {
+    stream?: unknown;
+    message?: unknown;
+    tv_corner?: unknown;
+  };
   if (typeof stream !== "object" || stream === null) {
     return undefined;
   }
@@ -45,7 +50,12 @@ export function parsePayload(raw: unknown, haUrl?: string): LaunchPayload | unde
     return undefined;
   }
   return {
-    stream: { label: typeof label === "string" ? label : "", url, type: "mse" },
+    stream: {
+      label: typeof label === "string" ? label : "",
+      url,
+      type: "mse",
+      ...(CORNERS.includes(tv_corner as Corner) ? { tvCorner: tv_corner as Corner } : {}),
+    },
     message: typeof message === "string" ? message : "",
   };
 }

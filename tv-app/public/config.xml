@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- widget version is the single source of truth for the app version reported to Home Assistant -->
 <widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets"
-        id="https://github.com/Mrslimon/samstream" version="0.8.3" viewmodes="maximized">
+        id="https://github.com/Mrslimon/samstream" version="0.9.0" viewmodes="maximized">
   <tizen:application id="SmStrm0001.Samstream" package="SmStrm0001" required_version="2.3"/>
   <name>Samstream</name>
   <content src="index.html"/>
@@ -12,6 +12,7 @@
   <tizen:privilege name="http://tizen.org/privilege/internet"/>
   <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
   <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+  <tizen:privilege name="http://tizen.org/privilege/tv.window"/>
   <tizen:privilege name="http://developer.samsung.com/privilege/network.public"/>
   <tizen:setting screen-orientation="landscape" context-menu="disable"
                  background-support="disable" encryption="disable"
