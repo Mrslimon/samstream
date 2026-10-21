@@ -33,8 +33,13 @@ _CORS = {"Access-Control-Allow-Origin": "*"}
 
 
 def signal_playing(entry_id: str) -> str:
-    """Dispatcher signal: the TV showed the first frame of play command `seq`."""
+    """Dispatcher signal: the TV shows command `seq` (first frame, notice, video)."""
     return f"{DOMAIN}_playing_{entry_id}"
+
+
+def signal_ended(entry_id: str) -> str:
+    """Dispatcher signal: the video of command `seq` ended on the TV."""
+    return f"{DOMAIN}_ended_{entry_id}"
 
 
 @dataclass
@@ -92,11 +97,14 @@ class SamstreamTvSessionView(HomeAssistantView):
         hass = request.app[KEY_HASS]
         since = _int_query(request, "since") or 0
         playing = _int_query(request, "playing")
+        ended = _int_query(request, "ended")
         for entry in hass.config_entries.async_entries(DOMAIN):
             known = entry.data.get(CONF_TV_SECRET)
             if known and secrets.compare_digest(str(known), secret):
                 if playing is not None:
                     async_dispatcher_send(hass, signal_playing(entry.entry_id), playing)
+                if ended is not None:
+                    async_dispatcher_send(hass, signal_ended(entry.entry_id), ended)
                 return self.json(session_answer(hass, entry, since), headers=_CORS)
         return self.json_message("Unknown TV", HTTPStatus.NOT_FOUND, headers=_CORS)
 

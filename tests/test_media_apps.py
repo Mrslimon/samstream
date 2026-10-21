@@ -146,8 +146,8 @@ async def test_play_media_app(hass: HomeAssistant, mock_tv: MagicMock) -> None:
             "play_media",
             {
                 ATTR_ENTITY_ID: TV,
-                ATTR_MEDIA_CONTENT_TYPE: "video",
-                ATTR_MEDIA_CONTENT_ID: "http://x/y.mp4",
+                ATTR_MEDIA_CONTENT_TYPE: "playlist",
+                ATTR_MEDIA_CONTENT_ID: "my favourites",
             },
             blocking=True,
         )

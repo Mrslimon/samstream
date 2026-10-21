@@ -51,6 +51,29 @@
       <div id="overlay" aria-live="polite" hidden></div>
     </section>
 
+    <section id="notice" hidden>
+      <span class="notice-clock" id="notice-clock"></span>
+      <div class="notice-card">
+        <div class="notice-icon" id="notice-icon"></div>
+        <h1 id="notice-title" dir="auto"></h1>
+        <div class="notice-body" id="notice-body"></div>
+      </div>
+    </section>
+    <audio id="sound"></audio>
+
+    <section id="media" hidden>
+      <video id="media-video" playsinline></video>
+      <div class="media-note" aria-hidden="true">
+        <svg viewBox="0 0 64 64" width="140" height="140">
+          <path d="M24 46V14l28-6v32" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round" />
+          <circle cx="17" cy="46" r="7" fill="none" stroke="currentColor" stroke-width="4" />
+          <circle cx="45" cy="40" r="7" fill="none" stroke="currentColor" stroke-width="4" />
+        </svg>
+      </div>
+      <div class="hud media-hud" id="media-hud"><span id="media-title" dir="auto"></span></div>
+      <div class="media-progress"><div id="media-bar"></div></div>
+    </section>
+
     <aside id="help" class="card" hidden></aside>
     <pre id="debug" dir="ltr" hidden></pre>
     <script type="module" src="/src/main.ts"></script>

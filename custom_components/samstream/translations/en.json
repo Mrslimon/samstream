@@ -231,6 +231,12 @@
     },
     "tv_did_not_wake": {
       "message": "The TV did not turn on in time."
+    },
+    "message_required": {
+      "message": "Enter a title or a message."
+    },
+    "media_unresolvable": {
+      "message": "Cannot play this media item: {error}"
     }
   },
   "services": {
@@ -294,9 +300,39 @@
         }
       }
     },
+    "show_message": {
+      "name": "Show message on TV",
+      "description": "Shows a full-screen message on the TV, optionally with a sound (a chime from the media library or text-to-speech), then returns to what was on.",
+      "fields": {
+        "title": {
+          "name": "Title",
+          "description": "Large heading, for example the room or event."
+        },
+        "message": {
+          "name": "Message",
+          "description": "Text under the title; long text scrolls."
+        },
+        "severity": {
+          "name": "Severity",
+          "description": "Colour and icon: info, warning or alert."
+        },
+        "sound": {
+          "name": "Sound",
+          "description": "Audio to play with the message: a media library file or text-to-speech."
+        },
+        "duration": {
+          "name": "Duration",
+          "description": "Go back to what was on the TV after this many seconds. Leave empty to stay until Stop stream or Back."
+        },
+        "return_to_previous": {
+          "name": "Return to previous",
+          "description": "When the message ends, reopen the app that was playing and resume it (or turn the TV off again if it was off)."
+        }
+      }
+    },
     "update_message": {
       "name": "Update message on TV",
-      "description": "Changes the text over the camera on the TV without reloading it, for example with an AI description that arrives later. Does nothing when no camera is on the TV.",
+      "description": "Changes the text over the camera, or of the full-screen message, on the TV without reloading it, for example with an AI description that arrives later. Does nothing when Samstream shows neither.",
       "fields": {
         "message": {
           "name": "Message",
@@ -335,6 +371,13 @@
       "options": {
         "light": "Light",
         "dark": "Dark"
+      }
+    },
+    "severity": {
+      "options": {
+        "info": "Info",
+        "warning": "Warning",
+        "alert": "Alert"
       }
     }
   }

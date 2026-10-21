@@ -10,10 +10,15 @@ from datetime import datetime
 from typing import Any
 
 from aiosamstream import SAMSTREAM_APP_ID, SamstreamConnectionError, SamstreamError
+from homeassistant.components import media_source
 from homeassistant.components.camera import async_get_stream_source
 from homeassistant.components.media_player import (
     MediaPlayerDeviceClass,
     MediaPlayerEntity,
+)
+from homeassistant.components.media_player.browse_media import (
+    BrowseMedia,
+    async_process_play_media_url,
 )
 from homeassistant.components.media_player.const import (
     MediaPlayerEntityFeature,
@@ -34,7 +39,7 @@ from .coordinator import SamstreamCoordinator
 from .entity import SamstreamEntity
 from .installer import async_install_package, resolve_package_path
 from .stream_relay import async_publish_stream, tv_stream_url
-from .tv_session import current_command, set_command, signal_playing
+from .tv_session import current_command, set_command, signal_ended, signal_playing
 from .tv_settings import ensure_tv_secret
 
 _LOGGER = logging.getLogger(__name__)
@@ -74,6 +79,7 @@ FEATURES = (
     | MediaPlayerEntityFeature.STOP
     | MediaPlayerEntityFeature.SELECT_SOURCE
     | MediaPlayerEntityFeature.PLAY_MEDIA
+    | MediaPlayerEntityFeature.BROWSE_MEDIA
 )
 
 
@@ -107,12 +113,14 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
     async def async_added_to_hass(self) -> None:
         """Listen for the TV app reporting its first frame."""
         await super().async_added_to_hass()
+        entry_id = self.coordinator.config_entry.entry_id
         self.async_on_remove(
             async_dispatcher_connect(
-                self.hass,
-                signal_playing(self.coordinator.config_entry.entry_id),
-                self._on_first_frame,
+                self.hass, signal_playing(entry_id), self._on_first_frame
             )
+        )
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, signal_ended(entry_id), self._on_ended)
         )
 
     async def async_will_remove_from_hass(self) -> None:
@@ -232,14 +240,50 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
     async def async_play_media(
         self, media_type: MediaType | str, media_id: str, **kwargs: Any
     ) -> None:
-        """`media_content_type: app`, `media_content_id: <Tizen app ID>`."""
-        if media_type != MediaType.APP:
+        """Launch an app (`app` + Tizen app ID), or play a file on the TV.
+
+        Files are HA media library items (`media-source://…`, including TTS) or
+        http(s) URLs. Samstream plays them full screen and, when the file ends,
+        the TV returns to what was on before.
+        """
+        if media_type == MediaType.APP:
+            await self.async_launch_app(media_id)
+            return
+        if not (media_source.is_media_source_id(media_id) or _is_http(media_id)):
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="unsupported_media_type",
                 translation_placeholders={"media_type": str(media_type)},
             )
-        await self.async_launch_app(media_id)
+        url, mime = await self._async_media_url(media_id)
+        kind = (mime or str(media_type)).split("/", 1)[0]
+        audio = kind in {"audio", MediaType.MUSIC}
+        extra = kwargs.get("extra") or {}
+        title = extra.get("title") or _title_from(media_id)
+        await self._async_take_over(
+            {
+                "action": "media",
+                "title": title,
+                "url": url,
+                "kind": "audio" if audio else "video",
+            },
+            duration=None,
+            return_to_previous=True,
+        )
+
+    async def async_browse_media(
+        self,
+        media_content_type: MediaType | str | None = None,
+        media_content_id: str | None = None,
+    ) -> BrowseMedia:
+        """HA's media library, video and audio only (the TV plays them)."""
+        return await media_source.async_browse_media(
+            self.hass,
+            media_content_id,
+            content_filter=lambda item: item.media_content_type.startswith(
+                ("video/", "audio/")
+            ),
+        )
 
     async def async_launch_app(self, app_id: str) -> None:
         """Start or bring an app to the front (also the `launch_app` action)."""
@@ -296,17 +340,66 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         ensure_tv_secret(self.hass, entry)
         name = await async_publish_stream(self.hass, entry, source)
         stream_url = tv_stream_url(self.hass, entry, name)
-        # The app pulls this when it starts (or within ~2 s if already open):
-        # Samsung TVs ignore launch data for sideloaded apps.
-        seq = set_command(
-            self.hass,
-            entry,
+        await self._async_take_over(
             {
                 "action": "play",
                 "stream": {"label": label or "", "url": stream_url, "type": "mse"},
                 "message": message or "",
             },
+            duration=duration,
+            return_to_previous=return_to_previous,
+            stream_url=stream_url,
         )
+
+    async def async_show_message(  # noqa: PLR0913 - one argument per action field
+        self,
+        *,
+        message: str = "",
+        title: str = "",
+        severity: str = "info",
+        sound: str | dict[str, Any] | None = None,
+        duration: float | None = None,
+        return_to_previous: bool = True,
+    ) -> None:
+        """Show a full-screen message on the TV (the `show_message` action)."""
+        if not message and not title:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="message_required"
+            )
+        sound_url = None
+        if sound:
+            media_id = sound["media_content_id"] if isinstance(sound, dict) else sound
+            sound_url, _mime = await self._async_media_url(str(media_id))
+        await self._async_take_over(
+            {
+                "action": "notice",
+                "title": title,
+                "message": message,
+                "severity": severity,
+                "sound": sound_url,
+            },
+            duration=duration,
+            return_to_previous=return_to_previous,
+        )
+
+    async def _async_take_over(
+        self,
+        command: dict[str, Any],
+        *,
+        duration: float | None,
+        return_to_previous: bool,
+        stream_url: str | None = None,
+    ) -> None:
+        """Queue `command`, open Samstream over what is on screen, plan the return.
+
+        `duration` starts when the TV reports the command on screen (first camera
+        frame, notice shown, video started).
+        """
+        entry = self.coordinator.config_entry
+        ensure_tv_secret(self.hass, entry)
+        # The app pulls this when it starts (or within ~2 s if already open):
+        # Samsung TVs ignore launch data for sideloaded apps.
+        seq = set_command(self.hass, entry, command)
         if self._interruption is None:
             self._interruption = await self._async_remember_screen(
                 pause=return_to_previous
@@ -322,7 +415,11 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
             self._interruption = None
             raise
         # The same camera already on screen only changes its text: no new frame.
-        if not (self._frame_seen and stream_url == self._stream_url):
+        if not (
+            self._frame_seen
+            and stream_url is not None
+            and stream_url == self._stream_url
+        ):
             self._frame_seen = False
         self._play_seq, self._stream_url, self._duration = seq, stream_url, duration
         self._cancel_timed_return()
@@ -330,14 +427,31 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
             wait = 0 if self._frame_seen else FIRST_FRAME_WAIT_SECONDS
             self._schedule_return(duration + wait)
 
+    async def _async_media_url(self, media_id: str) -> tuple[str, str | None]:
+        """Return a URL the TV can fetch (signed if it is HA's) and its MIME type."""
+        mime = None
+        if media_source.is_media_source_id(media_id):
+            try:
+                play = await media_source.async_resolve_media(
+                    self.hass, media_id, self.entity_id
+                )
+            except media_source.Unresolvable as err:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="media_unresolvable",
+                    translation_placeholders={"error": str(err)},
+                ) from err
+            media_id, mime = play.url, play.mime_type
+        return async_process_play_media_url(self.hass, media_id), mime
+
     async def async_update_message(self, message: str) -> None:
-        """Change the text over the camera on screen (the `update_message` action).
+        """Change the text of the camera or message on screen (`update_message`).
 
         The camera keeps playing. Without a camera on the TV nothing happens, so
         a slow automation (an AI description) cannot reopen a closed camera.
         """
         command = current_command(self.hass, self.coordinator.config_entry)
-        if command is None or command.get("action") != "play":
+        if command is None or command.get("action") not in {"play", "notice"}:
             _LOGGER.debug("No camera on %s; message not shown", self.entity_id)
             return
         # Re-sent as the same play: an app that starts late still gets the camera.
@@ -408,6 +522,14 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
             self._cancel_timed_return()
             self._schedule_return(self._duration)
 
+    @callback
+    def _on_ended(self, seq: int) -> None:
+        """Go back now: a video from the media library ended."""
+        if seq != self._play_seq:
+            return
+        self._cancel_timed_return()
+        self.hass.async_create_task(self._async_timed_return(None))
+
     def _schedule_return(self, delay: float) -> None:
         self._cancel_return = async_call_later(
             self.hass, delay, self._async_timed_return
@@ -418,7 +540,7 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
             self._cancel_return()
             self._cancel_return = None
 
-    async def _async_timed_return(self, _now: datetime) -> None:
+    async def _async_timed_return(self, _now: datetime | None) -> None:
         self._cancel_return = None
         try:
             await self.async_stop_stream()
@@ -462,3 +584,13 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
     async def _async_key(self, key: str) -> None:
         await self._async_call(self.coordinator.tv.send_keys([key]))
         await self.coordinator.async_request_refresh()
+
+
+def _is_http(media_id: str) -> bool:
+    return media_id.startswith(("http://", "https://"))
+
+
+def _title_from(media_id: str) -> str:
+    """File name without folders, query or extension, as a fallback title."""
+    name = media_id.split("?", 1)[0].rstrip("/").rsplit("/", 1)[-1]
+    return name.rsplit(".", 1)[0] if "." in name else name

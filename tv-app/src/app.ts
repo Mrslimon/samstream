@@ -6,6 +6,8 @@ import { MsePlayer } from "./mse";
 import { scrollWhenLong, showOverlay } from "./overlay";
 import { Player, type PlayerCallbacks, type StreamPlayer } from "./player";
 import type { LaunchPayload } from "./launch";
+import type { MediaItem, Notice } from "./notice";
+import { MediaScreen, NoticeScreen, type MediaElements, type NoticeElements } from "./screens";
 import { redactUrl, type CameraStream } from "./streams";
 
 /** How the app reached Home Assistant at start. */
@@ -28,10 +30,14 @@ export interface AppElements {
   hud: HTMLElement;
   hudLabel: HTMLElement;
   hudClock: HTMLElement;
+  noticeClock: HTMLElement;
   toast: HTMLElement;
   help: HTMLElement;
   debug: HTMLElement;
   video: HTMLVideoElement;
+  notice: NoticeElements;
+  media: MediaElements;
+  sound: HTMLAudioElement;
 }
 
 const KEY_UP = 38;
@@ -50,6 +56,8 @@ const TOAST_MS = 2_500;
 // The camera name and clock fold away after this; the LIVE badge stays.
 const HUD_FULL_MS = 5_000;
 const CLOCK_MS = 10_000;
+// After a video ends, close ourselves if HA has not taken the TV back by then.
+const END_FALLBACK_MS = 5_000;
 
 /** Home screen (cards + action bar) and the full-screen player. */
 export class App {
@@ -69,8 +77,14 @@ export class App {
   // Opened by HA for a camera: Back and HA's stop close the app, so the TV
   // returns to what was on before. Opened from the TV's app list: Back goes home.
   private fromHa = false;
-  /** Called when a stream shows its first frame. */
+  /** Called when what HA sent is on screen (first camera frame, notice, video start). */
   onFirstFrame: (() => void) | undefined;
+  /** Called when a video from HA's media library ends. */
+  onEnded: (() => void) | undefined;
+  private readonly noticeScreen: NoticeScreen;
+  private readonly mediaScreen: MediaScreen;
+  // A notice or a media file on screen instead of home / camera.
+  private screen: "notice" | "media" | undefined;
   // Text from Home Assistant shown over the video until the next stream.
   private message = "";
 
@@ -103,6 +117,22 @@ export class App {
     const avplay = globalThis.webapis?.avplay;
     this.native = avplay ? new Player(avplay, callbacks) : undefined;
     this.mse = new MsePlayer(el.video, callbacks);
+    this.noticeScreen = new NoticeScreen(el.notice, el.sound);
+    this.mediaScreen = new MediaScreen(el.media, {
+      onStart: () => {
+        this.log("media: playing");
+        this.onFirstFrame?.();
+      },
+      onEnd: () => {
+        this.log("media: ended");
+        this.onEnded?.();
+        // HA returns to what was on (and closes us); this is the fallback.
+        setTimeout(() => {
+          if (this.screen === "media") this.back();
+        }, END_FALLBACK_MS);
+      },
+      onError: (message) => this.log(`media: ERROR ${message}`),
+    });
     for (const player of this.players()) player.setFit(this.fit);
 
     this.renderHome(version);
@@ -112,12 +142,22 @@ export class App {
     for (let digit = 1; digit <= Math.min(this.streams.length, 9); digit++) {
       globalThis.tizen?.tvinputdevice.registerKey(String(digit));
     }
-    for (const key of ["ColorF1Green", "ColorF2Yellow", "Info"]) {
+    for (const key of [
+      "ColorF1Green",
+      "ColorF2Yellow",
+      "Info",
+      "MediaPlay",
+      "MediaPause",
+      "MediaPlayPause",
+    ]) {
       globalThis.tizen?.tvinputdevice.registerKey(key);
     }
     document.addEventListener("keydown", (event) => this.onKey(event.keyCode));
     document.addEventListener("visibilitychange", () => {
-      if (document.hidden) this.active?.stop();
+      if (document.hidden) {
+        this.active?.stop();
+        this.mediaScreen.pause();
+      }
       else if (this.playing) this.play(this.current);
     });
     this.el.playButton.addEventListener("click", () => {
@@ -155,10 +195,26 @@ export class App {
     this.play(0);
   }
 
-  /** HA's `stop_stream`: close if HA opened the camera, else back to home. */
+  /** A full-screen message (`samstream.show_message`); same title only updates. */
+  showNotice(notice: Notice): void {
+    this.fromHa = true;
+    this.enterScreen("notice");
+    this.noticeScreen.show(notice);
+    this.onFirstFrame?.();
+  }
+
+  /** A video or audio file from HA's media library. */
+  playMedia(item: MediaItem): void {
+    this.fromHa = true;
+    this.enterScreen("media");
+    this.log(`▶ media ${item.kind} ${item.title}`);
+    this.mediaScreen.show(item);
+  }
+
+  /** HA's `stop_stream`: close if HA opened the app, else back to home. */
   stop(): void {
     if (this.fromHa) this.exit();
-    else if (this.playing) this.showHome();
+    else if (this.playing || this.screen) this.showHome();
   }
 
   /** Line for the debug panel (Yellow key). */
@@ -196,7 +252,11 @@ export class App {
       this.showHelp(this.playing ? this.text.helpPlayer : this.text.helpHome);
       return;
     }
-    if (this.playing) {
+    if (this.screen === "notice") {
+      if (key === KEY_BACK || key === KEY_ENTER) this.back();
+    } else if (this.screen === "media") {
+      if (!this.mediaScreen.onKey(key) && key === KEY_BACK) this.back();
+    } else if (this.playing) {
       this.onPlayerKey(key);
     } else if (key === KEY_BACK) {
       this.exit();
@@ -216,9 +276,32 @@ export class App {
       for (const player of this.players()) player.setFit(this.fit);
       this.toast(FIT_LABELS[this.fit]);
     } else if (key === KEY_BACK) {
-      if (this.fromHa) this.exit();
-      else this.showHome();
+      this.back();
     }
+  }
+
+  /** Back from anything HA opened: close the app (TV returns); else home. */
+  private back(): void {
+    if (this.fromHa) this.exit();
+    else this.showHome();
+  }
+
+  /** Show a notice or media screen; the camera and home make way. */
+  private enterScreen(screen: "notice" | "media"): void {
+    this.active?.stop();
+    this.active = undefined;
+    this.playing = false;
+    if (this.screen && this.screen !== screen) this.leaveScreen();
+    this.screen = screen;
+    document.body.classList.add("playing");
+    this.el.home.hidden = true;
+    this.el.player.hidden = true;
+  }
+
+  private leaveScreen(): void {
+    if (this.screen === "notice") this.noticeScreen.hide();
+    if (this.screen === "media") this.mediaScreen.hide();
+    this.screen = undefined;
   }
 
   private play(index: number): void {
@@ -229,6 +312,7 @@ export class App {
     const stream = this.streams[this.current];
     const player = stream.type === "mse" ? this.mse : this.native;
     this.active?.stop();
+    this.leaveScreen();
     this.playing = true;
     document.body.classList.add("playing");
     this.el.home.hidden = true;
@@ -248,6 +332,7 @@ export class App {
 
   private showHome(): void {
     this.active?.stop();
+    this.leaveScreen();
     this.active = undefined;
     this.playing = false;
     document.body.classList.remove("playing");
@@ -278,7 +363,7 @@ export class App {
   }
 
   private updateClock(): void {
-    this.el.hudClock.textContent = new Date().toLocaleTimeString(
+    this.el.hudClock.textContent = this.el.noticeClock.textContent = new Date().toLocaleTimeString(
       document.documentElement.lang || undefined,
       {
         hour: "2-digit",
@@ -326,6 +411,7 @@ export class App {
 
   private exit(): void {
     this.active?.stop();
+    this.leaveScreen();
     globalThis.tizen?.application.getCurrentApplication().exit();
   }
 }

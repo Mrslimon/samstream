@@ -71,6 +71,48 @@ play_stream:
       selector:
         text:
 
+show_message:
+  target:
+    entity:
+      integration: samstream
+      domain: media_player
+  fields:
+    title:
+      example: "Front door"
+      selector:
+        text:
+    message:
+      example: "Someone is at the door"
+      selector:
+        text:
+          multiline: true
+    severity:
+      default: info
+      selector:
+        select:
+          translation_key: severity
+          options:
+            - info
+            - warning
+            - alert
+    sound:
+      selector:
+        media:
+          accept:
+            - audio/*
+    duration:
+      example: 30
+      selector:
+        number:
+          min: 1
+          max: 3600
+          unit_of_measurement: s
+          mode: box
+    return_to_previous:
+      default: true
+      selector:
+        boolean:
+
 update_message:
   target:
     entity:

@@ -10,6 +10,7 @@ import "./styles.css";
 import { App, type AppElements, type Connection } from "./app";
 import { parsePayload, readLaunchPayload } from "./launch";
 import { resolveLanguage, strings } from "./i18n";
+import { parseMedia, parseNotice } from "./notice";
 import { fetchSession, loadSettings, xhrFetch } from "./settings";
 import { parseStreams } from "./streams";
 
@@ -66,6 +67,21 @@ async function boot(): Promise<void> {
     hudLabel: byId("hud-label"),
     hudClock: byId("hud-clock"),
     toast: byId("toast"),
+    noticeClock: byId("notice-clock"),
+    notice: {
+      root: byId("notice"),
+      icon: byId("notice-icon"),
+      title: byId("notice-title"),
+      body: byId("notice-body"),
+    },
+    media: {
+      root: byId("media"),
+      video: byId<HTMLVideoElement>("media-video"),
+      hud: byId("media-hud"),
+      title: byId("media-title"),
+      bar: byId("media-bar"),
+    },
+    sound: byId<HTMLAudioElement>("sound"),
     help: byId("help"),
     debug: byId("debug"),
     video: byId<HTMLVideoElement>("mse-video"),
@@ -99,11 +115,30 @@ async function boot(): Promise<void> {
       app.stop();
       return;
     }
+    const notice = action === "notice" ? parseNotice(command) : undefined;
+    if (notice) {
+      app.debug(`HA: notice ${notice.severity}`);
+      playSeq = seq;
+      app.showNotice(notice);
+      return;
+    }
+    const media = action === "media" ? parseMedia(command) : undefined;
+    if (media) {
+      app.debug(`HA: media ${media.kind}`);
+      playSeq = seq;
+      app.playMedia(media);
+      return;
+    }
     const payload = action === "play" ? parsePayload(command, haUrl) : undefined;
     if (payload) {
       app.debug(`HA: play ${payload.stream.label || "camera"}`);
       playSeq = seq;
       app.playPayload(payload);
+    }
+  };
+  app.onEnded = () => {
+    if (config && playSeq !== undefined) {
+      fetchSession(xhrFetch, config, seq, undefined, playSeq).catch(() => undefined);
     }
   };
   app.onFirstFrame = () => {

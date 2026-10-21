@@ -88,16 +88,20 @@ function sessionUrl(config: PackageConfig, since: number): string {
 }
 
 /**
- * Ask HA for settings and any command newer than `since`; `playing` tells HA the
- * first frame of that play command is on screen (its `duration` starts then).
+ * Ask HA for settings and any command newer than `since`. `playing` tells HA that
+ * command is on screen (its `duration` starts then); `ended` that its video ended.
  */
 export async function fetchSession(
   fetchText: Fetch,
   config: PackageConfig,
   since: number,
   playing?: number,
+  ended?: number,
 ): Promise<{ settings: Partial<TvSettings>; session: Session }> {
-  const url = sessionUrl(config, since) + (playing === undefined ? "" : `&playing=${playing}`);
+  const url =
+    sessionUrl(config, since) +
+    (playing === undefined ? "" : `&playing=${playing}`) +
+    (ended === undefined ? "" : `&ended=${ended}`);
   const raw = JSON.parse(await fetchText(url, HA_TIMEOUT_MS)) as {
     settings?: unknown;
     seq?: unknown;

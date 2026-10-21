@@ -260,3 +260,7 @@ Source: PatrickSt1991/Samsung-Jellyfin-Installer (MIT), `Apps2Samsung.Core/Certi
   - **Text-only updates:** `samstream.update_message` changes the text over the camera without reloading it, for example an AI description that arrives later. It does nothing if no camera is on the TV, and `play_stream` with the same camera also only updates the text.
   - **Long messages:** the card is capped at 40% of the screen height; longer text scrolls slowly, holds at each end, and scrolls back.
   - **Home source:** "Home" heads the media player's source list and presses the Home key.
+- **16 result (2026-10-21), TV app 0.7.0:**
+  - **`samstream.show_message`:** a full-screen card (title, scrolling message, icon and colour by severity: info / warning / alert with a pulsing ring), with an optional sound. The sound uses HA's media selector (library file or TTS), resolved and signed by HA.
+  - **`media_player.play_media`:** plays media library items (`media-source://…`) and http(s) URLs full screen. OK pauses, ◀ ▶ seek 10 s, and the title and progress fade after 5 s. The media player is browsable, so HA's media browser can "play on TV".
+  - **Shared take-over:** messages and videos use the same remember / pause / return flow as cameras. `duration` starts when the notice shows or the video starts, a video without `duration` returns when it ends, and `update_message` also changes a notice's text.

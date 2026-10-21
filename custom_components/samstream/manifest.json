@@ -22,6 +22,7 @@
   "version": "0.0.1",
   "after_dependencies": [
     "camera",
-    "go2rtc"
+    "go2rtc",
+    "media_source"
   ]
 }
