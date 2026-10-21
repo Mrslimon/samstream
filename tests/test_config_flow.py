@@ -16,6 +16,7 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_MAC, CONF_MODEL, CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.samstream.const import CONF_TOKEN, DOMAIN
@@ -268,3 +269,55 @@ async def test_reconfigure_unreachable(
 
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "cannot_connect"}
+
+
+def _ssdp(location: str | None = f"http://{HOST}:9197/dmr") -> SsdpServiceInfo:
+    return SsdpServiceInfo(
+        ssdp_usn=f"uuid:{UUID}::urn:samsung.com:device:RemoteControlReceiver:1",
+        ssdp_st="urn:samsung.com:device:RemoteControlReceiver:1",
+        ssdp_location=location,
+        upnp={"manufacturer": "Samsung Electronics"},
+    )
+
+
+async def test_discovered_tv_is_confirmed_then_paired(
+    hass: HomeAssistant, tv: MagicMock
+) -> None:
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_SSDP}, data=_ssdp()
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "discovery_confirm"
+    assert result["description_placeholders"]["model"] == "QA65QN800CUXEG"
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    result = await _finish_pairing(hass, result)
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["result"].unique_id == UUID
+    assert result["data"][CONF_HOST] == HOST
+
+
+async def test_discovery_moves_a_known_tv(
+    hass: HomeAssistant, tv: MagicMock, entry: MockConfigEntry
+) -> None:
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_SSDP},
+        data=_ssdp("http://192.168.1.77:9197/dmr"),
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert entry.data[CONF_HOST] == "192.168.1.77"
+
+
+@pytest.mark.parametrize("location", [None, "http://192.168.1.50:9197/dmr"])
+async def test_discovery_of_unsupported_tv(
+    hass: HomeAssistant, tv: MagicMock, location: str | None
+) -> None:
+    tv.device_info.side_effect = SamstreamConnectionError("no API")
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_SSDP}, data=_ssdp(location)
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "not_supported"

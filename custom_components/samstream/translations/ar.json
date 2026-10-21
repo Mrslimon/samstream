@@ -1,5 +1,6 @@
 {
   "config": {
+    "flow_title": "{name}",
     "step": {
       "user": {
         "title": "ربط تلفاز سامسونج",
@@ -28,6 +29,10 @@
         "data_description": {
           "host": "عنوان IP أو اسم المضيف لتلفاز سامسونج."
         }
+      },
+      "discovery_confirm": {
+        "title": "إضافة {name}؟",
+        "description": "وجد Home Assistant التلفاز {name} ({model}) على العنوان {host}. اختر إرسال، ثم اختر **السماح** على التلفاز."
       }
     },
     "progress": {
@@ -44,7 +49,8 @@
       "reauth_successful": "تمت إعادة ربط التلفاز.",
       "reconfigure_successful": "تم تحديث عنوان التلفاز.",
       "wrong_device": "هذا العنوان يخص تلفازًا آخر.",
-      "unknown": "خطأ غير متوقع، راجع سجل Home Assistant."
+      "unknown": "خطأ غير متوقع، راجع سجل Home Assistant.",
+      "not_supported": "هذا التلفاز لا يملك واجهة التحكم التي يحتاجها Samstream (تلفزيونات سامسونج بنظام Tizen من 2016 فما بعد)."
     }
   },
   "options": {
@@ -237,6 +243,9 @@
     },
     "media_unresolvable": {
       "message": "تعذّر تشغيل عنصر الوسائط هذا: {error}"
+    },
+    "go2rtc_refused": {
+      "message": "رفض go2rtc البث: {status} {detail}"
     }
   },
   "services": {

@@ -35,8 +35,11 @@ class FakeGo2rtc:
 
     def __init__(self) -> None:
         self.streams: dict[str, str] = {}
+        self.status = 200
 
     async def put_stream(self, request: web.Request) -> web.Response:
+        if self.status != 200:
+            return web.Response(status=self.status, text="bad source")
         self.streams[request.query["name"]] = request.query["src"]
         return web.Response(status=200)
 
@@ -216,6 +219,20 @@ async def test_go2rtc_missing(hass: HomeAssistant) -> None:
             DOMAIN, "play_stream", {"entity_id": TV, "url": RTSP}, blocking=True
         )
     assert err.value.translation_key == "go2rtc_unavailable"
+
+
+@pytest.mark.usefixtures("setup_entry")
+async def test_go2rtc_refuses(hass: HomeAssistant, go2rtc: FakeGo2rtc) -> None:
+    go2rtc.status = 400
+    with pytest.raises(HomeAssistantError) as err:
+        await hass.services.async_call(
+            DOMAIN, "play_stream", {"entity_id": TV, "url": RTSP}, blocking=True
+        )
+    assert err.value.translation_key == "go2rtc_refused"
+    assert err.value.translation_placeholders == {
+        "status": "400",
+        "detail": "bad source",
+    }
 
 
 @pytest.mark.usefixtures("setup_entry", "go2rtc")

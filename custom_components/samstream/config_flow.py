@@ -7,7 +7,7 @@ import ipaddress
 import logging
 from collections.abc import Mapping
 from typing import Any
-from urllib.parse import unquote, urlencode
+from urllib.parse import unquote, urlencode, urlparse
 
 import voluptuous as vol
 from aiosamstream import (
@@ -49,6 +49,7 @@ from homeassistant.helpers.selector import (
     TextSelectorConfig,
     TextSelectorType,
 )
+from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
 
 from .app_signing import SigningSetup, async_load_signing
 from .const import (
@@ -125,6 +126,41 @@ class SamstreamConfigFlow(ConfigFlow, domain=DOMAIN):
                 STEP_USER_DATA_SCHEMA, user_input
             ),
             errors=errors,
+        )
+
+    async def async_step_ssdp(
+        self, discovery_info: SsdpServiceInfo
+    ) -> ConfigFlowResult:
+        """Offer to add a Samsung TV that announced itself on the network."""
+        host = urlparse(discovery_info.ssdp_location or "").hostname
+        if not host:
+            return self.async_abort(reason="not_supported")
+        self._host = host
+        info, _error = await self._async_read_device_info()
+        if info is None:
+            # Pre-2016 models do not have the API Samstream needs.
+            return self.async_abort(reason="not_supported")
+        await self.async_set_unique_id(info.uuid)
+        # Known TV at a new address (DHCP): move the entry, nothing to confirm.
+        self._abort_if_unique_id_configured(updates={CONF_HOST: host})
+        self.context["title_placeholders"] = {"name": info.name}
+        return await self.async_step_discovery_confirm()
+
+    async def async_step_discovery_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Confirm a discovered TV, then pair."""
+        if user_input is not None:
+            return await self.async_step_pair()
+        self._set_confirm_only()
+        info = self._info
+        return self.async_show_form(
+            step_id="discovery_confirm",
+            description_placeholders={
+                "name": info.name if info else self._host,
+                "model": (info.model_name if info else None) or "",
+                "host": self._host,
+            },
         )
 
     async def async_step_pair(

@@ -26,5 +26,11 @@
     "camera",
     "go2rtc",
     "media_source"
+  ],
+  "ssdp": [
+    {
+      "st": "urn:samsung.com:device:RemoteControlReceiver:1",
+      "manufacturer": "Samsung Electronics"
+    }
   ]
 }

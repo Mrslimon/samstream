@@ -2,63 +2,71 @@
 # Target: platinum. Every rule must end as `done` or `exempt` with a comment.
 rules:
   # Bronze
-  action-setup: todo
-  appropriate-polling: todo
-  brands: todo
-  common-modules: todo
-  config-flow: todo
-  config-flow-test-coverage: todo
-  dependency-transparency: todo
-  docs-actions: todo
-  docs-conditions: todo
+  action-setup: done # Actions registered in async_setup (platform entity services).
+  appropriate-polling: done # 10 s state poll; the app list every 6 h (or on demand).
+  brands: done # custom_components/samstream/brand (placeholders the owner replaces).
+  common-modules: done # coordinator.py, entity.py; protocol code in aiosamstream.
+  config-flow: done
+  config-flow-test-coverage: done
+  dependency-transparency: done # aiosamstream (lib/aiosamstream), published to PyPI at release.
+  docs-actions: todo # Documentation milestone (last).
   docs-high-level-description: todo
   docs-installation-instructions: todo
   docs-removal-instructions: todo
-  docs-triggers: todo
-  entity-event-setup: todo
-  entity-unique-id: todo
-  has-entity-name: todo
-  runtime-data: todo
-  test-before-configure: todo
-  test-before-setup: todo
-  unique-config-entry: todo
+  docs-conditions:
+    status: exempt
+    comment: No custom conditions.
+  docs-triggers:
+    status: exempt
+    comment: No custom triggers.
+  entity-event-setup: done # Dispatcher listeners added in async_added_to_hass, removed with async_on_remove.
+  entity-unique-id: done # Device UUID + entity key.
+  has-entity-name: done
+  runtime-data: done
+  test-before-configure: done # The flow reads device info before pairing.
+  test-before-setup: done # First refresh before platforms; off TVs set up as off, not failed.
+  unique-config-entry: done # Unique ID = TV UUID; a new address updates the entry.
 
   # Silver
-  action-exceptions: todo
-  config-entry-unloading: todo
-  docs-configuration-parameters: todo
+  action-exceptions: done # HomeAssistantError / ServiceValidationError with translation keys.
+  config-entry-unloading: done
+  docs-configuration-parameters: todo # Documentation milestone (last).
   docs-installation-parameters: todo
-  entity-unavailable: todo
-  integration-owner: todo
-  log-when-unavailable: todo
-  parallel-updates: todo
-  reauthentication-flow: todo
-  test-coverage: todo
+  entity-unavailable: done # Diagnostic entities unavailable while the TV never answered.
+  integration-owner: done
+  log-when-unavailable: done # Logged once when the TV goes off or unreachable.
+  parallel-updates: done # PARALLEL_UPDATES in every platform.
+  reauthentication-flow: done # Revoked token -> reauth (Allow on the TV again).
+  test-coverage: done # 97 %.
 
   # Gold
-  devices: todo
-  diagnostics: todo
-  discovery: todo
-  discovery-update-info: todo
-  docs-data-update: todo
+  devices: done
+  diagnostics: done # Secrets, MAC and stream URLs redacted.
+  discovery: done # SSDP urn:samsung.com:device:RemoteControlReceiver:1.
+  discovery-update-info: done # A rediscovered TV moves its entry to the new address.
+  docs-data-update: todo # Documentation milestone (last).
   docs-examples: todo
   docs-known-limitations: todo
   docs-supported-devices: todo
   docs-supported-functions: todo
   docs-troubleshooting: todo
   docs-use-cases: todo
-  dynamic-devices: todo
-  entity-category: todo
-  entity-device-class: todo
-  entity-disabled-by-default: todo
-  entity-translations: todo
-  exception-translations: todo
-  icon-translations: todo
-  reconfiguration-flow: todo
-  repair-issues: todo
-  stale-devices: todo
+  dynamic-devices:
+    status: exempt
+    comment: One TV per config entry; no devices appear later.
+  entity-category: done
+  entity-device-class: done # media_player TV; sensors use enum / none where no class fits.
+  entity-disabled-by-default: done # Developer host sensor.
+  entity-translations: done
+  exception-translations: done
+  icon-translations: done # icons.json for entities and actions.
+  reconfiguration-flow: done
+  repair-issues: done # Developer Mode host, certificate expiry.
+  stale-devices:
+    status: exempt
+    comment: One device per entry; it goes with the entry.
 
   # Platinum
-  async-dependency: todo
-  inject-websession: todo
-  strict-typing: todo
+  async-dependency: done # aiosamstream is asyncio end to end (REST, WebSocket, UPnP, sdb).
+  inject-websession: done # HA's aiohttp session is passed to aiosamstream.
+  strict-typing: done # mypy --strict on the integration and aiosamstream (py.typed).

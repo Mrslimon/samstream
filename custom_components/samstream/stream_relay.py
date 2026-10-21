@@ -78,8 +78,14 @@ async def async_publish_stream(
         ) as response:
             if response.status >= HTTPStatus.BAD_REQUEST:
                 detail = (await response.text())[:200]
-                msg = f"go2rtc refused the stream: {response.status} {detail}"
-                raise HomeAssistantError(msg)
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="go2rtc_refused",
+                    translation_placeholders={
+                        "status": str(response.status),
+                        "detail": detail,
+                    },
+                )
     except aiohttp.ClientError as err:
         raise HomeAssistantError(
             translation_domain=DOMAIN, translation_key="go2rtc_unavailable"

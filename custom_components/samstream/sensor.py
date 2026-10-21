@@ -68,6 +68,8 @@ class DeveloperHostSensor(SamstreamEntity, SensorEntity):
 
     _attr_translation_key = "developer_host"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    # Only needed when installs fail; the Developer Mode repair issue says so too.
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator: SamstreamCoordinator) -> None:
         """Create the sensor for the coordinator's TV."""

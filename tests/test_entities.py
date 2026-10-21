@@ -14,6 +14,7 @@ from homeassistant.components.remote import ATTR_COMMAND, ATTR_NUM_REPEATS
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -37,7 +38,7 @@ async def _poll(hass: HomeAssistant) -> None:
     await hass.async_block_till_done()
 
 
-@pytest.mark.usefixtures("setup_entry")
+@pytest.mark.usefixtures("entity_registry_enabled_by_default", "setup_entry")
 async def test_states_when_on(hass: HomeAssistant) -> None:
     tv = hass.states.get(TV)
     assert tv.state == "on"
@@ -69,6 +70,7 @@ async def test_standby_then_unreachable(
     assert hass.states.get(DEV_MODE).state == "on"
 
 
+@pytest.mark.usefixtures("entity_registry_enabled_by_default")
 async def test_unknown_info_makes_diagnostics_unavailable(
     hass: HomeAssistant, mock_entry: MockConfigEntry, mock_tv: MagicMock
 ) -> None:
@@ -261,3 +263,11 @@ async def test_text_hold_and_pointer(hass: HomeAssistant, mock_tv: MagicMock) ->
         DOMAIN, "pointer", {ATTR_ENTITY_ID: TV, "click": "left"}, blocking=True
     )
     assert mock_tv.move_pointer.await_count == 1
+
+
+@pytest.mark.usefixtures("setup_entry")
+async def test_developer_host_disabled_by_default(hass: HomeAssistant) -> None:
+    entry = er.async_get(hass).async_get(DEV_HOST)
+    assert entry is not None
+    assert entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert hass.states.get(DEV_HOST) is None
