@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextlib
 from collections.abc import Iterable, Sequence
 
@@ -16,7 +17,7 @@ from samsungtvws.exceptions import (
     ResponseError,
     UnauthorizedError,
 )
-from samsungtvws.remote import ChannelEmitCommand, SendRemoteKey
+from samsungtvws.remote import ChannelEmitCommand, RemoteControlCommand, SendRemoteKey
 from websockets.exceptions import WebSocketException
 
 from .const import CLIENT_NAME, REST_PORT, WS_PORT_SECURE
@@ -203,6 +204,51 @@ class SamsungTV:
                 else:
                     commands.append(SendRemoteKey.click(key))
         await self._send_commands(commands, delay=delay)
+
+    async def send_text(self, text: str, *, done: bool = True) -> None:
+        """Type into the text field that has the on-screen keyboard open.
+
+        Any language (sent as UTF-8). `done` closes the keyboard afterwards, as
+        the keyboard's Done key would.
+        """
+        # The payloads of samsungtvws 2.8's SendInputString / SendInputEnd, built
+        # here so older samsungtvws (HA ships 2.7) works too.
+        encoded = base64.b64encode(text.encode("utf-8")).decode("ascii")
+        commands: list[SamsungTVCommand] = [
+            RemoteControlCommand(
+                {
+                    "Cmd": encoded,
+                    "DataOfCmd": "base64",
+                    "TypeOfRemote": "SendInputString",
+                }
+            )
+        ]
+        if done:
+            commands.append(RemoteControlCommand({"TypeOfRemote": "SendInputEnd"}))
+        await self._send_commands(commands, delay=0)
+
+    async def move_pointer(self, dx: int, dy: int) -> None:
+        """Move the TV's pointer by (dx, dy) screen pixels (apps with a pointer)."""
+        await self._send_commands(
+            [
+                RemoteControlCommand(
+                    {
+                        "Cmd": "Move",
+                        "Position": {"x": dx, "y": dy, "Time": "0"},
+                        "TypeOfRemote": "ProcessMouseDevice",
+                    }
+                )
+            ],
+            delay=0,
+        )
+
+    async def click(self, button: str = "left") -> None:
+        """Click with the TV's pointer: `left` or `right`."""
+        cmd = {"left": "LeftClick", "right": "RightClick"}[button]
+        await self._send_commands(
+            [RemoteControlCommand({"Cmd": cmd, "TypeOfRemote": "ProcessMouseDevice"})],
+            delay=0,
+        )
 
     async def _send_commands(
         self, commands: Sequence[SamsungTVCommand], *, delay: float = KEY_DELAY

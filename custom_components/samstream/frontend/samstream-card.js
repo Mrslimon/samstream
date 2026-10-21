@@ -254,34 +254,34 @@ var v = class extends HTMLElement {
 v.elementStyles = [], v.shadowRootOptions = { mode: "open" }, v[m("elementProperties")] = /* @__PURE__ */ new Map(), v[m("finalized")] = /* @__PURE__ */ new Map(), ie?.({ ReactiveElement: v }), (f.reactiveElementVersions ??= []).push("2.1.2");
 //#endregion
 //#region node_modules/lit-html/lit-html.js
-var y = globalThis, ae = (e) => e, b = y.trustedTypes, x = b ? b.createPolicy("lit-html", { createHTML: (e) => e }) : void 0, S = "$lit$", C = `lit$${Math.random().toFixed(9).slice(2)}$`, w = "?" + C, oe = `<${w}>`, T = document, E = () => T.createComment(""), D = (e) => e === null || typeof e != "object" && typeof e != "function", O = Array.isArray, se = (e) => O(e) || typeof e?.[Symbol.iterator] == "function", k = "[ 	\n\f\r]", A = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, j = /-->/g, ce = />/g, M = RegExp(`>|${k}(?:([^\\s"'>=/]+)(${k}*=${k}*(?:[^ \t\n\f\r"'\`<>=]|("|')|))|$)`, "g"), N = /'/g, P = /"/g, F = /^(?:script|style|textarea|title)$/i, I = ((e) => (t, ...n) => ({
+var y = globalThis, ae = (e) => e, b = y.trustedTypes, x = b ? b.createPolicy("lit-html", { createHTML: (e) => e }) : void 0, S = "$lit$", C = `lit$${Math.random().toFixed(9).slice(2)}$`, w = "?" + C, oe = `<${w}>`, T = document, E = () => T.createComment(""), D = (e) => e === null || typeof e != "object" && typeof e != "function", O = Array.isArray, se = (e) => O(e) || typeof e?.[Symbol.iterator] == "function", k = "[ 	\n\f\r]", A = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, ce = /-->/g, le = />/g, j = RegExp(`>|${k}(?:([^\\s"'>=/]+)(${k}*=${k}*(?:[^ \t\n\f\r"'\`<>=]|("|')|))|$)`, "g"), ue = /'/g, M = /"/g, N = /^(?:script|style|textarea|title)$/i, P = ((e) => (t, ...n) => ({
 	_$litType$: e,
 	strings: t,
 	values: n
-}))(1), L = Symbol.for("lit-noChange"), R = Symbol.for("lit-nothing"), z = /* @__PURE__ */ new WeakMap(), B = T.createTreeWalker(T, 129);
-function V(e, t) {
+}))(1), F = Symbol.for("lit-noChange"), I = Symbol.for("lit-nothing"), L = /* @__PURE__ */ new WeakMap(), R = T.createTreeWalker(T, 129);
+function z(e, t) {
 	if (!O(e) || !e.hasOwnProperty("raw")) throw Error("invalid template strings array");
 	return x === void 0 ? t : x.createHTML(t);
 }
-var le = (e, t) => {
+var de = (e, t) => {
 	let n = e.length - 1, r = [], i, a = t === 2 ? "<svg>" : t === 3 ? "<math>" : "", o = A;
 	for (let t = 0; t < n; t++) {
 		let n = e[t], s, c, l = -1, u = 0;
-		for (; u < n.length && (o.lastIndex = u, c = o.exec(n), c !== null);) u = o.lastIndex, o === A ? c[1] === "!--" ? o = j : c[1] === void 0 ? c[2] === void 0 ? c[3] !== void 0 && (o = M) : (F.test(c[2]) && (i = RegExp("</" + c[2], "g")), o = M) : o = ce : o === M ? c[0] === ">" ? (o = i ?? A, l = -1) : c[1] === void 0 ? l = -2 : (l = o.lastIndex - c[2].length, s = c[1], o = c[3] === void 0 ? M : c[3] === "\"" ? P : N) : o === P || o === N ? o = M : o === j || o === ce ? o = A : (o = M, i = void 0);
-		let d = o === M && e[t + 1].startsWith("/>") ? " " : "";
+		for (; u < n.length && (o.lastIndex = u, c = o.exec(n), c !== null);) u = o.lastIndex, o === A ? c[1] === "!--" ? o = ce : c[1] === void 0 ? c[2] === void 0 ? c[3] !== void 0 && (o = j) : (N.test(c[2]) && (i = RegExp("</" + c[2], "g")), o = j) : o = le : o === j ? c[0] === ">" ? (o = i ?? A, l = -1) : c[1] === void 0 ? l = -2 : (l = o.lastIndex - c[2].length, s = c[1], o = c[3] === void 0 ? j : c[3] === "\"" ? M : ue) : o === M || o === ue ? o = j : o === ce || o === le ? o = A : (o = j, i = void 0);
+		let d = o === j && e[t + 1].startsWith("/>") ? " " : "";
 		a += o === A ? n + oe : l >= 0 ? (r.push(s), n.slice(0, l) + S + n.slice(l) + C + d) : n + C + (l === -2 ? t : d);
 	}
-	return [V(e, a + (e[n] || "<?>") + (t === 2 ? "</svg>" : t === 3 ? "</math>" : "")), r];
-}, H = class e {
+	return [z(e, a + (e[n] || "<?>") + (t === 2 ? "</svg>" : t === 3 ? "</math>" : "")), r];
+}, B = class e {
 	constructor({ strings: t, _$litType$: n }, r) {
 		let i;
 		this.parts = [];
-		let a = 0, o = 0, s = t.length - 1, c = this.parts, [l, u] = le(t, n);
-		if (this.el = e.createElement(l, r), B.currentNode = this.el.content, n === 2 || n === 3) {
+		let a = 0, o = 0, s = t.length - 1, c = this.parts, [l, u] = de(t, n);
+		if (this.el = e.createElement(l, r), R.currentNode = this.el.content, n === 2 || n === 3) {
 			let e = this.el.content.firstChild;
 			e.replaceWith(...e.childNodes);
 		}
-		for (; (i = B.nextNode()) !== null && c.length < s;) {
+		for (; (i = R.nextNode()) !== null && c.length < s;) {
 			if (i.nodeType === 1) {
 				if (i.hasAttributes()) for (let e of i.getAttributeNames()) if (e.endsWith(S)) {
 					let t = u[o++], n = i.getAttribute(e).split(C), r = /([.?@])?(.*)/.exec(t);
@@ -290,17 +290,17 @@ var le = (e, t) => {
 						index: a,
 						name: r[2],
 						strings: n,
-						ctor: r[1] === "." ? de : r[1] === "?" ? fe : r[1] === "@" ? pe : G
+						ctor: r[1] === "." ? pe : r[1] === "?" ? me : r[1] === "@" ? he : U
 					}), i.removeAttribute(e);
 				} else e.startsWith(C) && (c.push({
 					type: 6,
 					index: a
 				}), i.removeAttribute(e));
-				if (F.test(i.tagName)) {
+				if (N.test(i.tagName)) {
 					let e = i.textContent.split(C), t = e.length - 1;
 					if (t > 0) {
 						i.textContent = b ? b.emptyScript : "";
-						for (let n = 0; n < t; n++) i.append(e[n], E()), B.nextNode(), c.push({
+						for (let n = 0; n < t; n++) i.append(e[n], E()), R.nextNode(), c.push({
 							type: 2,
 							index: ++a
 						});
@@ -328,12 +328,12 @@ var le = (e, t) => {
 		return n.innerHTML = e, n;
 	}
 };
-function U(e, t, n = e, r) {
-	if (t === L) return t;
+function V(e, t, n = e, r) {
+	if (t === F) return t;
 	let i = r === void 0 ? n._$Cl : n._$Co?.[r], a = D(t) ? void 0 : t._$litDirective$;
-	return i?.constructor !== a && (i?._$AO?.(!1), a === void 0 ? i = void 0 : (i = new a(e), i._$AT(e, n, r)), r === void 0 ? n._$Cl = i : (n._$Co ??= [])[r] = i), i !== void 0 && (t = U(e, i._$AS(e, t.values), i, r)), t;
+	return i?.constructor !== a && (i?._$AO?.(!1), a === void 0 ? i = void 0 : (i = new a(e), i._$AT(e, n, r)), r === void 0 ? n._$Cl = i : (n._$Co ??= [])[r] = i), i !== void 0 && (t = V(e, i._$AS(e, t.values), i, r)), t;
 }
-var ue = class {
+var fe = class {
 	constructor(e, t) {
 		this._$AV = [], this._$AN = void 0, this._$AD = e, this._$AM = t;
 	}
@@ -345,27 +345,27 @@ var ue = class {
 	}
 	u(e) {
 		let { el: { content: t }, parts: n } = this._$AD, r = (e?.creationScope ?? T).importNode(t, !0);
-		B.currentNode = r;
-		let i = B.nextNode(), a = 0, o = 0, s = n[0];
+		R.currentNode = r;
+		let i = R.nextNode(), a = 0, o = 0, s = n[0];
 		for (; s !== void 0;) {
 			if (a === s.index) {
 				let t;
-				s.type === 2 ? t = new W(i, i.nextSibling, this, e) : s.type === 1 ? t = new s.ctor(i, s.name, s.strings, this, e) : s.type === 6 && (t = new me(i, this, e)), this._$AV.push(t), s = n[++o];
+				s.type === 2 ? t = new H(i, i.nextSibling, this, e) : s.type === 1 ? t = new s.ctor(i, s.name, s.strings, this, e) : s.type === 6 && (t = new ge(i, this, e)), this._$AV.push(t), s = n[++o];
 			}
-			a !== s?.index && (i = B.nextNode(), a++);
+			a !== s?.index && (i = R.nextNode(), a++);
 		}
-		return B.currentNode = T, r;
+		return R.currentNode = T, r;
 	}
 	p(e) {
 		let t = 0;
 		for (let n of this._$AV) n !== void 0 && (n.strings === void 0 ? n._$AI(e[t]) : (n._$AI(e, n, t), t += n.strings.length - 2)), t++;
 	}
-}, W = class e {
+}, H = class e {
 	get _$AU() {
 		return this._$AM?._$AU ?? this._$Cv;
 	}
 	constructor(e, t, n, r) {
-		this.type = 2, this._$AH = R, this._$AN = void 0, this._$AA = e, this._$AB = t, this._$AM = n, this.options = r, this._$Cv = r?.isConnected ?? !0;
+		this.type = 2, this._$AH = I, this._$AN = void 0, this._$AA = e, this._$AB = t, this._$AM = n, this.options = r, this._$Cv = r?.isConnected ?? !0;
 	}
 	get parentNode() {
 		let e = this._$AA.parentNode, t = this._$AM;
@@ -378,7 +378,7 @@ var ue = class {
 		return this._$AB;
 	}
 	_$AI(e, t = this) {
-		e = U(this, e, t), D(e) ? e === R || e == null || e === "" ? (this._$AH !== R && this._$AR(), this._$AH = R) : e !== this._$AH && e !== L && this._(e) : e._$litType$ === void 0 ? e.nodeType === void 0 ? se(e) ? this.k(e) : this._(e) : this.T(e) : this.$(e);
+		e = V(this, e, t), D(e) ? e === I || e == null || e === "" ? (this._$AH !== I && this._$AR(), this._$AH = I) : e !== this._$AH && e !== F && this._(e) : e._$litType$ === void 0 ? e.nodeType === void 0 ? se(e) ? this.k(e) : this._(e) : this.T(e) : this.$(e);
 	}
 	O(e) {
 		return this._$AA.parentNode.insertBefore(e, this._$AB);
@@ -387,19 +387,19 @@ var ue = class {
 		this._$AH !== e && (this._$AR(), this._$AH = this.O(e));
 	}
 	_(e) {
-		this._$AH !== R && D(this._$AH) ? this._$AA.nextSibling.data = e : this.T(T.createTextNode(e)), this._$AH = e;
+		this._$AH !== I && D(this._$AH) ? this._$AA.nextSibling.data = e : this.T(T.createTextNode(e)), this._$AH = e;
 	}
 	$(e) {
-		let { values: t, _$litType$: n } = e, r = typeof n == "number" ? this._$AC(e) : (n.el === void 0 && (n.el = H.createElement(V(n.h, n.h[0]), this.options)), n);
+		let { values: t, _$litType$: n } = e, r = typeof n == "number" ? this._$AC(e) : (n.el === void 0 && (n.el = B.createElement(z(n.h, n.h[0]), this.options)), n);
 		if (this._$AH?._$AD === r) this._$AH.p(t);
 		else {
-			let e = new ue(r, this), n = e.u(this.options);
+			let e = new fe(r, this), n = e.u(this.options);
 			e.p(t), this.T(n), this._$AH = e;
 		}
 	}
 	_$AC(e) {
-		let t = z.get(e.strings);
-		return t === void 0 && z.set(e.strings, t = new H(e)), t;
+		let t = L.get(e.strings);
+		return t === void 0 && L.set(e.strings, t = new B(e)), t;
 	}
 	k(t) {
 		O(this._$AH) || (this._$AH = [], this._$AR());
@@ -416,7 +416,7 @@ var ue = class {
 	setConnected(e) {
 		this._$AM === void 0 && (this._$Cv = e, this._$AP?.(e));
 	}
-}, G = class {
+}, U = class {
 	get tagName() {
 		return this.element.tagName;
 	}
@@ -424,47 +424,47 @@ var ue = class {
 		return this._$AM._$AU;
 	}
 	constructor(e, t, n, r, i) {
-		this.type = 1, this._$AH = R, this._$AN = void 0, this.element = e, this.name = t, this._$AM = r, this.options = i, n.length > 2 || n[0] !== "" || n[1] !== "" ? (this._$AH = Array(n.length - 1).fill(/* @__PURE__ */ new String()), this.strings = n) : this._$AH = R;
+		this.type = 1, this._$AH = I, this._$AN = void 0, this.element = e, this.name = t, this._$AM = r, this.options = i, n.length > 2 || n[0] !== "" || n[1] !== "" ? (this._$AH = Array(n.length - 1).fill(/* @__PURE__ */ new String()), this.strings = n) : this._$AH = I;
 	}
 	_$AI(e, t = this, n, r) {
 		let i = this.strings, a = !1;
-		if (i === void 0) e = U(this, e, t, 0), a = !D(e) || e !== this._$AH && e !== L, a && (this._$AH = e);
+		if (i === void 0) e = V(this, e, t, 0), a = !D(e) || e !== this._$AH && e !== F, a && (this._$AH = e);
 		else {
 			let r = e, o, s;
-			for (e = i[0], o = 0; o < i.length - 1; o++) s = U(this, r[n + o], t, o), s === L && (s = this._$AH[o]), a ||= !D(s) || s !== this._$AH[o], s === R ? e = R : e !== R && (e += (s ?? "") + i[o + 1]), this._$AH[o] = s;
+			for (e = i[0], o = 0; o < i.length - 1; o++) s = V(this, r[n + o], t, o), s === F && (s = this._$AH[o]), a ||= !D(s) || s !== this._$AH[o], s === I ? e = I : e !== I && (e += (s ?? "") + i[o + 1]), this._$AH[o] = s;
 		}
 		a && !r && this.j(e);
 	}
 	j(e) {
-		e === R ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ?? "");
+		e === I ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ?? "");
 	}
-}, de = class extends G {
+}, pe = class extends U {
 	constructor() {
 		super(...arguments), this.type = 3;
 	}
 	j(e) {
-		this.element[this.name] = e === R ? void 0 : e;
+		this.element[this.name] = e === I ? void 0 : e;
 	}
-}, fe = class extends G {
+}, me = class extends U {
 	constructor() {
 		super(...arguments), this.type = 4;
 	}
 	j(e) {
-		this.element.toggleAttribute(this.name, !!e && e !== R);
+		this.element.toggleAttribute(this.name, !!e && e !== I);
 	}
-}, pe = class extends G {
+}, he = class extends U {
 	constructor(e, t, n, r, i) {
 		super(e, t, n, r, i), this.type = 5;
 	}
 	_$AI(e, t = this) {
-		if ((e = U(this, e, t, 0) ?? R) === L) return;
-		let n = this._$AH, r = e === R && n !== R || e.capture !== n.capture || e.once !== n.once || e.passive !== n.passive, i = e !== R && (n === R || r);
+		if ((e = V(this, e, t, 0) ?? I) === F) return;
+		let n = this._$AH, r = e === I && n !== I || e.capture !== n.capture || e.once !== n.once || e.passive !== n.passive, i = e !== I && (n === I || r);
 		r && this.element.removeEventListener(this.name, this, n), i && this.element.addEventListener(this.name, this, e), this._$AH = e;
 	}
 	handleEvent(e) {
 		typeof this._$AH == "function" ? this._$AH.call(this.options?.host ?? this.element, e) : this._$AH.handleEvent(e);
 	}
-}, me = class {
+}, ge = class {
 	constructor(e, t, n) {
 		this.element = e, this.type = 6, this._$AN = void 0, this._$AM = t, this.options = n;
 	}
@@ -472,18 +472,18 @@ var ue = class {
 		return this._$AM._$AU;
 	}
 	_$AI(e) {
-		U(this, e);
+		V(this, e);
 	}
-}, he = y.litHtmlPolyfillSupport;
-he?.(H, W), (y.litHtmlVersions ??= []).push("3.3.3");
-var ge = (e, t, n) => {
+}, _e = y.litHtmlPolyfillSupport;
+_e?.(B, H), (y.litHtmlVersions ??= []).push("3.3.3");
+var ve = (e, t, n) => {
 	let r = n?.renderBefore ?? t, i = r._$litPart$;
 	if (i === void 0) {
 		let e = n?.renderBefore ?? null;
-		r._$litPart$ = i = new W(t.insertBefore(E(), e), e, void 0, n ?? {});
+		r._$litPart$ = i = new H(t.insertBefore(E(), e), e, void 0, n ?? {});
 	}
 	return i._$AI(e), i;
-}, K = globalThis, q = class extends v {
+}, W = globalThis, G = class extends v {
 	constructor() {
 		super(...arguments), this.renderOptions = { host: this }, this._$Do = void 0;
 	}
@@ -493,7 +493,7 @@ var ge = (e, t, n) => {
 	}
 	update(e) {
 		let t = this.render();
-		this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = ge(t, this.renderRoot, this.renderOptions);
+		this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = ve(t, this.renderRoot, this.renderOptions);
 	}
 	connectedCallback() {
 		super.connectedCallback(), this._$Do?.setConnected(!0);
@@ -502,15 +502,15 @@ var ge = (e, t, n) => {
 		super.disconnectedCallback(), this._$Do?.setConnected(!1);
 	}
 	render() {
-		return L;
+		return F;
 	}
 };
-q._$litElement$ = !0, q.finalized = !0, K.litElementHydrateSupport?.({ LitElement: q });
-var _e = K.litElementPolyfillSupport;
-_e?.({ LitElement: q }), (K.litElementVersions ??= []).push("4.2.2");
+G._$litElement$ = !0, G.finalized = !0, W.litElementHydrateSupport?.({ LitElement: G });
+var ye = W.litElementPolyfillSupport;
+ye?.({ LitElement: G }), (W.litElementVersions ??= []).push("4.2.2");
 //#endregion
 //#region src/helpers.ts
-function ve(e, t) {
+function be(e, t) {
 	let n = e.entities?.[t]?.device_id;
 	if (n) {
 		for (let t of Object.values(e.entities ?? {})) if (t.device_id === n && t.entity_id.startsWith("remote.")) return t.entity_id;
@@ -518,43 +518,49 @@ function ve(e, t) {
 	let r = `remote.${t.split(".", 2)[1]}`;
 	return e.states[r] ? r : void 0;
 }
-function ye(e, t) {
-	return t && t.length > 0 ? t.filter((t) => e.states[t]) : Object.keys(e.states).filter((e) => e.startsWith("camera.")).sort((t, n) => J(e, t).localeCompare(J(e, n)));
+function xe(e, t) {
+	return t && t.length > 0 ? t.filter((t) => e.states[t]) : Object.keys(e.states).filter((e) => e.startsWith("camera.")).sort((t, n) => K(e, t).localeCompare(K(e, n)));
 }
-function J(e, t) {
+function K(e, t) {
 	let n = e.states[t]?.attributes.friendly_name;
 	return typeof n == "string" && n ? n : t;
 }
-function be(e) {
+function Se(e) {
 	let t = e.trim().split(/\s+/).filter(Boolean);
 	if (t.length === 0) return "?";
 	let n = Array.from(t[0])[0] ?? "?";
 	return (n + (/^[A-Za-z0-9]/.test(n) && t.length > 1 ? Array.from(t[1])[0] ?? "" : "")).toUpperCase();
 }
-function xe(e) {
+function Ce(e) {
 	let t = 0;
 	for (let n of e) t = t * 31 + (n.codePointAt(0) ?? 0) | 0;
 	return `hsl(${Math.abs(t) % 360} 55% 46%)`;
 }
-var Y = [
+var q = [
 	"tv",
 	"cameras",
 	"message",
 	"apps",
 	"remote",
-	"media"
+	"media",
+	"keyboard",
+	"touchpad"
 ];
-function Se(e) {
+function we(e) {
 	if (Array.isArray(e.sections)) {
-		let t = e.sections.filter((e) => Y.includes(e));
+		let t = e.sections.filter((e) => q.includes(e));
 		return t.filter((e, n) => t.indexOf(e) === n);
 	}
 	let t = ["tv"];
 	return e.show_cameras !== !1 && t.push("cameras"), e.show_message !== !1 && t.push("message"), e.show_apps !== !1 && t.push("apps"), e.show_remote !== !1 && t.push("remote", "media"), t;
 }
+var J = 2.5, Te = 6, Ee = 300, De = 600;
+function Oe(e, t) {
+	return e > Te ? "move" : t <= Ee ? "click" : t >= De ? "right" : "move";
+}
 //#endregion
 //#region src/strings.ts
-var X = {
+var Y = {
 	en: {
 		off: "Off",
 		home: "Home",
@@ -578,6 +584,13 @@ var X = {
 		tv: "TV and power",
 		sections: "Sections (drag to reorder)",
 		camerasField: "Cameras (empty: all)",
+		keyboard: "Keyboard",
+		touchpad: "Touchpad",
+		typeHere: "Open a text field on the TV, then type here",
+		send: "Send",
+		leftClick: "Click",
+		rightClick: "Right click",
+		touchpadHint: "Drag to move · tap to click · hold for right click",
 		back: "Back",
 		menu: "Menu",
 		ok: "OK",
@@ -612,6 +625,13 @@ var X = {
 		tv: "التلفاز والتشغيل",
 		sections: "الأقسام (اسحب لإعادة الترتيب)",
 		camerasField: "الكاميرات (فارغ: الكل)",
+		keyboard: "لوحة المفاتيح",
+		touchpad: "لوحة اللمس",
+		typeHere: "افتح حقل نص على التلفاز ثم اكتب هنا",
+		send: "إرسال",
+		leftClick: "نقر",
+		rightClick: "نقر أيمن",
+		touchpadHint: "اسحب للتحريك · انقر للنقر · اضغط مطولًا للنقر الأيمن",
 		back: "رجوع",
 		menu: "القائمة",
 		ok: "موافق",
@@ -624,22 +644,25 @@ var X = {
 		failed: "فشل"
 	}
 };
-function Z(e) {
+function X(e) {
 	return e?.toLowerCase().startsWith("ar") ? "ar" : "en";
 }
-function Ce(e) {
-	return X[e];
+function ke(e) {
+	return Y[e];
 }
-Object.keys(X);
+Object.keys(Y);
 //#endregion
 //#region src/samstream-card.ts
-var Q, we = [
+var Z, Ae = [
 	"info",
 	"warning",
 	"alert"
-], Te = 3e3, $ = class extends q {
+], je = 3e3, Me = 400, Ne = 150, Pe = 600, Fe = 1.5, Ie = 60, Q = (e) => e.preventDefault(), $ = class extends G {
 	constructor(...e) {
-		super(...e), this.camera = "", this.feedback = "", this.severity = "info";
+		super(...e), this.camera = "", this.feedback = "", this.severity = "info", this.held = !1, this.pending = {
+			x: 0,
+			y: 0
+		};
 	}
 	setConfig(e) {
 		if (!e.entity) throw Error("Choose the Samstream TV (media player).");
@@ -649,7 +672,7 @@ var Q, we = [
 		return 8;
 	}
 	static getConfigForm() {
-		let e = (e) => Ce(Z(e?.locale?.language ?? e?.language));
+		let e = (e) => ke(X(e?.locale?.language ?? e?.language));
 		return {
 			schema: [
 				{
@@ -666,9 +689,9 @@ var Q, we = [
 						multiple: !0,
 						reorder: !0,
 						mode: "list",
-						options: Y.map((t) => ({
+						options: q.map((t) => ({
 							value: t,
-							label: e()[Ee(t)]
+							label: e()[Le(t)]
 						}))
 					} }
 				},
@@ -690,14 +713,21 @@ var Q, we = [
 	static getStubConfig(e) {
 		return {
 			entity: Object.values(e.entities ?? {}).find((e) => e.platform === "samstream" && e.entity_id.startsWith("media_player."))?.entity_id ?? "",
-			sections: [...Y]
+			sections: [
+				"tv",
+				"cameras",
+				"message",
+				"apps",
+				"remote",
+				"media"
+			]
 		};
 	}
 	get text() {
-		return Ce(Z(this.hass?.locale?.language ?? this.hass?.language));
+		return ke(X(this.hass?.locale?.language ?? this.hass?.language));
 	}
 	get rtl() {
-		return Z(this.hass?.locale?.language ?? this.hass?.language) === "ar";
+		return X(this.hass?.locale?.language ?? this.hass?.language) === "ar";
 	}
 	updated(e) {
 		if (!e.has("hass") || !this.hass || !this.config) return;
@@ -715,15 +745,15 @@ var Q, we = [
 		});
 	}
 	render() {
-		if (!this.hass || !this.config) return R;
+		if (!this.hass || !this.config) return I;
 		let e = this.hass.states[this.config.entity];
-		if (!e) return I`<ha-card><div class="empty">${this.config.entity}?</div></ha-card>`;
-		let t = e.state !== "off" && e.state !== "unavailable", n = Se(this.config), r = t ? n : n.includes("tv") ? ["tv"] : [];
-		return I`
+		if (!e) return P`<ha-card><div class="empty">${this.config.entity}?</div></ha-card>`;
+		let t = e.state !== "off" && e.state !== "unavailable", n = we(this.config), r = t ? n : n.includes("tv") ? ["tv"] : [];
+		return P`
       <ha-card dir=${this.rtl ? "rtl" : "ltr"}>
-        ${t || r.length > 0 ? R : this.renderPowerOnly()}
+        ${t || r.length > 0 ? I : this.renderPowerOnly()}
         ${r.map((e, n) => this.renderSection(e, t, n === 0))}
-        ${this.feedback ? I`<div class="feedback">${this.feedback}</div>` : R}
+        ${this.feedback ? P`<div class="feedback">${this.feedback}</div>` : I}
       </ha-card>
     `;
 	}
@@ -734,18 +764,20 @@ var Q, we = [
 			message: () => this.renderMessage(),
 			apps: () => this.renderApps(),
 			remote: () => this.renderRemote(),
-			media: () => this.renderMedia()
+			media: () => this.renderMedia(),
+			keyboard: () => this.renderKeyboard(),
+			touchpad: () => this.renderTouchpad()
 		}[e]();
-		return I`<div class="section ${n ? "first" : ""}">${r}</div>`;
+		return P`<div class="section ${n ? "first" : ""}">${r}</div>`;
 	}
 	renderPowerOnly() {
-		return I`<div class="power-only">
-      <span>${J(this.hass, this.config.entity)} · ${this.text.off}</span>
+		return P`<div class="power-only">
+      <span>${K(this.hass, this.config.entity)} · ${this.text.off}</span>
       ${this.powerButton(!1)}
     </div>`;
 	}
 	powerButton(e) {
-		return I`<button
+		return P`<button
       class="round ${e ? "on" : ""}"
       title=${this.text.power}
       @click=${() => this.call("media_player", "toggle", { entity_id: this.config.entity })}
@@ -755,11 +787,11 @@ var Q, we = [
 	}
 	renderHeader(e) {
 		let t = this.text, n = this.hass.states[this.config.entity], r = n.attributes.source ?? "", i = n.attributes.app_id, a = this.apps?.apps.find((e) => e.id === i), o = e ? r === "Home" ? t.home : a?.name ?? r : t.off;
-		return I`
+		return P`
       <div class="header">
-        ${a ? this.tile(a, "small") : I`<div class="tv"><ha-icon icon="mdi:television"></ha-icon></div>`}
+        ${a ? this.tile(a, "small") : P`<div class="tv"><ha-icon icon="mdi:television"></ha-icon></div>`}
         <div class="titles">
-          <div class="name">${J(this.hass, this.config.entity)}</div>
+          <div class="name">${K(this.hass, this.config.entity)}</div>
           <div class="sub">${o}</div>
         </div>
         ${this.powerButton(e)}
@@ -767,18 +799,18 @@ var Q, we = [
     `;
 	}
 	renderCameras() {
-		let e = this.text, t = ye(this.hass, this.config.cameras);
-		if (t.length === 0) return I`<section><h3>${e.cameras}</h3><p class="hint">${e.noCameras}</p></section>`;
+		let e = this.text, t = xe(this.hass, this.config.cameras);
+		if (t.length === 0) return P`<section><h3>${e.cameras}</h3><p class="hint">${e.noCameras}</p></section>`;
 		let n = t.includes(this.camera) ? this.camera : t[0];
-		return I`
+		return P`
       <section>
         <h3>${e.cameras}</h3>
         <div class="chips">
-          ${t.map((e) => I`<button
+          ${t.map((e) => P`<button
               class="chip ${e === n ? "selected" : ""}"
               @click=${() => this.camera = e}
             >
-              <ha-icon icon="mdi:cctv"></ha-icon>${J(this.hass, e)}
+              <ha-icon icon="mdi:cctv"></ha-icon>${K(this.hass, e)}
             </button>`)}
         </div>
         <div class="row">
@@ -806,14 +838,14 @@ var Q, we = [
 			warning: e.warning,
 			alert: e.alert
 		};
-		return I`
+		return P`
       <section>
         <h3>${e.message}</h3>
         <input id="notice-title" dir="auto" placeholder=${e.title} />
         <textarea id="notice-message" dir="auto" rows="2" placeholder=${e.messagePlaceholder}></textarea>
         <div class="row">
           <div class="chips">
-            ${we.map((e) => I`<button
+            ${Ae.map((e) => P`<button
                 class="chip ${e} ${e === this.severity ? "selected" : ""}"
                 @click=${() => this.severity = e}
               >
@@ -843,7 +875,7 @@ var Q, we = [
 			name: e.home,
 			logo: null
 		};
-		return I`
+		return P`
       <section>
         <h3>${e.apps}</h3>
         <div class="apps">
@@ -854,7 +886,7 @@ var Q, we = [
             <div class="tile home"><ha-icon icon="mdi:home"></ha-icon></div>
             <span>${i.name}</span>
           </button>
-          ${(this.apps?.apps ?? []).map((e) => I`<button
+          ${(this.apps?.apps ?? []).map((e) => P`<button
               class="app ${e.id === n ? "current" : ""}"
               title=${e.name}
               @click=${() => this.selectSource(e.name)}
@@ -866,42 +898,50 @@ var Q, we = [
     `;
 	}
 	renderRemote() {
-		let e = this.text, t = (e, t, n, r = "") => I`<button class="key ${r}" title=${n} @click=${() => this.sendKey(e)}>
+		let e = this.text, t = (e, t, n, r = "repeat") => {
+			let i = this.pressable(() => this.sendKey(e), r, e);
+			return P`<button class="key" title=${n} @pointerdown=${i.down} @pointerup=${i.up} @pointerleave=${i.cancel} @pointercancel=${i.cancel} @contextmenu=${Q}>
         <ha-icon icon=${t}></ha-icon>
       </button>`;
-		return I`
+		}, n = this.pressable(() => this.sendKey("KEY_ENTER"), "hold", "KEY_ENTER");
+		return P`
       <section>
         <h3>${e.remote}</h3>
         <div class="remote">
           <div class="pad">
             <span></span>${t("KEY_UP", "mdi:chevron-up", "▲")}<span></span>
             ${t(this.rtl ? "KEY_RIGHT" : "KEY_LEFT", this.rtl ? "mdi:chevron-right" : "mdi:chevron-left", "◀")}
-            <button class="key ok" @click=${() => this.sendKey("KEY_ENTER")}>${e.ok}</button>
+            <button class="key ok" @pointerdown=${n.down} @pointerup=${n.up} @pointerleave=${n.cancel} @pointercancel=${n.cancel} @contextmenu=${Q}>
+              ${e.ok}
+            </button>
             ${t(this.rtl ? "KEY_LEFT" : "KEY_RIGHT", this.rtl ? "mdi:chevron-left" : "mdi:chevron-right", "▶")}
             <span></span>${t("KEY_DOWN", "mdi:chevron-down", "▼")}<span></span>
           </div>
           <div class="side">
-            ${t("KEY_RETURN", "mdi:arrow-u-left-top", e.back)}
-            ${t("KEY_HOME", "mdi:home", e.home)}
-            ${t("KEY_MENU", "mdi:menu", e.menu)}
+            ${t("KEY_RETURN", "mdi:arrow-u-left-top", e.back, "hold")}
+            ${t("KEY_HOME", "mdi:home", e.home, "hold")}
+            ${t("KEY_MENU", "mdi:menu", e.menu, "hold")}
           </div>
         </div>
       </section>
     `;
 	}
 	renderMedia() {
-		let e = this.text, t = (e, t, n) => I`<button class="key" title=${n} @click=${() => this.call("media_player", e, { entity_id: this.config.entity }, !1)}>
-        <ha-icon icon=${t}></ha-icon>
-      </button>`, n = this.hass.states[this.config.entity]?.attributes.volume_level;
-		return I`
+		let e = this.text, t = (e, t, n, r = !1) => {
+			let i = () => this.call("media_player", e, { entity_id: this.config.entity }, !1), a = this.pressable(i, "repeat");
+			return r ? P`<button class="key" title=${n} @pointerdown=${a.down} @pointerup=${a.up} @pointerleave=${a.cancel} @pointercancel=${a.cancel} @contextmenu=${Q}>
+            <ha-icon icon=${t}></ha-icon>
+          </button>` : P`<button class="key" title=${n} @click=${i}><ha-icon icon=${t}></ha-icon></button>`;
+		}, n = this.hass.states[this.config.entity]?.attributes.volume_level;
+		return P`
       <section>
         <h3>${e.media}</h3>
         <div class="media">
           ${t("media_play_pause", "mdi:play-pause", e.playPause)}
           <span class="spacer"></span>
-          ${t("volume_down", "mdi:volume-minus", e.volumeDown)}
+          ${t("volume_down", "mdi:volume-minus", e.volumeDown, !0)}
           <span class="level">${typeof n == "number" ? Math.round(n * 100) : "–"}</span>
-          ${t("volume_up", "mdi:volume-plus", e.volumeUp)}
+          ${t("volume_up", "mdi:volume-plus", e.volumeUp, !0)}
           <button class="key" title=${e.mute} @click=${() => this.toggleMute()}>
             <ha-icon icon="mdi:volume-off"></ha-icon>
           </button>
@@ -909,9 +949,122 @@ var Q, we = [
       </section>
     `;
 	}
+	renderKeyboard() {
+		let e = this.text, t = () => {
+			let e = this.value("tv-text");
+			if (!e) return;
+			this.call("samstream", "send_text", {
+				entity_id: this.config.entity,
+				text: e
+			});
+			let t = this.renderRoot.querySelector("#tv-text");
+			t && (t.value = "");
+		};
+		return P`
+      <section>
+        <h3>${e.keyboard}</h3>
+        <div class="row">
+          <input
+            id="tv-text"
+            dir="auto"
+            placeholder=${e.typeHere}
+            @keydown=${(e) => e.key === "Enter" && t()}
+          />
+          <button class="primary" @click=${t}><ha-icon icon="mdi:keyboard"></ha-icon>${e.send}</button>
+        </div>
+      </section>
+    `;
+	}
+	renderTouchpad() {
+		let e = this.text;
+		return P`
+      <section>
+        <h3>${e.touchpad}</h3>
+        <div
+          class="touchpad"
+          @pointerdown=${(e) => this.touchStart(e)}
+          @pointermove=${(e) => this.touchMove(e)}
+          @pointerup=${() => this.touchEnd()}
+          @pointercancel=${() => this.touch = void 0}
+          @contextmenu=${(e) => e.preventDefault()}
+        >
+          <span>${e.touchpadHint}</span>
+        </div>
+        <div class="actions">
+          <button @click=${() => this.pointer({ click: "left" })}>
+            <ha-icon icon="mdi:cursor-default-click"></ha-icon>${e.leftClick}
+          </button>
+          <button @click=${() => this.pointer({ click: "right" })}>
+            <ha-icon icon="mdi:mouse-right-click"></ha-icon>${e.rightClick}
+          </button>
+        </div>
+      </section>
+    `;
+	}
+	pressable(e, t, n) {
+		let r = () => {
+			clearTimeout(this.holdTimer), clearInterval(this.repeatTimer);
+		};
+		return {
+			down: (i) => {
+				i.currentTarget.setPointerCapture?.(i.pointerId), r(), this.held = !1, t === "repeat" ? (e(), this.holdTimer = setTimeout(() => {
+					this.repeatTimer = setInterval(e, Ne);
+				}, Me)) : this.holdTimer = setTimeout(() => {
+					this.held = !0, n && this.call("samstream", "hold_key", {
+						entity_id: this.config.entity,
+						key: n,
+						seconds: Fe
+					}, !1);
+				}, Pe);
+			},
+			up: () => {
+				r(), t === "hold" && !this.held && e(), this.held = !1;
+			},
+			cancel: () => {
+				r(), this.held = !1;
+			}
+		};
+	}
+	touchStart(e) {
+		e.currentTarget.setPointerCapture?.(e.pointerId), this.touch = {
+			x: e.clientX,
+			y: e.clientY,
+			at: Date.now(),
+			travel: 0
+		};
+	}
+	touchMove(e) {
+		let t = this.touch;
+		if (!t) return;
+		let n = e.clientX - t.x, r = e.clientY - t.y;
+		t.x = e.clientX, t.y = e.clientY, t.travel += Math.abs(n) + Math.abs(r), this.pending.x += n * J, this.pending.y += r * J, this.flushTimer ||= setTimeout(() => this.flushPointer(), Ie);
+	}
+	touchEnd() {
+		let e = this.touch;
+		if (this.touch = void 0, !e) return;
+		let t = Oe(e.travel, Date.now() - e.at);
+		t === "click" ? this.pointer({ click: "left" }) : t === "right" && this.pointer({ click: "right" });
+	}
+	flushPointer() {
+		this.flushTimer = void 0;
+		let e = Math.round(this.pending.x), t = Math.round(this.pending.y);
+		this.pending = {
+			x: 0,
+			y: 0
+		}, (e || t) && this.pointer({
+			move_x: e,
+			move_y: t
+		});
+	}
+	pointer(e) {
+		this.call("samstream", "pointer", {
+			entity_id: this.config.entity,
+			...e
+		}, !1);
+	}
 	tile(e, t) {
-		return e.logo ? I`<div class="tile ${t}"><img src=${e.logo} alt="" loading="lazy" /></div>` : I`<div class="tile ${t} letter" style="background:${xe(e.name)}">
-      ${be(e.name)}
+		return e.logo ? P`<div class="tile ${t}"><img src=${e.logo} alt="" loading="lazy" /></div>` : P`<div class="tile ${t} letter" style="background:${Ce(e.name)}">
+      ${Se(e.name)}
     </div>`;
 	}
 	value(e) {
@@ -956,7 +1109,7 @@ var Q, we = [
 		});
 	}
 	sendKey(e) {
-		let t = ve(this.hass, this.config.entity);
+		let t = be(this.hass, this.config.entity);
 		t && this.call("remote", "send_command", {
 			entity_id: t,
 			command: e
@@ -973,17 +1126,17 @@ var Q, we = [
 		this.hass.callService(e, t, n).then(() => r && t !== "toggle" && this.flash(this.text.sent), (e) => this.flash(`${this.text.failed}: ${e?.message ?? String(e)}`));
 	}
 	flash(e) {
-		this.feedback = e, clearTimeout(this.feedbackTimer), this.feedbackTimer = setTimeout(() => this.feedback = "", Te);
+		this.feedback = e, clearTimeout(this.feedbackTimer), this.feedbackTimer = setTimeout(() => this.feedback = "", je);
 	}
 };
-Q = $, Q.properties = {
+Z = $, Z.properties = {
 	hass: { attribute: !1 },
 	config: { state: !0 },
 	apps: { state: !0 },
 	camera: { state: !0 },
 	feedback: { state: !0 },
 	severity: { state: !0 }
-}, Q.styles = o`
+}, Z.styles = o`
     ha-card {
       padding: 16px;
       display: flex;
@@ -1244,6 +1397,30 @@ Q = $, Q.properties = {
       flex-direction: column;
       gap: 6px;
     }
+    .touchpad {
+      height: 180px;
+      border-radius: 14px;
+      background: var(--secondary-background-color);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 10px;
+      box-sizing: border-box;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      cursor: crosshair;
+    }
+    .touchpad span {
+      font-size: 0.78rem;
+      color: var(--secondary-text-color);
+      text-align: center;
+    }
+    .key {
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+    }
     .hint {
       margin: 0;
       color: var(--secondary-text-color);
@@ -1254,7 +1431,7 @@ Q = $, Q.properties = {
       text-align: center;
     }
   `;
-function Ee(e) {
+function Le(e) {
 	return e;
 }
 customElements.get("samstream-card") || (customElements.define("samstream-card", $), (window.customCards ??= []).push({

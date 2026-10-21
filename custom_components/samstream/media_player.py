@@ -39,6 +39,7 @@ from .const import DOMAIN, SOURCE_HOME
 from .coordinator import SamstreamCoordinator
 from .entity import SamstreamEntity
 from .installer import async_install_package, resolve_package_path
+from .remote import normalize_key
 from .stream_relay import async_publish_stream, tv_stream_url
 from .tv_session import current_command, set_command, signal_ended, signal_playing
 from .tv_settings import ensure_tv_secret
@@ -104,6 +105,8 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         """Create the media player for the coordinator's TV."""
         super().__init__(coordinator, "media_player")
         self._interruption: _Interruption | None = None
+        # App (or "" for none) on screen when we last sent Pause; None after Play.
+        self._paused_app: str | None = None
         self._cancel_return: CALLBACK_TYPE | None = None
         # The camera on screen: its play command, stream, and whether a frame showed.
         self._play_seq: int | None = None
@@ -220,10 +223,23 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
     async def async_media_play(self) -> None:
         """Play key."""
         await self._async_key("KEY_PLAY")
+        self._paused_app = None
 
     async def async_media_pause(self) -> None:
         """Pause key."""
         await self._async_key("KEY_PAUSE")
+        self._paused_app = self.coordinator.data.app_id or ""
+
+    async def async_media_play_pause(self) -> None:
+        """Toggle: the TV does not report playback, so undo our own last key.
+
+        The first press pauses; the next one plays, unless the app on screen
+        changed in between (then it pauses again).
+        """
+        if self._paused_app == (self.coordinator.data.app_id or ""):
+            await self.async_media_play()
+        else:
+            await self.async_media_pause()
 
     async def async_media_stop(self) -> None:
         """Stop key."""
@@ -628,6 +644,26 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         )
         log: list[JsonValueType] = list(result.lines)
         return {"app_id": result.app_id, "log": log}
+
+    async def async_send_text(self, *, text: str, done: bool = True) -> None:
+        """Type into the TV's on-screen keyboard (the `send_text` action)."""
+        await self._async_call(self.coordinator.tv.send_text(text, done=done))
+
+    async def async_hold_key(self, key: str, seconds: float) -> None:
+        """Press and hold a remote key (the `hold_key` action)."""
+        await self._async_call(
+            self.coordinator.tv.send_keys([normalize_key(key)], hold=seconds)
+        )
+
+    async def async_pointer(
+        self, move_x: int = 0, move_y: int = 0, click: str | None = None
+    ) -> None:
+        """Move the TV's pointer and/or click (the `pointer` action)."""
+        tv = self.coordinator.tv
+        if move_x or move_y:
+            await self._async_call(tv.move_pointer(move_x, move_y))
+        if click:
+            await self._async_call(tv.click(click))
 
     async def _async_key(self, key: str) -> None:
         await self._async_call(self.coordinator.tv.send_keys([key]))

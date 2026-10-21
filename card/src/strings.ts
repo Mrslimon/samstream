@@ -23,6 +23,13 @@ export interface Strings {
   tv: string;
   sections: string;
   camerasField: string;
+  keyboard: string;
+  touchpad: string;
+  typeHere: string;
+  send: string;
+  leftClick: string;
+  rightClick: string;
+  touchpadHint: string;
   back: string;
   menu: string;
   ok: string;
@@ -59,6 +66,13 @@ const STRINGS: Record<Language, Strings> = {
     tv: "TV and power",
     sections: "Sections (drag to reorder)",
     camerasField: "Cameras (empty: all)",
+    keyboard: "Keyboard",
+    touchpad: "Touchpad",
+    typeHere: "Open a text field on the TV, then type here",
+    send: "Send",
+    leftClick: "Click",
+    rightClick: "Right click",
+    touchpadHint: "Drag to move · tap to click · hold for right click",
     back: "Back",
     menu: "Menu",
     ok: "OK",
@@ -93,6 +107,13 @@ const STRINGS: Record<Language, Strings> = {
     tv: "التلفاز والتشغيل",
     sections: "الأقسام (اسحب لإعادة الترتيب)",
     camerasField: "الكاميرات (فارغ: الكل)",
+    keyboard: "لوحة المفاتيح",
+    touchpad: "لوحة اللمس",
+    typeHere: "افتح حقل نص على التلفاز ثم اكتب هنا",
+    send: "إرسال",
+    leftClick: "نقر",
+    rightClick: "نقر أيمن",
+    touchpadHint: "اسحب للتحريك · انقر للنقر · اضغط مطولًا للنقر الأيمن",
     back: "رجوع",
     menu: "القائمة",
     ok: "موافق",

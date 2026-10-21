@@ -1,5 +1,6 @@
 """Remote keys over a kept-open connection, and power on/off logic."""
 
+import base64
 from collections.abc import Iterator
 from dataclasses import replace
 from typing import Any
@@ -76,6 +77,30 @@ async def test_hold_key(remote: type[FakeRemote]) -> None:
 
     expected = SendRemoteKey.hold("KEY_POWER", 2)
     assert [type(c) for c in remote.sent[0]] == [type(c) for c in expected]
+
+
+async def test_send_text(remote: type[FakeRemote]) -> None:
+    client = tv()
+    await client.send_text("مرحبا Samstream")
+    await client.send_text("no close", done=False)
+
+    typed, end = remote.sent[0]
+    assert typed.params["TypeOfRemote"] == "SendInputString"
+    assert base64.b64decode(typed.params["Cmd"]).decode() == "مرحبا Samstream"
+    assert end.params == {"TypeOfRemote": "SendInputEnd"}
+    assert len(remote.sent[1]) == 1
+
+
+async def test_pointer(remote: type[FakeRemote]) -> None:
+    client = tv()
+    await client.move_pointer(12, -5)
+    await client.click()
+    await client.click("right")
+
+    move = remote.sent[0][0].params
+    assert move["TypeOfRemote"] == "ProcessMouseDevice"
+    assert move["Position"] == {"x": 12, "y": -5, "Time": "0"}
+    assert [s[0].params["Cmd"] for s in remote.sent[1:]] == ["LeftClick", "RightClick"]
 
 
 async def test_reconnects_once_after_drop(remote: type[FakeRemote]) -> None:

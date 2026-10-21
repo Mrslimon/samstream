@@ -11,6 +11,8 @@ import {
   type Hass,
   type Section,
   type TvApp,
+  POINTER_SCALE,
+  touchGesture,
 } from "./helpers";
 import { languageOf, strings, type Strings } from "./strings";
 
@@ -29,6 +31,15 @@ export interface CardConfig {
 type Severity = "info" | "warning" | "alert";
 const SEVERITIES: Severity[] = ["info", "warning", "alert"];
 const FEEDBACK_MS = 3_000;
+// Held buttons: arrows and volume repeat; OK / Back / Home send a long press.
+const REPEAT_AFTER_MS = 400;
+const REPEAT_EVERY_MS = 150;
+const LONG_PRESS_MS = 600;
+const LONG_PRESS_SECONDS = 1.5;
+// Pointer moves are batched so a drag does not flood Home Assistant.
+const POINTER_FLUSH_MS = 60;
+// A long press on touch screens must not open the browser's menu.
+const noMenu = (event: Event) => event.preventDefault();
 
 /** custom:samstream-card: the TV, its cameras, messages, apps and a remote. */
 export class SamstreamCard extends LitElement {
@@ -49,6 +60,12 @@ export class SamstreamCard extends LitElement {
   severity: Severity = "info";
   private appsFor: string | null | undefined;
   private feedbackTimer: ReturnType<typeof setTimeout> | undefined;
+  private holdTimer: ReturnType<typeof setTimeout> | undefined;
+  private repeatTimer: ReturnType<typeof setInterval> | undefined;
+  private held = false;
+  private touch: { x: number; y: number; at: number; travel: number } | undefined;
+  private pending = { x: 0, y: 0 };
+  private flushTimer: ReturnType<typeof setTimeout> | undefined;
 
   setConfig(config: CardConfig): void {
     if (!config.entity) throw new Error("Choose the Samstream TV (media player).");
@@ -94,7 +111,7 @@ export class SamstreamCard extends LitElement {
     const tv = Object.values(hass.entities ?? {}).find(
       (entry) => entry.platform === "samstream" && entry.entity_id.startsWith("media_player."),
     );
-    return { entity: tv?.entity_id ?? "", sections: [...SECTIONS] };
+    return { entity: tv?.entity_id ?? "", sections: ["tv", "cameras", "message", "apps", "remote", "media"] };
   }
 
   private get text(): Strings {
@@ -149,6 +166,8 @@ export class SamstreamCard extends LitElement {
       apps: () => this.renderApps(),
       remote: () => this.renderRemote(),
       media: () => this.renderMedia(),
+      keyboard: () => this.renderKeyboard(),
+      touchpad: () => this.renderTouchpad(),
     }[section]();
     return html`<div class="section ${first ? "first" : ""}">${body}</div>`;
   }
@@ -299,10 +318,13 @@ export class SamstreamCard extends LitElement {
 
   private renderRemote(): TemplateResult {
     const t = this.text;
-    const key = (code: string, icon: string, label: string, extra = "") =>
-      html`<button class="key ${extra}" title=${label} @click=${() => this.sendKey(code)}>
+    const key = (code: string, icon: string, label: string, mode: "repeat" | "hold" = "repeat") => {
+      const k = this.pressable(() => this.sendKey(code), mode, code);
+      return html`<button class="key" title=${label} @pointerdown=${k.down} @pointerup=${k.up} @pointerleave=${k.cancel} @pointercancel=${k.cancel} @contextmenu=${noMenu}>
         <ha-icon icon=${icon}></ha-icon>
       </button>`;
+    };
+    const ok = this.pressable(() => this.sendKey("KEY_ENTER"), "hold", "KEY_ENTER");
     // Arrows keep their physical meaning; only the layout mirrors in RTL.
     return html`
       <section>
@@ -311,14 +333,16 @@ export class SamstreamCard extends LitElement {
           <div class="pad">
             <span></span>${key("KEY_UP", "mdi:chevron-up", "▲")}<span></span>
             ${key(this.rtl ? "KEY_RIGHT" : "KEY_LEFT", this.rtl ? "mdi:chevron-right" : "mdi:chevron-left", "◀")}
-            <button class="key ok" @click=${() => this.sendKey("KEY_ENTER")}>${t.ok}</button>
+            <button class="key ok" @pointerdown=${ok.down} @pointerup=${ok.up} @pointerleave=${ok.cancel} @pointercancel=${ok.cancel} @contextmenu=${noMenu}>
+              ${t.ok}
+            </button>
             ${key(this.rtl ? "KEY_LEFT" : "KEY_RIGHT", this.rtl ? "mdi:chevron-left" : "mdi:chevron-right", "▶")}
             <span></span>${key("KEY_DOWN", "mdi:chevron-down", "▼")}<span></span>
           </div>
           <div class="side">
-            ${key("KEY_RETURN", "mdi:arrow-u-left-top", t.back)}
-            ${key("KEY_HOME", "mdi:home", t.home)}
-            ${key("KEY_MENU", "mdi:menu", t.menu)}
+            ${key("KEY_RETURN", "mdi:arrow-u-left-top", t.back, "hold")}
+            ${key("KEY_HOME", "mdi:home", t.home, "hold")}
+            ${key("KEY_MENU", "mdi:menu", t.menu, "hold")}
           </div>
         </div>
       </section>
@@ -327,11 +351,15 @@ export class SamstreamCard extends LitElement {
 
   private renderMedia(): TemplateResult {
     const t = this.text;
-    const media = (service: string, icon: string, label: string) =>
-      html`<button class="key" title=${label} @click=${() =>
-        this.call("media_player", service, { entity_id: this.config.entity }, false)}>
-        <ha-icon icon=${icon}></ha-icon>
-      </button>`;
+    const media = (service: string, icon: string, label: string, repeat = false) => {
+      const send = () => this.call("media_player", service, { entity_id: this.config.entity }, false);
+      const k = this.pressable(send, "repeat");
+      return repeat
+        ? html`<button class="key" title=${label} @pointerdown=${k.down} @pointerup=${k.up} @pointerleave=${k.cancel} @pointercancel=${k.cancel} @contextmenu=${noMenu}>
+            <ha-icon icon=${icon}></ha-icon>
+          </button>`
+        : html`<button class="key" title=${label} @click=${send}><ha-icon icon=${icon}></ha-icon></button>`;
+    };
     const volume = this.hass.states[this.config.entity]?.attributes.volume_level;
     return html`
       <section>
@@ -339,15 +367,153 @@ export class SamstreamCard extends LitElement {
         <div class="media">
           ${media("media_play_pause", "mdi:play-pause", t.playPause)}
           <span class="spacer"></span>
-          ${media("volume_down", "mdi:volume-minus", t.volumeDown)}
+          ${media("volume_down", "mdi:volume-minus", t.volumeDown, true)}
           <span class="level">${typeof volume === "number" ? Math.round(volume * 100) : "–"}</span>
-          ${media("volume_up", "mdi:volume-plus", t.volumeUp)}
+          ${media("volume_up", "mdi:volume-plus", t.volumeUp, true)}
           <button class="key" title=${t.mute} @click=${() => this.toggleMute()}>
             <ha-icon icon="mdi:volume-off"></ha-icon>
           </button>
         </div>
       </section>
     `;
+  }
+
+  private renderKeyboard(): TemplateResult {
+    const t = this.text;
+    const send = () => {
+      const text = this.value("tv-text");
+      if (!text) return;
+      this.call("samstream", "send_text", { entity_id: this.config.entity, text });
+      const field = this.renderRoot.querySelector<HTMLInputElement>("#tv-text");
+      if (field) field.value = "";
+    };
+    return html`
+      <section>
+        <h3>${t.keyboard}</h3>
+        <div class="row">
+          <input
+            id="tv-text"
+            dir="auto"
+            placeholder=${t.typeHere}
+            @keydown=${(event: KeyboardEvent) => event.key === "Enter" && send()}
+          />
+          <button class="primary" @click=${send}><ha-icon icon="mdi:keyboard"></ha-icon>${t.send}</button>
+        </div>
+      </section>
+    `;
+  }
+
+  private renderTouchpad(): TemplateResult {
+    const t = this.text;
+    return html`
+      <section>
+        <h3>${t.touchpad}</h3>
+        <div
+          class="touchpad"
+          @pointerdown=${(event: PointerEvent) => this.touchStart(event)}
+          @pointermove=${(event: PointerEvent) => this.touchMove(event)}
+          @pointerup=${() => this.touchEnd()}
+          @pointercancel=${() => (this.touch = undefined)}
+          @contextmenu=${(event: Event) => event.preventDefault()}
+        >
+          <span>${t.touchpadHint}</span>
+        </div>
+        <div class="actions">
+          <button @click=${() => this.pointer({ click: "left" })}>
+            <ha-icon icon="mdi:cursor-default-click"></ha-icon>${t.leftClick}
+          </button>
+          <button @click=${() => this.pointer({ click: "right" })}>
+            <ha-icon icon="mdi:mouse-right-click"></ha-icon>${t.rightClick}
+          </button>
+        </div>
+      </section>
+    `;
+  }
+
+  /**
+   * Button press handling: `repeat` sends now and keeps sending while held;
+   * `hold` sends a click on release, or a long press (`hold_key`) when held.
+   */
+  private pressable(send: () => void, mode: "repeat" | "hold", key?: string) {
+    const stop = () => {
+      clearTimeout(this.holdTimer);
+      clearInterval(this.repeatTimer);
+    };
+    const down = (event: PointerEvent) => {
+      (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+      stop();
+      this.held = false;
+      if (mode === "repeat") {
+        send();
+        this.holdTimer = setTimeout(() => {
+          this.repeatTimer = setInterval(send, REPEAT_EVERY_MS);
+        }, REPEAT_AFTER_MS);
+      } else {
+        this.holdTimer = setTimeout(() => {
+          this.held = true;
+          if (key) {
+            this.call(
+              "samstream",
+              "hold_key",
+              { entity_id: this.config.entity, key, seconds: LONG_PRESS_SECONDS },
+              false,
+            );
+          }
+        }, LONG_PRESS_MS);
+      }
+    };
+    const up = () => {
+      stop();
+      if (mode === "hold" && !this.held) send();
+      this.held = false;
+    };
+    const cancel = () => {
+      stop();
+      this.held = false;
+    };
+    return { down, up, cancel };
+  }
+
+  private touchStart(event: PointerEvent): void {
+    (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+    this.touch = { x: event.clientX, y: event.clientY, at: Date.now(), travel: 0 };
+  }
+
+  private touchMove(event: PointerEvent): void {
+    const touch = this.touch;
+    if (!touch) return;
+    const dx = event.clientX - touch.x;
+    const dy = event.clientY - touch.y;
+    touch.x = event.clientX;
+    touch.y = event.clientY;
+    touch.travel += Math.abs(dx) + Math.abs(dy);
+    // In RTL the pad is still a physical surface: no mirroring.
+    this.pending.x += dx * POINTER_SCALE;
+    this.pending.y += dy * POINTER_SCALE;
+    if (!this.flushTimer) {
+      this.flushTimer = setTimeout(() => this.flushPointer(), POINTER_FLUSH_MS);
+    }
+  }
+
+  private touchEnd(): void {
+    const touch = this.touch;
+    this.touch = undefined;
+    if (!touch) return;
+    const gesture = touchGesture(touch.travel, Date.now() - touch.at);
+    if (gesture === "click") this.pointer({ click: "left" });
+    else if (gesture === "right") this.pointer({ click: "right" });
+  }
+
+  private flushPointer(): void {
+    this.flushTimer = undefined;
+    const move_x = Math.round(this.pending.x);
+    const move_y = Math.round(this.pending.y);
+    this.pending = { x: 0, y: 0 };
+    if (move_x || move_y) this.pointer({ move_x, move_y });
+  }
+
+  private pointer(data: Record<string, unknown>): void {
+    this.call("samstream", "pointer", { entity_id: this.config.entity, ...data }, false);
   }
 
   private tile(app: TvApp, size: "small" | "large"): TemplateResult {
@@ -692,6 +858,30 @@ export class SamstreamCard extends LitElement {
       flex-direction: column;
       gap: 6px;
     }
+    .touchpad {
+      height: 180px;
+      border-radius: 14px;
+      background: var(--secondary-background-color);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 10px;
+      box-sizing: border-box;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      cursor: crosshair;
+    }
+    .touchpad span {
+      font-size: 0.78rem;
+      color: var(--secondary-text-color);
+      text-align: center;
+    }
+    .key {
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+    }
     .hint {
       margin: 0;
       color: var(--secondary-text-color);
@@ -705,7 +895,9 @@ export class SamstreamCard extends LitElement {
 }
 
 /** Label key of a section in the editor. */
-function sectionKey(section: Section): "tv" | "cameras" | "message" | "apps" | "remote" | "media" {
+function sectionKey(
+  section: Section,
+): "tv" | "cameras" | "message" | "apps" | "remote" | "media" | "keyboard" | "touchpad" {
   return section;
 }
 

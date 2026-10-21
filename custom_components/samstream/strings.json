@@ -340,6 +340,52 @@
         }
       }
     },
+    "send_text": {
+      "name": "Type on TV",
+      "description": "Types text into the TV's on-screen keyboard (a search box, a login field). Open the field on the TV first.",
+      "fields": {
+        "text": {
+          "name": "Text",
+          "description": "What to type; any language."
+        },
+        "done": {
+          "name": "Done",
+          "description": "Close the keyboard afterwards, like its Done key."
+        }
+      }
+    },
+    "hold_key": {
+      "name": "Hold key",
+      "description": "Presses a remote key and holds it, for long-press menus or fast seeking.",
+      "fields": {
+        "key": {
+          "name": "Key",
+          "description": "Remote key, for example KEY_ENTER, KEY_RIGHT or ENTER."
+        },
+        "seconds": {
+          "name": "Seconds",
+          "description": "How long to hold it."
+        }
+      }
+    },
+    "pointer": {
+      "name": "Move pointer",
+      "description": "Moves the TV's pointer and/or clicks, in apps that show one (the web browser).",
+      "fields": {
+        "move_x": {
+          "name": "Move right",
+          "description": "Pixels to the right (negative: left)."
+        },
+        "move_y": {
+          "name": "Move down",
+          "description": "Pixels down (negative: up)."
+        },
+        "click": {
+          "name": "Click",
+          "description": "Click after moving."
+        }
+      }
+    },
     "stop_stream": {
       "name": "Stop camera on TV",
       "description": "Leaves the camera: reopens and resumes the app that was playing, or turns the TV off if Samstream woke it."
@@ -378,6 +424,12 @@
         "info": "Info",
         "warning": "Warning",
         "alert": "Alert"
+      }
+    },
+    "click": {
+      "options": {
+        "left": "Left click",
+        "right": "Right click"
       }
     }
   }

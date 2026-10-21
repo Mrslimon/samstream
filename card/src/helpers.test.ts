@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { cameraList, initials, remoteEntity, sectionsOf, tileColor, type Hass } from "./helpers";
+import {
+  cameraList,
+  initials,
+  remoteEntity,
+  sectionsOf,
+  tileColor,
+  touchGesture,
+  type Hass,
+} from "./helpers";
 import { LANGUAGES, languageOf, strings } from "./strings";
 
 function hass(partial: Partial<Hass>): Hass {
@@ -90,5 +98,14 @@ describe("sectionsOf", () => {
   it("reads the switches of cards made before sections existed", () => {
     expect(sectionsOf({})).toEqual(["tv", "cameras", "message", "apps", "remote", "media"]);
     expect(sectionsOf({ show_cameras: false, show_remote: false })).toEqual(["tv", "message", "apps"]);
+  });
+});
+
+describe("touchGesture", () => {
+  it("tells taps, long presses and drags apart", () => {
+    expect(touchGesture(2, 120)).toBe("click");
+    expect(touchGesture(3, 900)).toBe("right");
+    expect(touchGesture(40, 120)).toBe("move");
+    expect(touchGesture(2, 450)).toBe("move");
   });
 });

@@ -127,6 +127,46 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     service.async_register_platform_entity_service(
         hass,
         DOMAIN,
+        "send_text",
+        entity_domain=MEDIA_PLAYER_DOMAIN,
+        schema={
+            vol.Required("text"): cv.string,
+            vol.Optional("done", default=True): cv.boolean,
+        },
+        func="async_send_text",
+    )
+    service.async_register_platform_entity_service(
+        hass,
+        DOMAIN,
+        "hold_key",
+        entity_domain=MEDIA_PLAYER_DOMAIN,
+        schema={
+            vol.Required("key"): cv.string,
+            vol.Optional("seconds", default=1.5): vol.All(
+                vol.Coerce(float), vol.Range(min=0.1, max=30)
+            ),
+        },
+        func="async_hold_key",
+    )
+    service.async_register_platform_entity_service(
+        hass,
+        DOMAIN,
+        "pointer",
+        entity_domain=MEDIA_PLAYER_DOMAIN,
+        schema={
+            vol.Optional("move_x", default=0): vol.All(
+                vol.Coerce(int), vol.Range(min=-1920, max=1920)
+            ),
+            vol.Optional("move_y", default=0): vol.All(
+                vol.Coerce(int), vol.Range(min=-1080, max=1080)
+            ),
+            vol.Optional("click"): vol.In(["left", "right"]),
+        },
+        func="async_pointer",
+    )
+    service.async_register_platform_entity_service(
+        hass,
+        DOMAIN,
         "stop_stream",
         entity_domain=MEDIA_PLAYER_DOMAIN,
         schema={},

@@ -276,3 +276,10 @@ Source: PatrickSt1991/Samsung-Jellyfin-Installer (MIT), `Apps2Samsung.Core/Certi
   - **Logos:** the TV gives no icons (`ed.apps.icon` / `ed.installedApp.get` get no answer on the QN800C) and there is no public lookup by app ID. So logos come from `/config/www/samstream/apps/`, matched by app ID, TV name or slugified name; other apps get coloured letter tiles. They show in the card, as the media player picture of the current app, and in a new **Apps** folder of the media browser (click to launch).
   - **Data:** the card reads apps over websocket (`samstream/apps`), not entity attributes.
 - **SmartThings (local) research:** SmartThings-Local reaches Samsung TVs over CoAP-DTLS, but `/sec/tv/inputsource` etc. answer 4.01 without an owner credential, which would need an ownership transfer (PIN on the TV). Not pursued; the cloud SmartThings integration stays the optional way to tell Live TV from apps. Multi View: no remote key or API (KEY_MULTI_VIEW, KEY_PIP_ONOFF and others did nothing).
+- **15 result (2026-10-21):**
+  - **`samstream.send_text`:** types into the TV's on-screen keyboard field (`SendInputString`, UTF-8 so Arabic works), then closes it unless `done: false`.
+  - **`samstream.hold_key`:** press and hold any key for N seconds.
+  - **`samstream.pointer`:** relative move and left/right click via `ProcessMouseDevice`, for apps that show a pointer, such as the browser.
+  - **samsungtvws compatibility:** the text payloads are built in `aiosamstream`, because HA's samsungtvws 2.7 lacks the 2.8 classes.
+  - **Card:** D-pad and volume repeat while held, and OK / Back / Home / Menu send a long press after 0.6 s. New optional **Keyboard** and **Touchpad** sections: drag to move (batched every 60 ms), tap to click, hold to right-click.
+  - **Play/pause fix:** play/pause now alternates Pause / Play, because the TV reports no playback state; it starts over when the app changes.

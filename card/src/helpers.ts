@@ -78,7 +78,16 @@ export function tileColor(name: string): string {
   return `hsl(${hue} 55% 46%)`;
 }
 
-export const SECTIONS = ["tv", "cameras", "message", "apps", "remote", "media"] as const;
+export const SECTIONS = [
+  "tv",
+  "cameras",
+  "message",
+  "apps",
+  "remote",
+  "media",
+  "keyboard",
+  "touchpad",
+] as const;
 export type Section = (typeof SECTIONS)[number];
 
 export interface SectionConfig {
@@ -101,4 +110,16 @@ export function sectionsOf(config: SectionConfig): Section[] {
   if (config.show_apps !== false) shown.push("apps");
   if (config.show_remote !== false) shown.push("remote", "media");
   return shown;
+}
+
+/** Touchpad: finger travel to TV pixels, and what a touch without travel means. */
+export const POINTER_SCALE = 2.5;
+const TAP_MAX_TRAVEL = 6;
+const TAP_MAX_MS = 300;
+const PRESS_MIN_MS = 600;
+
+export function touchGesture(travel: number, ms: number): "click" | "right" | "move" {
+  if (travel > TAP_MAX_TRAVEL) return "move";
+  if (ms <= TAP_MAX_MS) return "click";
+  return ms >= PRESS_MIN_MS ? "right" : "move";
 }

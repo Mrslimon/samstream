@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 from datetime import timedelta
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from aiosamstream import SamstreamAuthError, SamstreamConnectionError
@@ -20,6 +20,7 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
+from custom_components.samstream.const import DOMAIN
 from custom_components.samstream.coordinator import default_wol_target
 from custom_components.samstream.remote import normalize_key
 
@@ -120,6 +121,28 @@ async def test_key_services(
     mock_tv.send_keys.assert_awaited_once_with([key])
 
 
+@pytest.mark.usefixtures("setup_entry")
+async def test_play_pause_toggles(hass: HomeAssistant, mock_tv: MagicMock) -> None:
+    async def toggle() -> str:
+        await hass.services.async_call(
+            "media_player", "media_play_pause", {ATTR_ENTITY_ID: TV}, blocking=True
+        )
+        return mock_tv.send_keys.await_args.args[0][0]
+
+    assert [await toggle(), await toggle(), await toggle()] == [
+        "KEY_PAUSE",
+        "KEY_PLAY",
+        "KEY_PAUSE",
+    ]
+    # Another app on screen since the pause: it is playing, so pause it.
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data.coordinator
+    coordinator.async_set_updated_data(
+        replace(coordinator.data, app_id="3201907018807")
+    )
+    assert await toggle() == "KEY_PAUSE"
+    assert await toggle() == "KEY_PLAY"
+
+
 @pytest.mark.parametrize("entity_id", [TV, REMOTE])
 @pytest.mark.usefixtures("setup_entry")
 async def test_power(hass: HomeAssistant, mock_tv: MagicMock, entity_id: str) -> None:
@@ -207,3 +230,34 @@ def test_normalize_key() -> None:
 def test_default_wol_target() -> None:
     assert default_wol_target("192.168.1.11") == "192.168.1.255"
     assert default_wol_target("tv.local") == "255.255.255.255"
+
+
+@pytest.mark.usefixtures("setup_entry")
+async def test_text_hold_and_pointer(hass: HomeAssistant, mock_tv: MagicMock) -> None:
+    mock_tv.send_text = AsyncMock()
+    mock_tv.move_pointer = AsyncMock()
+    mock_tv.click = AsyncMock()
+
+    await hass.services.async_call(
+        DOMAIN, "send_text", {ATTR_ENTITY_ID: TV, "text": "مرحبا"}, blocking=True
+    )
+    mock_tv.send_text.assert_awaited_once_with("مرحبا", done=True)
+
+    await hass.services.async_call(
+        DOMAIN, "hold_key", {ATTR_ENTITY_ID: TV, "key": "enter"}, blocking=True
+    )
+    mock_tv.send_keys.assert_awaited_once_with(["KEY_ENTER"], hold=1.5)
+
+    await hass.services.async_call(
+        DOMAIN,
+        "pointer",
+        {ATTR_ENTITY_ID: TV, "move_x": 30, "move_y": -10, "click": "right"},
+        blocking=True,
+    )
+    mock_tv.move_pointer.assert_awaited_once_with(30, -10)
+    mock_tv.click.assert_awaited_once_with("right")
+
+    await hass.services.async_call(
+        DOMAIN, "pointer", {ATTR_ENTITY_ID: TV, "click": "left"}, blocking=True
+    )
+    assert mock_tv.move_pointer.await_count == 1
