@@ -151,7 +151,27 @@ async def async_read_duid(hass: HomeAssistant, entry: SamstreamConfigEntry) -> s
 async def async_install_package(
     hass: HomeAssistant, entry: SamstreamConfigEntry, package: Path | None
 ) -> InstallResult:
-    """Sign (when signing is set up) and install a .wgt; None = the bundled app."""
+    """Sign (when signing is set up) and install a .wgt; None = the bundled app.
+
+    Only one install runs per TV; the install button is unavailable meanwhile.
+    """
+    coordinator = entry.runtime_data.coordinator
+    if coordinator.installing:
+        raise HomeAssistantError(
+            translation_domain=DOMAIN, translation_key="install_in_progress"
+        )
+    coordinator.installing = True
+    coordinator.async_update_listeners()
+    try:
+        return await _async_install(hass, entry, package)
+    finally:
+        coordinator.installing = False
+        coordinator.async_update_listeners()
+
+
+async def _async_install(
+    hass: HomeAssistant, entry: SamstreamConfigEntry, package: Path | None
+) -> InstallResult:
     setup = await async_load_signing(hass)
     if package is None:
         if setup is None:

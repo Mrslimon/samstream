@@ -191,6 +191,9 @@
     },
     "duid_not_covered": {
       "message": "The certificate does not list this TV (DUID {duid})."
+    },
+    "install_in_progress": {
+      "message": "The Samstream app is already being installed on this TV."
     }
   },
   "services": {

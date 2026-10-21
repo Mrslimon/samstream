@@ -1,5 +1,6 @@
 """App signing: options menus, Samsung sign-in hand-off, import, signed installs."""
 
+import asyncio
 import datetime as dt
 import io
 import json
@@ -9,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from urllib.parse import parse_qs, urlencode, urlparse
 
 import pytest
-from aiosamstream import SAMSTREAM_APP_ID, InstallResult
+from aiosamstream import SAMSTREAM_APP_ID, InstallResult, SdbError
 from aiosamstream.samsung_cert import SamsungAccount, SamsungCertError
 from aiosamstream.signing import SigningIdentity
 from cryptography import x509
@@ -506,6 +507,49 @@ async def test_button_signs_bundled_app(
     names = zipfile.ZipFile(io.BytesIO(pushed)).namelist()
     assert names[:2] == ["author-signature.xml", "signature1.xml"]
     assert "config.xml" in names
+
+
+async def test_button_unavailable_while_installing(
+    hass: HomeAssistant, setup_entry: MockConfigEntry, sdb: MagicMock
+) -> None:
+    await async_save_signing(hass, setup_for([DUID]))
+    release = asyncio.Event()
+
+    async def slow_install(wgt: bytes, app_id: str) -> InstallResult:
+        await release.wait()
+        return InstallResult(app_id, ["install completed"])
+
+    sdb.install.side_effect = slow_install
+    press = hass.async_create_task(
+        hass.services.async_call(
+            "button", "press", {"entity_id": INSTALL_BUTTON}, blocking=True
+        )
+    )
+    await asyncio.sleep(0.05)
+    assert hass.states.get(INSTALL_BUTTON).state == "unavailable"
+
+    # The action path is guarded too.
+    with pytest.raises(HomeAssistantError) as err:
+        await installer.async_install_package(hass, setup_entry, None)
+    assert err.value.translation_key == "install_in_progress"
+
+    release.set()
+    await press
+    assert hass.states.get(INSTALL_BUTTON).state != "unavailable"
+    assert sdb.install.await_count == 1
+
+
+async def test_button_available_again_after_error(
+    hass: HomeAssistant, setup_entry: MockConfigEntry, sdb: MagicMock
+) -> None:
+    await async_save_signing(hass, setup_for([DUID]))
+    sdb.install.side_effect = SdbError("Check certificate error")
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            "button", "press", {"entity_id": INSTALL_BUTTON}, blocking=True
+        )
+    assert hass.states.get(INSTALL_BUTTON).state != "unavailable"
+    assert setup_entry.runtime_data.coordinator.installing is False
 
 
 async def test_read_duid(

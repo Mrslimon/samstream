@@ -34,6 +34,11 @@ class InstallAppButton(SamstreamEntity, ButtonEntity):
         """Create the button for the coordinator's TV."""
         super().__init__(coordinator, "install_app")
 
+    @property
+    def available(self) -> bool:
+        """Greyed out while an install is running, so it cannot start twice."""
+        return super().available and not self.coordinator.installing
+
     async def async_press(self) -> None:
         """Sign the bundled package and install it over sdb."""
         await async_install_package(self.hass, self.coordinator.config_entry, None)

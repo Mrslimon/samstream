@@ -191,6 +191,9 @@
     },
     "duid_not_covered": {
       "message": "الشهادة لا تتضمّن هذا التلفاز (DUID ‏{duid})."
+    },
+    "install_in_progress": {
+      "message": "يجري تثبيت تطبيق Samstream على هذا التلفاز بالفعل."
     }
   },
   "services": {

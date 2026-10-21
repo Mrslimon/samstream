@@ -86,6 +86,8 @@ class SamstreamCoordinator(DataUpdateCoordinator[SamstreamState]):
         # Installed apps (id -> name the TV reports), refreshed while the TV is on.
         self.apps: dict[str, str] = {}
         self.app_versions: dict[str, str | None] = {}
+        # True while the Samstream app is being installed (one install at a time).
+        self.installing = False
         self._apps_scanned_at: float | None = None
 
     @property
