@@ -251,6 +251,12 @@
     },
     "go2rtc_refused": {
       "message": "go2rtc refused the stream: {status} {detail}"
+    },
+    "sdb_restart_needed": {
+      "message": "{name} has Developer Mode on for {ha_host}, but it does not accept app installs yet. Restart the TV: hold the power button until the Samsung logo appears, then try again."
+    },
+    "sdb_host_reversed": {
+      "message": "{name} has Developer Mode set to {developer_host}: Home Assistant's address {ha_host} backwards. See Settings → Repairs."
     }
   },
   "services": {
@@ -408,7 +414,7 @@
   "issues": {
     "developer_mode": {
       "title": "Developer Mode needed on {name}",
-      "description": "Home Assistant could not connect to {name} to install the Samstream app. The TV only accepts app installs from the one computer set in its Developer Mode.\n\nThe TV's developer host is now **{developer_host}**, and Home Assistant is at **{ha_host}**.\n\n1. On the TV, open **Apps**.\n2. Press **1 2 3 4 5** on the remote (or on the on-screen keypad).\n3. Turn **Developer mode** on, enter **{ha_host}** as the Host PC IP, then choose **OK**.\n4. Restart the TV: hold the power button until the Samsung logo appears.\n5. Run the install again; this message disappears once it works.\n\nIf {ha_host} is not this server's address on your network, set the local network URL under **Settings → System → Network**."
+      "description": "Home Assistant could not connect to {name} to install the Samstream app. The TV only accepts app installs from the one computer set in its Developer Mode.\n\nThe TV's developer host is now **{developer_host}**, and Home Assistant is at **{ha_host}**.\n\n1. On the TV, open **Apps**.\n2. Press **1 2 3 4 5** on the remote (or on the on-screen keypad).\n3. Turn **Developer mode** on, enter **{ha_host}** as the Host PC IP, then choose **OK**.\n4. Restart the TV: hold the power button until the Samsung logo appears.\n5. Run the install again; this message disappears once it works.\n\nIf {ha_host} is not this server's address on your network, set the local network URL under **Settings → System → Network**.\n\nIf the TV's menu is in Arabic or another right-to-left language and installs still fail, the TV may store the address backwards: Home Assistant will tell you."
     },
     "certificate_expiring": {
       "title": "Samstream signing certificates expire on {date}",
@@ -417,6 +423,14 @@
     "certificate_expired": {
       "title": "Samstream signing certificates expired on {date}",
       "description": "Home Assistant can no longer install or update the Samstream TV app. Open Samstream → Configure → App signing and sign in with Samsung again to renew the certificates. The app already on your TVs keeps working."
+    },
+    "developer_restart": {
+      "title": "Restart {name} to finish Developer Mode",
+      "description": "Developer Mode on {name} is on and points at Home Assistant (**{ha_host}**), but the TV does not accept app installs yet. Samsung TVs start this only after a full restart, once Developer Mode or its host was changed.\n\n1. Hold the power button on the TV's remote until the TV turns off and the Samsung logo appears (a short press only puts it in standby).\n2. Wait until the TV has started.\n3. Run the install again; this message disappears once it works.\n\nOn **The Frame** the power button switches Art Mode instead: unplug the TV (or its One Connect box) for 30 seconds instead. Do the same if holding the button does not help.\n\nIf it still fails after a restart, check that nothing blocks port 26101 between this server and the TV."
+    },
+    "developer_reversed": {
+      "title": "Developer Mode address is reversed on {name}",
+      "description": "{name} has **{developer_host}** as its Developer Mode host: that is Home Assistant's address **{ha_host}** backwards. Some Samsung TVs mirror the IP field when the menu language is right-to-left (Arabic, Hebrew, Persian), so the numbers are stored in reverse.\n\nFix it either way:\n- **Type it backwards:** in Developer Mode, enter **{developer_host}**, so the TV stores {ha_host}; or\n- **Switch the TV to English** (Settings → General → System Manager → Language), set **{ha_host}**, then switch back.\n\nThen restart the TV (hold the power button until the Samsung logo appears) and run the install again."
     }
   },
   "selector": {

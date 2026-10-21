@@ -123,18 +123,21 @@ async def _sdb(
         await client.connect()
     except SdbConnectionError as err:
         placeholders = _developer_placeholders(hass, entry)
+        issue, error = developer_problem(
+            placeholders["developer_host"], placeholders["ha_host"]
+        )
         ir.async_create_issue(
             hass,
             DOMAIN,
             issue_id(entry),
             is_fixable=False,
             severity=ir.IssueSeverity.ERROR,
-            translation_key="developer_mode",
+            translation_key=issue,
             translation_placeholders=placeholders,
         )
         raise HomeAssistantError(
             translation_domain=DOMAIN,
-            translation_key="sdb_unreachable",
+            translation_key=error,
             translation_placeholders=placeholders,
         ) from err
     ir.async_delete_issue(hass, DOMAIN, issue_id(entry))
@@ -369,6 +372,22 @@ def _load_p12_pair(
         SigningIdentity.from_p12(author.read_bytes(), password),
         SigningIdentity.from_p12(distributor.read_bytes(), password),
     )
+
+
+def developer_problem(developer_host: str, ha_host: str) -> tuple[str, str]:
+    """(repair issue, error) keys for an sdb connection the TV refused.
+
+    - Host is HA's: set up right but not listening yet; the TV starts its
+      developer service only after a full restart.
+    - Host is HA's address backwards (5.1.168.192): some TVs mirror the IP field
+      when the menu language is right-to-left, so the digits were stored reversed.
+    - Otherwise Developer Mode is off or points at another computer.
+    """
+    if developer_host == ha_host:
+        return "developer_restart", "sdb_restart_needed"
+    if developer_host == ".".join(reversed(ha_host.split("."))) != ha_host:
+        return "developer_reversed", "sdb_host_reversed"
+    return "developer_mode", "sdb_unreachable"
 
 
 def _developer_placeholders(

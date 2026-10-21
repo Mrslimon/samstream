@@ -3,6 +3,7 @@
 import io
 import zipfile
 from collections.abc import Generator
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -25,7 +26,11 @@ from homeassistant.helpers.network import NoURLAvailableError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.samstream.const import DOMAIN
-from custom_components.samstream.installer import async_get_sdb_key, ha_lan_host
+from custom_components.samstream.installer import (
+    async_get_sdb_key,
+    developer_problem,
+    ha_lan_host,
+)
 
 from .conftest import NETFLIX, YOUTUBE
 
@@ -110,36 +115,100 @@ async def test_path_outside_allowed_dirs(hass: HomeAssistant, tmp_path: Path) ->
     assert err.value.translation_key == "file_not_allowed"
 
 
+@dataclass(frozen=True)
+class RefusedCase:
+    ha_url: str
+    developer_mode: bool
+    developer_ip: str
+    error: str
+    issue: str
+    shown_host: str
+
+
+REFUSED = [
+    # Right host, not listening: the TV needs a full restart.
+    RefusedCase(
+        "http://192.168.1.5:8123",
+        True,
+        "192.168.1.5",
+        "sdb_restart_needed",
+        "developer_restart",
+        "192.168.1.5",
+    ),
+    # Host set to another computer.
+    RefusedCase(
+        "http://192.168.1.21:8123",
+        True,
+        "192.168.1.5",
+        "sdb_unreachable",
+        "developer_mode",
+        "192.168.1.5",
+    ),
+    # Typed into a mirrored (RTL) field: stored backwards.
+    RefusedCase(
+        "http://192.168.1.5:8123",
+        True,
+        "5.1.168.192",
+        "sdb_host_reversed",
+        "developer_reversed",
+        "5.1.168.192",
+    ),
+    # Developer Mode off.
+    RefusedCase(
+        "http://192.168.1.5:8123",
+        False,
+        "192.168.1.5",
+        "sdb_unreachable",
+        "developer_mode",
+        "off",
+    ),
+]
+
+
+@pytest.mark.parametrize("case", REFUSED, ids=lambda case: case.issue + case.shown_host)
 @pytest.mark.usefixtures("setup_entry")
 async def test_unreachable_sdb_raises_repair_issue(
     hass: HomeAssistant,
     setup_entry: MockConfigEntry,
     sdb: MagicMock,
     package: Path,
+    case: RefusedCase,
 ) -> None:
-    await async_process_ha_core_config(
-        hass, {"internal_url": "http://192.168.1.5:8123"}
-    )
+    await async_process_ha_core_config(hass, {"internal_url": case.ha_url})
     # Processing core config resets the allowed directories.
     hass.config.allowlist_external_dirs = {str(package.parent)}
+    coordinator = setup_entry.runtime_data.coordinator
+    info = replace(
+        coordinator.data.info,
+        developer_mode=case.developer_mode,
+        developer_ip=case.developer_ip,
+    )
+    coordinator.async_set_updated_data(replace(coordinator.data, info=info))
     sdb.connect.side_effect = SdbConnectionError("refused")
 
     with pytest.raises(HomeAssistantError) as err:
         await _install(hass, str(package))
 
-    assert err.value.translation_key == "sdb_unreachable"
+    assert err.value.translation_key == case.error
     issue_id = f"developer_mode_{setup_entry.entry_id}"
     issue = ir.async_get(hass).async_get_issue(DOMAIN, issue_id)
     assert issue is not None
+    assert issue.translation_key == case.issue
     assert issue.translation_placeholders == {
         "name": '65" Neo QLED 8K',
-        "ha_host": "192.168.1.5",
-        "developer_host": "192.168.1.5",
+        "ha_host": case.ha_url.split("//")[1].split(":")[0],
+        "developer_host": case.shown_host,
     }
 
     sdb.connect.side_effect = None
     await _install(hass, str(package))
     assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is None
+
+
+def test_reversed_check_ignores_palindromes() -> None:
+    """An address that reads the same backwards is not 'reversed'."""
+    assert developer_problem("1.2.2.1", "1.2.2.1")[0] == "developer_restart"
+    assert developer_problem("10.0.0.10", "10.0.0.10")[0] == "developer_restart"
 
 
 @pytest.mark.usefixtures("setup_entry")
