@@ -1,4 +1,4 @@
-name: TV app
+name: TV app and card
 
 on:
   push:
@@ -22,3 +22,22 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+  card:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: card
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: card/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      # The built card ships in the integration: it must match the sources.
+      - run: git diff --exit-code -- ../custom_components/samstream/frontend

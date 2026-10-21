@@ -1,0 +1,56 @@
+name: Release
+
+# Push a tag like v0.1.0. The library goes to PyPI first, then the GitHub
+# release (with samstream.zip for HACS), so HA can always install the
+# aiosamstream version a release requires.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.14"
+      - run: python scripts/build_release.py --tag "${GITHUB_REF_NAME}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: library
+          path: dist/aiosamstream-*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: integration
+          path: dist/samstream.zip
+
+  pypi:
+    needs: build
+    runs-on: ubuntu-latest
+    # Trusted publishing: add this repository + workflow + environment as a
+    # publisher of "aiosamstream" on pypi.org; no token is stored in GitHub.
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: library
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    needs: pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: integration
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/samstream.zip
+          generate_release_notes: true
