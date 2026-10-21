@@ -36,8 +36,9 @@ const REPEAT_AFTER_MS = 400;
 const REPEAT_EVERY_MS = 150;
 const LONG_PRESS_MS = 600;
 const LONG_PRESS_SECONDS = 1.5;
-// Pointer moves are batched so a drag does not flood Home Assistant.
-const POINTER_FLUSH_MS = 60;
+// One pointer move in flight at a time; movement meanwhile is summed and sent
+// as soon as the TV has the previous one, so a drag never queues up behind.
+const POINTER_FLUSH_MS = 16;
 // A long press on touch screens must not open the browser's menu.
 const noMenu = (event: Event) => event.preventDefault();
 
@@ -66,6 +67,7 @@ export class SamstreamCard extends LitElement {
   private touch: { x: number; y: number; at: number; travel: number } | undefined;
   private pending = { x: 0, y: 0 };
   private flushTimer: ReturnType<typeof setTimeout> | undefined;
+  private pointerBusy = false;
 
   setConfig(config: CardConfig): void {
     if (!config.entity) throw new Error("Choose the Samstream TV (media player).");
@@ -399,6 +401,7 @@ export class SamstreamCard extends LitElement {
           />
           <button class="primary" @click=${send}><ha-icon icon="mdi:keyboard"></ha-icon>${t.send}</button>
         </div>
+        <p class="hint">${t.keyboardNote}</p>
       </section>
     `;
   }
@@ -426,6 +429,7 @@ export class SamstreamCard extends LitElement {
             <ha-icon icon="mdi:mouse-right-click"></ha-icon>${t.rightClick}
           </button>
         </div>
+        <p class="hint">${t.touchpadNote}</p>
       </section>
     `;
   }
@@ -490,7 +494,7 @@ export class SamstreamCard extends LitElement {
     // In RTL the pad is still a physical surface: no mirroring.
     this.pending.x += dx * POINTER_SCALE;
     this.pending.y += dy * POINTER_SCALE;
-    if (!this.flushTimer) {
+    if (!this.flushTimer && !this.pointerBusy) {
       this.flushTimer = setTimeout(() => this.flushPointer(), POINTER_FLUSH_MS);
     }
   }
@@ -508,8 +512,16 @@ export class SamstreamCard extends LitElement {
     this.flushTimer = undefined;
     const move_x = Math.round(this.pending.x);
     const move_y = Math.round(this.pending.y);
-    this.pending = { x: 0, y: 0 };
-    if (move_x || move_y) this.pointer({ move_x, move_y });
+    if (this.pointerBusy || (!move_x && !move_y)) return;
+    this.pending = { x: this.pending.x - move_x, y: this.pending.y - move_y };
+    this.pointerBusy = true;
+    this.hass
+      .callService("samstream", "pointer", { entity_id: this.config.entity, move_x, move_y })
+      .catch(() => undefined)
+      .finally(() => {
+        this.pointerBusy = false;
+        this.flushPointer();
+      });
   }
 
   private pointer(data: Record<string, unknown>): void {

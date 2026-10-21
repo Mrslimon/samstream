@@ -591,6 +591,8 @@ var Y = {
 		leftClick: "Click",
 		rightClick: "Right click",
 		touchpadHint: "Drag to move · tap to click · hold for right click",
+		keyboardNote: "Works with the TV's own keyboard (browser, sign-in fields). Apps with their own keyboard, like YouTube, ignore it.",
+		touchpadNote: "For the web browser and apps with a pointer; elsewhere the TV shows its pointer panel instead.",
 		back: "Back",
 		menu: "Menu",
 		ok: "OK",
@@ -632,6 +634,8 @@ var Y = {
 		leftClick: "نقر",
 		rightClick: "نقر أيمن",
 		touchpadHint: "اسحب للتحريك · انقر للنقر · اضغط مطولًا للنقر الأيمن",
+		keyboardNote: "يعمل مع لوحة مفاتيح التلفاز (المتصفح وحقول تسجيل الدخول). التطبيقات ذات لوحة المفاتيح الخاصة مثل يوتيوب تتجاهله.",
+		touchpadNote: "للمتصفح والتطبيقات التي تعرض مؤشرًا؛ في غيرها يعرض التلفاز لوحة المؤشر الخاصة به.",
 		back: "رجوع",
 		menu: "القائمة",
 		ok: "موافق",
@@ -657,12 +661,12 @@ var Z, Ae = [
 	"info",
 	"warning",
 	"alert"
-], je = 3e3, Me = 400, Ne = 150, Pe = 600, Fe = 1.5, Ie = 60, Q = (e) => e.preventDefault(), $ = class extends G {
+], je = 3e3, Me = 400, Ne = 150, Pe = 600, Fe = 1.5, Ie = 16, Q = (e) => e.preventDefault(), $ = class extends G {
 	constructor(...e) {
 		super(...e), this.camera = "", this.feedback = "", this.severity = "info", this.held = !1, this.pending = {
 			x: 0,
 			y: 0
-		};
+		}, this.pointerBusy = !1;
 	}
 	setConfig(e) {
 		if (!e.entity) throw Error("Choose the Samstream TV (media player).");
@@ -972,6 +976,7 @@ var Z, Ae = [
           />
           <button class="primary" @click=${t}><ha-icon icon="mdi:keyboard"></ha-icon>${e.send}</button>
         </div>
+        <p class="hint">${e.keyboardNote}</p>
       </section>
     `;
 	}
@@ -998,6 +1003,7 @@ var Z, Ae = [
             <ha-icon icon="mdi:mouse-right-click"></ha-icon>${e.rightClick}
           </button>
         </div>
+        <p class="hint">${e.touchpadNote}</p>
       </section>
     `;
 	}
@@ -1037,7 +1043,7 @@ var Z, Ae = [
 		let t = this.touch;
 		if (!t) return;
 		let n = e.clientX - t.x, r = e.clientY - t.y;
-		t.x = e.clientX, t.y = e.clientY, t.travel += Math.abs(n) + Math.abs(r), this.pending.x += n * J, this.pending.y += r * J, this.flushTimer ||= setTimeout(() => this.flushPointer(), Ie);
+		t.x = e.clientX, t.y = e.clientY, t.travel += Math.abs(n) + Math.abs(r), this.pending.x += n * J, this.pending.y += r * J, !this.flushTimer && !this.pointerBusy && (this.flushTimer = setTimeout(() => this.flushPointer(), Ie));
 	}
 	touchEnd() {
 		let e = this.touch;
@@ -1048,13 +1054,16 @@ var Z, Ae = [
 	flushPointer() {
 		this.flushTimer = void 0;
 		let e = Math.round(this.pending.x), t = Math.round(this.pending.y);
-		this.pending = {
-			x: 0,
-			y: 0
-		}, (e || t) && this.pointer({
+		this.pointerBusy || !e && !t || (this.pending = {
+			x: this.pending.x - e,
+			y: this.pending.y - t
+		}, this.pointerBusy = !0, this.hass.callService("samstream", "pointer", {
+			entity_id: this.config.entity,
 			move_x: e,
 			move_y: t
-		});
+		}).catch(() => void 0).finally(() => {
+			this.pointerBusy = !1, this.flushPointer();
+		}));
 	}
 	pointer(e) {
 		this.call("samstream", "pointer", {

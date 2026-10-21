@@ -30,6 +30,8 @@ export interface Strings {
   leftClick: string;
   rightClick: string;
   touchpadHint: string;
+  keyboardNote: string;
+  touchpadNote: string;
   back: string;
   menu: string;
   ok: string;
@@ -73,6 +75,8 @@ const STRINGS: Record<Language, Strings> = {
     leftClick: "Click",
     rightClick: "Right click",
     touchpadHint: "Drag to move · tap to click · hold for right click",
+    keyboardNote: "Works with the TV's own keyboard (browser, sign-in fields). Apps with their own keyboard, like YouTube, ignore it.",
+    touchpadNote: "For the web browser and apps with a pointer; elsewhere the TV shows its pointer panel instead.",
     back: "Back",
     menu: "Menu",
     ok: "OK",
@@ -114,6 +118,8 @@ const STRINGS: Record<Language, Strings> = {
     leftClick: "نقر",
     rightClick: "نقر أيمن",
     touchpadHint: "اسحب للتحريك · انقر للنقر · اضغط مطولًا للنقر الأيمن",
+    keyboardNote: "يعمل مع لوحة مفاتيح التلفاز (المتصفح وحقول تسجيل الدخول). التطبيقات ذات لوحة المفاتيح الخاصة مثل يوتيوب تتجاهله.",
+    touchpadNote: "للمتصفح والتطبيقات التي تعرض مؤشرًا؛ في غيرها يعرض التلفاز لوحة المؤشر الخاصة به.",
     back: "رجوع",
     menu: "القائمة",
     ok: "موافق",
