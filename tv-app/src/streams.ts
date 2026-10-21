@@ -6,8 +6,6 @@ export interface CameraStream {
   /** "avplay" (default) for HLS/HTTP URLs, "mse" for go2rtc ws://…/api/ws?src= URLs. */
   type?: "avplay" | "mse";
   lowLatency?: boolean;
-  /** Show Live TV full screen with this camera in a corner (TV Window API). */
-  pip?: boolean;
   /** MSE only: also ask go2rtc for audio (this TV cannot decode FLAC; needs AAC). */
   audio?: boolean;
 }

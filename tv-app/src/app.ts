@@ -4,7 +4,6 @@ import { renderHelp } from "./help";
 import { applyLanguage, strings, type Language, type Strings } from "./i18n";
 import { MsePlayer } from "./mse";
 import { scrollWhenLong, showOverlay } from "./overlay";
-import { hideLiveTv, showLiveTv } from "./pip";
 import { Player, type PlayerCallbacks, type StreamPlayer } from "./player";
 import type { LaunchPayload } from "./launch";
 import type { MediaItem, Notice } from "./notice";
@@ -289,7 +288,6 @@ export class App {
 
   /** Show a notice or media screen; the camera and home make way. */
   private enterScreen(screen: "notice" | "media"): void {
-    this.setPip(false);
     this.active?.stop();
     this.active = undefined;
     this.playing = false;
@@ -327,32 +325,12 @@ export class App {
     this.log(
       `▶ [${this.current + 1}/${this.streams.length}] ${redactUrl(stream.url)}`,
     );
-    this.setPip(stream.pip === true);
     this.showMessage();
     this.showHud(stream.label ?? "");
     player.play(stream.url, stream.lowLatency === true, stream.audio === true);
   }
 
-  /** Live TV behind a transparent page, camera in a corner; full screen if refused. */
-  private setPip(on: boolean): void {
-    if (!on) {
-      if (document.body.classList.contains("pip")) hideLiveTv();
-      document.documentElement.classList.remove("pip");
-      document.body.classList.remove("pip");
-      return;
-    }
-    document.documentElement.classList.add("pip");
-    document.body.classList.add("pip");
-    void showLiveTv((line) => this.log(line)).then((shown) => {
-      if (!shown) {
-        document.documentElement.classList.remove("pip");
-        document.body.classList.remove("pip");
-      }
-    });
-  }
-
   private showHome(): void {
-    this.setPip(false);
     this.active?.stop();
     this.leaveScreen();
     this.active = undefined;
@@ -432,7 +410,6 @@ export class App {
   }
 
   private exit(): void {
-    this.setPip(false);
     this.active?.stop();
     this.leaveScreen();
     globalThis.tizen?.application.getCurrentApplication().exit();

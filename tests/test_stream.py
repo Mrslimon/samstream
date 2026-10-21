@@ -139,7 +139,6 @@ async def test_play_camera(
             "type": "mse",
         },
         "message": "شخص عند الباب",
-        "pip": False,
     }
     # No credentials in what the TV receives.
     assert "pass" not in json.dumps(payload)
@@ -428,14 +427,3 @@ async def test_launch_gives_up(hass: HomeAssistant, mock_tv: MagicMock) -> None:
             DOMAIN, "play_stream", {"entity_id": TV, "url": RTSP}, blocking=True
         )
     assert mock_tv.launch_app.await_count == 5
-
-
-@pytest.mark.usefixtures("setup_entry", "go2rtc")
-async def test_pip_flag(hass: HomeAssistant, mock_tv: MagicMock) -> None:
-    await hass.services.async_call(
-        DOMAIN,
-        "play_stream",
-        {"entity_id": TV, "url": RTSP, "pip": True},
-        blocking=True,
-    )
-    assert launched_payload(hass, mock_tv)["pip"] is True

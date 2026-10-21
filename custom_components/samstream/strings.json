@@ -297,10 +297,6 @@
         "return_to_previous": {
           "name": "Return to previous",
           "description": "When the camera ends, reopen the app that was playing and resume it (or turn the TV off again if it was off)."
-        },
-        "pip": {
-          "name": "Picture in picture",
-          "description": "Over Live TV: keep the broadcast full screen and show the camera in a corner. Other apps get the full-screen camera."
         }
       }
     },

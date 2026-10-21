@@ -38,7 +38,6 @@ export function parsePayload(raw: unknown, haUrl?: string): LaunchPayload | unde
     return undefined;
   }
   const { url, label } = stream as { url?: unknown; label?: unknown };
-  const { pip } = raw as { pip?: unknown };
   if (typeof url !== "string" || !/^wss?:\/\//.test(url)) {
     return undefined;
   }
@@ -46,12 +45,7 @@ export function parsePayload(raw: unknown, haUrl?: string): LaunchPayload | unde
     return undefined;
   }
   return {
-    stream: {
-      label: typeof label === "string" ? label : "",
-      url,
-      type: "mse",
-      ...(pip === true ? { pip: true } : {}),
-    },
+    stream: { label: typeof label === "string" ? label : "", url, type: "mse" },
     message: typeof message === "string" ? message : "",
   };
 }
