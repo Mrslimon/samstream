@@ -1,5 +1,6 @@
 """play_stream / stop_stream and the go2rtc WebSocket relay to the TV."""
 
+import asyncio
 import json
 import time
 from collections.abc import AsyncIterator
@@ -18,7 +19,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.typing import ClientSessionGenerator
 
 from custom_components.samstream.const import CONF_TV_SECRET, DOMAIN
-from custom_components.samstream.stream_relay import stream_name
+from custom_components.samstream.stream_relay import mse_codec, stream_name
 from custom_components.samstream.tv_session import session_answer
 
 # The fake go2rtc is a real local aiohttp server.
@@ -29,7 +30,7 @@ RTSP = "rtsp://user:pass@192.168.1.6:554/Streaming/channels/101"
 
 
 class FakeGo2rtc:
-    """Records stream registrations; answers go2rtc's MSE WebSocket handshake."""
+    """Records stream registrations; says where its RTSP restream listens."""
 
     def __init__(self) -> None:
         self.streams: dict[str, str] = {}
@@ -38,16 +39,41 @@ class FakeGo2rtc:
         self.streams[request.query["name"]] = request.query["src"]
         return web.Response(status=200)
 
-    async def ws(self, request: web.Request) -> web.WebSocketResponse:
-        socket = web.WebSocketResponse()
-        await socket.prepare(request)
-        async for message in socket:
-            if message.type is aiohttp.WSMsgType.TEXT:
-                offer = json.loads(message.data)
-                assert offer["type"] == "mse"
-                await socket.send_str(json.dumps({"type": "mse", "value": "video/mp4"}))
-                await socket.send_bytes(b"fmp4-init-" + request.query["src"].encode())
-        return socket
+    async def info(self, _request: web.Request) -> web.Response:
+        return web.json_response({"rtsp": {"listen": "127.0.0.1:18554"}})
+
+
+def box(kind: bytes, payload: bytes = b"") -> bytes:
+    return (8 + len(payload)).to_bytes(4, "big") + kind + payload
+
+
+# fMP4 as ffmpeg writes it: ftyp + moov (H.264 High 5.0 in avcC), then fragments.
+FTYP = box(b"ftyp", b"isom")
+MOOV = box(b"moov", box(b"avcC", bytes([1, 0x64, 0x00, 0x32, 0xFF])))
+MOOF, MDAT = box(b"moof", b"m" * 4), box(b"mdat", b"frame")
+
+
+SUBPROCESS = "custom_components.samstream.stream_relay.asyncio.create_subprocess_exec"
+
+
+class FakeFfmpeg:
+    """Stands in for the ffmpeg process: writes `output`, then waits to be killed."""
+
+    def __init__(self, output: bytes) -> None:
+        self.output = output
+        self.args: tuple[str, ...] = ()
+        self.killed = asyncio.Event()
+
+    async def __call__(self, *args: str, **_kwargs: Any) -> Any:
+        self.args = args
+        stdout = asyncio.StreamReader()
+        stdout.feed_data(self.output)
+
+        async def wait() -> int:
+            await self.killed.wait()
+            return -9
+
+        return SimpleNamespace(stdout=stdout, kill=self.killed.set, wait=wait)
 
 
 @pytest.fixture
@@ -55,7 +81,7 @@ async def go2rtc(hass: HomeAssistant, aiohttp_server: Any) -> AsyncIterator[Fake
     fake = FakeGo2rtc()
     app = web.Application()
     app.router.add_put("/api/streams", fake.put_stream)
-    app.router.add_get("/api/ws", fake.ws)
+    app.router.add_get("/api", fake.info)
     server = await aiohttp_server(app)
     session = aiohttp.ClientSession()
     hass.data["go2rtc"] = SimpleNamespace(
@@ -199,6 +225,16 @@ async def test_stop_stream(hass: HomeAssistant, mock_tv: MagicMock) -> None:
     mock_tv.close_app.assert_awaited_once_with(SAMSTREAM_APP_ID)
 
 
+async def open_relay(
+    hass: HomeAssistant, mock_tv: MagicMock, hass_client_no_auth: ClientSessionGenerator
+) -> tuple[Any, str]:
+    await hass.services.async_call(
+        DOMAIN, "play_stream", {"entity_id": TV, "url": RTSP}, blocking=True
+    )
+    path = launched_payload(hass, mock_tv)["stream"]["url"].split("8123", 1)[1]
+    return await hass_client_no_auth(), path
+
+
 async def test_relay(
     hass: HomeAssistant,
     setup_entry: MockConfigEntry,
@@ -206,19 +242,70 @@ async def test_relay(
     go2rtc: FakeGo2rtc,
     hass_client_no_auth: ClientSessionGenerator,
 ) -> None:
-    await hass.services.async_call(
-        DOMAIN, "play_stream", {"entity_id": TV, "url": RTSP}, blocking=True
-    )
-    path = launched_payload(hass, mock_tv)["stream"]["url"].split("8123", 1)[1]
-    client = await hass_client_no_auth()
+    client, path = await open_relay(hass, mock_tv, hass_client_no_auth)
+    ffmpeg = FakeFfmpeg(FTYP + MOOV + MOOF + MDAT)
 
-    async with client.ws_connect(path) as socket:
-        await socket.send_str(json.dumps({"type": "mse", "value": "avc1.640029"}))
-        hello = await socket.receive_json(timeout=5)
-        data = await socket.receive_bytes(timeout=5)
+    with patch(
+        "custom_components.samstream.stream_relay.asyncio.create_subprocess_exec",
+        ffmpeg,
+    ):
+        async with client.ws_connect(path) as socket:
+            await socket.send_str(json.dumps({"type": "mse", "value": "avc1.640029"}))
+            hello = await socket.receive_json(timeout=5)
+            init = await socket.receive_bytes(timeout=5)
+            fragment = await socket.receive_bytes(timeout=5)
+        await asyncio.wait_for(ffmpeg.killed.wait(), 5)
 
-    assert hello == {"type": "mse", "value": "video/mp4"}
-    assert data == b"fmp4-init-" + stream_name(RTSP).encode()
+    assert hello == {"type": "mse", "value": 'video/mp4; codecs="avc1.640032"'}
+    assert init == FTYP + MOOV
+    assert fragment == MOOF + MDAT
+    assert f"rtsp://127.0.0.1:18554/{stream_name(RTSP)}" in ffmpeg.args
+    assert "copy" in ffmpeg.args  # remux only, never transcode
+
+
+async def test_relay_reports_unplayable_video(
+    hass: HomeAssistant,
+    setup_entry: MockConfigEntry,
+    mock_tv: MagicMock,
+    go2rtc: FakeGo2rtc,
+    hass_client_no_auth: ClientSessionGenerator,
+) -> None:
+    client, path = await open_relay(hass, mock_tv, hass_client_no_auth)
+    ffmpeg = FakeFfmpeg(FTYP + box(b"moov", box(b"mp4v")))
+
+    with patch(
+        "custom_components.samstream.stream_relay.asyncio.create_subprocess_exec",
+        ffmpeg,
+    ):
+        async with client.ws_connect(path) as socket:
+            await socket.send_str(json.dumps({"type": "mse"}))
+            answer = await socket.receive_json(timeout=5)
+            closed = await socket.receive(timeout=5)
+
+    assert answer["type"] == "error"
+    assert closed.type is aiohttp.WSMsgType.CLOSE
+
+
+async def test_relay_needs_the_mse_request(
+    hass: HomeAssistant,
+    setup_entry: MockConfigEntry,
+    mock_tv: MagicMock,
+    go2rtc: FakeGo2rtc,
+    hass_client_no_auth: ClientSessionGenerator,
+) -> None:
+    client, path = await open_relay(hass, mock_tv, hass_client_no_auth)
+    ffmpeg = AsyncMock()
+
+    with patch(
+        "custom_components.samstream.stream_relay.asyncio.create_subprocess_exec",
+        ffmpeg,
+    ):
+        async with client.ws_connect(path) as socket:
+            await socket.send_str("not json")
+            closed = await socket.receive(timeout=5)
+
+    assert closed.type is aiohttp.WSMsgType.CLOSE
+    ffmpeg.assert_not_called()
 
 
 async def test_relay_rejects_wrong_secret_and_unknown_stream(
@@ -295,3 +382,10 @@ async def test_old_command_expires(
         "custom_components.samstream.tv_session.time.monotonic", return_value=later
     ):
         assert session_answer(hass, setup_entry, 0)["command"] is None
+
+
+def test_mse_codec() -> None:
+    assert mse_codec(MOOV) == "avc1.640032"
+    assert mse_codec(box(b"moov", box(b"hvcC"))).startswith("hvc1.")
+    with pytest.raises(ValueError, match="no H"):
+        mse_codec(box(b"moov"))
