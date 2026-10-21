@@ -216,6 +216,21 @@
     },
     "install_in_progress": {
       "message": "يجري تثبيت تطبيق Samstream على هذا التلفاز بالفعل."
+    },
+    "camera_no_stream": {
+      "message": "لا يوجد بث للكاميرا {camera}."
+    },
+    "stream_source_required": {
+      "message": "اختر كاميرا أو أدخل رابط بث."
+    },
+    "go2rtc_unavailable": {
+      "message": "خدمة go2rtc في Home Assistant لا تعمل؛ وهي التي تنقل بث الكاميرات إلى التلفاز."
+    },
+    "no_internal_url": {
+      "message": "اضبط عنوان الشبكة المحلية من الإعدادات ← النظام ← الشبكة، ليصل التلفاز إلى Home Assistant."
+    },
+    "tv_did_not_wake": {
+      "message": "لم يعمل التلفاز في الوقت المحدد."
     }
   },
   "services": {
@@ -248,6 +263,32 @@
           "description": "اختياري. ملف ‎.wgt نسبةً إلى مجلد الإعدادات. اتركه فارغًا لتثبيت تطبيق Samstream المرفق مع التكامل موقّعًا بشهادات Home Assistant."
         }
       }
+    },
+    "play_stream": {
+      "name": "عرض الكاميرا على التلفاز",
+      "description": "يفتح Samstream على التلفاز ويعرض كاميرا (ويشغّل التلفاز أولًا إذا لزم الأمر).",
+      "fields": {
+        "camera": {
+          "name": "الكاميرا",
+          "description": "كيان الكاميرا المراد عرضه."
+        },
+        "url": {
+          "name": "رابط البث",
+          "description": "رابط RTSP يُعرض بدلًا من كيان كاميرا."
+        },
+        "label": {
+          "name": "الاسم",
+          "description": "الاسم الظاهر على التلفاز، افتراضيًا اسم الكاميرا."
+        },
+        "message": {
+          "name": "الرسالة",
+          "description": "نص يظهر فوق الفيديو، مثل من على الباب."
+        }
+      }
+    },
+    "stop_stream": {
+      "name": "إيقاف الكاميرا على التلفاز",
+      "description": "يغلق Samstream على التلفاز."
     }
   },
   "issues": {

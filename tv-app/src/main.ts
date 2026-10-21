@@ -7,7 +7,8 @@ import "@fontsource/readex-pro/latin-500.css";
 import "@fontsource/readex-pro/arabic-600.css";
 import "@fontsource/readex-pro/latin-600.css";
 import "./styles.css";
-import { App, type AppElements } from "./app";
+import { App, type AppElements, type Connection } from "./app";
+import { parsePayload, readLaunchPayload } from "./launch";
 import { resolveLanguage, strings } from "./i18n";
 import { loadSettings, xhrFetch } from "./settings";
 import { parseStreams } from "./streams";
@@ -28,8 +29,17 @@ function storage(): Storage | undefined {
   }
 }
 
+function lastStream(haUrl: string | undefined) {
+  try {
+    const saved = storage()?.getItem("samstream.lastStream");
+    return saved ? parsePayload(JSON.parse(saved), haUrl) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function boot(): Promise<void> {
-  const { settings, source } = await loadSettings(xhrFetch, storage());
+  const { settings, source, config } = await loadSettings(xhrFetch, storage());
   const language = resolveLanguage(settings.language, navigator.language);
   document.documentElement.dataset.theme = settings.theme;
   console.log(`[samstream] settings from ${source}: ${JSON.stringify(settings)}`);
@@ -55,9 +65,31 @@ async function boot(): Promise<void> {
     video: byId<HTMLVideoElement>("mse-video"),
   };
 
-  // Launch payloads from Home Assistant (stream URL, overlay text) land in milestone 8.
-  const streams = parseStreams(import.meta.env.VITE_SPIKE_STREAMS);
-  new App(elements, streams, __APP_VERSION__, language).start();
+  const haUrl = config?.ha_url;
+  const connection: Connection = !config
+    ? "none"
+    : source === "home-assistant"
+      ? "connected"
+      : "offline";
+  const previous = lastStream(haUrl);
+  const streams = [
+    ...(previous ? [previous.stream] : []),
+    ...parseStreams(import.meta.env.VITE_SPIKE_STREAMS),
+  ];
+  const app = new App(elements, streams, __APP_VERSION__, language, connection);
+  app.start();
+  app.debug(`settings: ${source} ${JSON.stringify(settings)}`);
+  app.debug(`home assistant: ${haUrl ? haUrl.replace(/\/\/.*@/, "//") : "not set (not installed by HA)"}`);
+
+  const launch = readLaunchPayload(haUrl);
+  app.debug(launch ? `launched by HA: ${launch.stream.label || "camera"}` : "plain launch");
+  if (launch) app.playPayload(launch);
+  // HA opening Samstream while it already runs.
+  window.addEventListener("appcontrol", () => {
+    const again = readLaunchPayload(haUrl);
+    app.debug(again ? `relaunched by HA: ${again.stream.label || "camera"}` : "relaunch without payload");
+    if (again) app.playPayload(again);
+  });
 }
 
 void boot();

@@ -42,6 +42,12 @@
     },
     "install_app": {
       "service": "mdi:package-down"
+    },
+    "play_stream": {
+      "service": "mdi:cctv"
+    },
+    "stop_stream": {
+      "service": "mdi:stop-circle-outline"
     }
   }
 }

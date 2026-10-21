@@ -23,6 +23,7 @@ from .const import ATTR_APP_ID, ATTR_PATH, CERT_CHECK_INTERVAL, CONF_TOKEN, DOMA
 from .coordinator import SamstreamCoordinator
 from .installer import async_bundled_version
 from .signin import SamstreamSignInView
+from .stream_relay import SamstreamStreamView
 from .tv_settings import SamstreamTvSettingsView
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -56,6 +57,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Register the actions and the sign-in hand-off view once."""
     hass.http.register_view(SamstreamSignInView())
     hass.http.register_view(SamstreamTvSettingsView())
+    hass.http.register_view(SamstreamStreamView())
     app_schema: VolDictType = {vol.Required(ATTR_APP_ID): cv.string}
     for name, method in (
         ("launch_app", "async_launch_app"),
@@ -69,6 +71,27 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             schema=app_schema,
             func=method,
         )
+    service.async_register_platform_entity_service(
+        hass,
+        DOMAIN,
+        "play_stream",
+        entity_domain=MEDIA_PLAYER_DOMAIN,
+        schema={
+            vol.Exclusive("camera", "source"): cv.entity_id,
+            vol.Exclusive("url", "source"): cv.string,
+            vol.Optional("label"): cv.string,
+            vol.Optional("message"): cv.string,
+        },
+        func="async_play_stream",
+    )
+    service.async_register_platform_entity_service(
+        hass,
+        DOMAIN,
+        "stop_stream",
+        entity_domain=MEDIA_PLAYER_DOMAIN,
+        schema={},
+        func="async_stop_stream",
+    )
     service.async_register_platform_entity_service(
         hass,
         DOMAIN,

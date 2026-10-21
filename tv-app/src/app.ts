@@ -5,7 +5,13 @@ import { applyLanguage, strings, type Language, type Strings } from "./i18n";
 import { MsePlayer } from "./mse";
 import { showOverlay } from "./overlay";
 import { Player, type PlayerCallbacks, type StreamPlayer } from "./player";
+import type { LaunchPayload } from "./launch";
 import { redactUrl, type CameraStream } from "./streams";
+
+/** How the app reached Home Assistant at start. */
+export type Connection = "connected" | "offline" | "none";
+
+const LAST_STREAM_KEY = "samstream.lastStream";
 
 export interface AppElements {
   home: HTMLElement;
@@ -52,12 +58,15 @@ export class App {
   private debugLines: string[] = [];
   private helpTimer: ReturnType<typeof setTimeout> | undefined;
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
+  // Text from Home Assistant shown over the video until the next stream.
+  private message = "";
 
   constructor(
     private readonly el: AppElements,
-    private readonly streams: CameraStream[],
+    private streams: CameraStream[],
     version: string,
     language: Language,
+    private readonly connection: Connection = "none",
   ) {
     applyLanguage(document.documentElement, language);
     this.text = strings(language);
@@ -102,10 +111,33 @@ export class App {
     this.showHome();
   }
 
+  /** Play what Home Assistant sent (at launch, or while already open). */
+  playPayload(payload: LaunchPayload): void {
+    this.message = payload.message;
+    this.streams = [payload.stream, ...this.streams.filter((s) => s.url !== payload.stream.url)];
+    this.el.playButton.hidden = false;
+    try {
+      localStorage.setItem(LAST_STREAM_KEY, JSON.stringify(payload));
+    } catch {
+      // Storage unavailable: just no "Play camera" after a restart.
+    }
+    this.play(0);
+  }
+
+  /** Line for the debug panel (Yellow key). */
+  debug(line: string): void {
+    this.log(line);
+  }
+
   private renderHome(version: string): void {
     const ready = this.streams.length > 0;
-    this.el.statusText.textContent = ready ? this.text.statusReady : this.text.statusWaiting;
-    this.el.statusDot.classList.toggle("ready", ready);
+    const status = {
+      connected: this.text.statusConnected,
+      offline: this.text.statusOffline,
+      none: ready ? this.text.statusReady : this.text.statusWaiting,
+    }[this.connection];
+    this.el.statusText.textContent = status;
+    this.el.statusDot.classList.toggle("ready", this.connection === "connected" || ready);
     this.el.previewText.textContent = this.text.previewIdle;
     this.el.version.textContent = `v${version}`;
     this.el.playButton.textContent = this.text.playCamera;
@@ -166,7 +198,8 @@ export class App {
     }
     this.active = player;
     this.log(`▶ [${this.current + 1}/${this.streams.length}] ${redactUrl(stream.url)}`);
-    this.toast(stream.label);
+    this.showMessage();
+    if (stream.label) this.toast(stream.label);
     player.play(stream.url, stream.lowLatency === true, stream.audio === true);
   }
 
@@ -187,11 +220,21 @@ export class App {
     this.helpTimer = setTimeout(() => (this.el.help.hidden = true), HELP_VISIBLE_MS);
   }
 
-  private toast(message: string): void {
-    showOverlay(this.el.overlay, message);
+  /** Brief text (camera name, fit mode); then the HA message, if any, returns. */
+  private toast(text: string): void {
+    showOverlay(this.el.overlay, text);
     this.el.overlay.hidden = false;
     clearTimeout(this.toastTimer);
-    this.toastTimer = setTimeout(() => (this.el.overlay.hidden = true), TOAST_MS);
+    this.toastTimer = setTimeout(() => this.showMessage(), TOAST_MS);
+  }
+
+  private showMessage(): void {
+    if (this.message) {
+      showOverlay(this.el.overlay, this.message);
+      this.el.overlay.hidden = false;
+    } else {
+      this.el.overlay.hidden = true;
+    }
   }
 
   private log(line: string): void {

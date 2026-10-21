@@ -6,6 +6,8 @@ export interface Strings {
   appName: string;
   statusReady: string;
   statusWaiting: string;
+  statusConnected: string;
+  statusOffline: string;
   previewIdle: string;
   infoTitle: string;
   infoText: string;
@@ -24,6 +26,8 @@ const STRINGS: Record<Language, Strings> = {
     appName: "Samstream",
     statusReady: "Ready",
     statusWaiting: "Waiting for Home Assistant",
+    statusConnected: "Connected to Home Assistant",
+    statusOffline: "Home Assistant is not reachable",
     previewIdle: "No camera playing",
     infoTitle: "Your cameras on the big screen",
     infoText:
@@ -48,6 +52,8 @@ const STRINGS: Record<Language, Strings> = {
     appName: "Samstream",
     statusReady: "جاهز",
     statusWaiting: "في انتظار Home Assistant",
+    statusConnected: "متصل بـ Home Assistant",
+    statusOffline: "تعذّر الوصول إلى Home Assistant",
     previewIdle: "لا توجد كاميرا قيد التشغيل",
     infoTitle: "كاميراتك على الشاشة الكبيرة",
     infoText:

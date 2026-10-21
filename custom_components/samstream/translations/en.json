@@ -216,6 +216,21 @@
     },
     "install_in_progress": {
       "message": "The Samstream app is already being installed on this TV."
+    },
+    "camera_no_stream": {
+      "message": "{camera} has no stream to play."
+    },
+    "stream_source_required": {
+      "message": "Choose a camera or enter a stream URL."
+    },
+    "go2rtc_unavailable": {
+      "message": "Home Assistant's go2rtc is not running; it relays camera streams to the TV."
+    },
+    "no_internal_url": {
+      "message": "Set the local network URL under Settings → System → Network, so the TV can reach Home Assistant."
+    },
+    "tv_did_not_wake": {
+      "message": "The TV did not turn on in time."
     }
   },
   "services": {
@@ -248,6 +263,32 @@
           "description": "Optional. A .wgt relative to the config folder. Leave empty to install the Samstream app bundled with the integration, signed with Home Assistant's certificates."
         }
       }
+    },
+    "play_stream": {
+      "name": "Play camera on TV",
+      "description": "Opens Samstream on the TV and plays a camera (turns the TV on first if needed).",
+      "fields": {
+        "camera": {
+          "name": "Camera",
+          "description": "Camera entity to show."
+        },
+        "url": {
+          "name": "Stream URL",
+          "description": "RTSP URL to show instead of a camera entity."
+        },
+        "label": {
+          "name": "Label",
+          "description": "Name shown on the TV, defaults to the camera name."
+        },
+        "message": {
+          "name": "Message",
+          "description": "Text shown over the video, for example who is at the door."
+        }
+      }
+    },
+    "stop_stream": {
+      "name": "Stop camera on TV",
+      "description": "Closes Samstream on the TV."
     }
   },
   "issues": {

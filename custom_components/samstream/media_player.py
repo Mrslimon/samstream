@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 from dataclasses import replace
 from typing import Any
 
+from aiosamstream import SAMSTREAM_APP_ID
+from homeassistant.components.camera import async_get_stream_source
 from homeassistant.components.media_player import (
     MediaPlayerDeviceClass,
     MediaPlayerEntity,
@@ -16,7 +20,7 @@ from homeassistant.components.media_player.const import (
 )
 from homeassistant.const import CONF_MAC
 from homeassistant.core import HomeAssistant, ServiceResponse
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util.json import JsonValueType
 
@@ -25,8 +29,12 @@ from .const import DOMAIN
 from .coordinator import SamstreamCoordinator
 from .entity import SamstreamEntity
 from .installer import async_install_package, resolve_package_path
+from .stream_relay import async_publish_stream, tv_stream_url
+from .tv_settings import ensure_tv_secret
 
 PARALLEL_UPDATES = 1
+# Wake-on-LAN to a launchable TV usually takes 5-15 s.
+WAKE_WAIT_SECONDS = 25
 
 FEATURES = (
     MediaPlayerEntityFeature.TURN_ON
@@ -196,6 +204,64 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
             self.coordinator.async_set_updated_data(
                 replace(self.coordinator.data, app_id=None, app_name=None)
             )
+
+    async def async_play_stream(
+        self,
+        camera: str | None = None,
+        url: str | None = None,
+        label: str | None = None,
+        message: str | None = None,
+    ) -> None:
+        """Open Samstream on the TV with a camera (the `play_stream` action)."""
+        source = url
+        if camera:
+            source = await async_get_stream_source(self.hass, camera)
+            if not source:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="camera_no_stream",
+                    translation_placeholders={"camera": camera},
+                )
+            if label is None and (state := self.hass.states.get(camera)):
+                label = state.name
+        if not source:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="stream_source_required"
+            )
+        entry = self.coordinator.config_entry
+        ensure_tv_secret(self.hass, entry)
+        name = await async_publish_stream(self.hass, entry, source)
+        payload = {
+            "v": 1,
+            "stream": {
+                "label": label or "",
+                "url": tv_stream_url(self.hass, entry, name),
+                "type": "mse",
+            },
+            "message": message or "",
+        }
+        if not self.coordinator.data.is_on:
+            await self.async_turn_on()
+            await self._async_wait_until_on()
+        await self._async_call(
+            self.coordinator.tv.launch_app(
+                SAMSTREAM_APP_ID, meta_tag=json.dumps(payload, ensure_ascii=False)
+            )
+        )
+
+    async def async_stop_stream(self) -> None:
+        """Close Samstream (the `stop_stream` action)."""
+        await self.async_close_app(SAMSTREAM_APP_ID)
+
+    async def _async_wait_until_on(self) -> None:
+        """After waking the TV, give it time to accept the launch."""
+        for _ in range(WAKE_WAIT_SECONDS):
+            if await self.coordinator.tv.is_on():
+                return
+            await asyncio.sleep(1)
+        raise HomeAssistantError(
+            translation_domain=DOMAIN, translation_key="tv_did_not_wake"
+        )
 
     async def async_install_app(self, path: str | None = None) -> ServiceResponse:
         """Install Samstream over sdb (the `install_app` action).

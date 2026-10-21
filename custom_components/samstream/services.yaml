@@ -33,3 +33,32 @@ install_app:
       example: "samstream/Samstream.wgt"
       selector:
         text:
+
+play_stream:
+  target:
+    entity:
+      integration: samstream
+      domain: media_player
+  fields:
+    camera:
+      selector:
+        entity:
+          domain: camera
+    url:
+      example: "rtsp://user:pass@192.168.1.6:554/Streaming/channels/101"
+      selector:
+        text:
+    label:
+      example: "Front door"
+      selector:
+        text:
+    message:
+      example: "Someone is at the door"
+      selector:
+        text:
+
+stop_stream:
+  target:
+    entity:
+      integration: samstream
+      domain: media_player

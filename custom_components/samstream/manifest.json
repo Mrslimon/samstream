@@ -19,5 +19,9 @@
   "requirements": [
     "aiosamstream==0.0.1"
   ],
-  "version": "0.0.1"
+  "version": "0.0.1",
+  "after_dependencies": [
+    "camera",
+    "go2rtc"
+  ]
 }
