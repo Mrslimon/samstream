@@ -230,3 +230,12 @@ Source: PatrickSt1991/Samsung-Jellyfin-Installer (MIT), `Apps2Samsung.Core/Certi
 - **Fallback:** the catalog plus "Extra app IDs" is still used when sdb is unavailable (Developer Mode off).
 - **Foreground check:** the last app on screen is re-checked first (one request while it stays). The full check runs only when it changes.
 - **Still open:** home, Live TV and HDMI still show as "unknown". Neither the REST API nor `vd_applist` exposes them; SmartThings could, as a later option.
+
+### Milestone 8 finding (2026-10-21), next step
+- **The deep link never arrives.** On the QN800C, `ed.apps.launch` over the remote channel is ignored for the sideloaded Samstream app: DEEP_LINK and NATIVE_LAUNCH, with or without metaTag, open nothing and get no reply. So the launch payload never reaches the app. A REST `POST /api/v2/applications/SmStrm0001.Samstream` does open it, within about 1 s, but REST cannot carry data.
+- **Fix (next): pull model.**
+  - `play_stream` stores a pending command (stream + message) for the TV, then opens the app with a REST launch.
+  - The app asks `GET /api/samstream/tv/{secret}/session` at start; the endpoint answers settings + pending command.
+  - While the app is open it polls the same endpoint (every ~2 s, or later a WebSocket channel) for new or stop commands.
+  - The payload parsing in `launch.ts` and the relay stay as they are; only the delivery changes.
+- **Verified so far:** update 0.2.0 → 0.3.0 installed through HA, the relay works end to end in tests, and `play_stream` registers the stream in HA's go2rtc.
