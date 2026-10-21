@@ -264,3 +264,8 @@ Source: PatrickSt1991/Samsung-Jellyfin-Installer (MIT), `Apps2Samsung.Core/Certi
   - **`samstream.show_message`:** a full-screen card (title, scrolling message, icon and colour by severity: info / warning / alert with a pulsing ring), with an optional sound. The sound uses HA's media selector (library file or TTS), resolved and signed by HA.
   - **`media_player.play_media`:** plays media library items (`media-source://…`) and http(s) URLs full screen. OK pauses, ◀ ▶ seek 10 s, and the title and progress fade after 5 s. The media player is browsable, so HA's media browser can "play on TV".
   - **Shared take-over:** messages and videos use the same remember / pause / return flow as cameras. `duration` starts when the notice shows or the video starts, a video without `duration` returns when it ends, and `update_message` also changes a notice's text.
+- **17 result (2026-10-21): PiP is not possible on the QN800C.**
+  - **TV Window API:** the TV accepted the `tv.window` privilege, but when Samstream showed the TV window, the system brought Live TV itself to the front within about 1 s. Samstream moved to the background, so nothing can sit on top. The option was removed again (TV app 0.8.1).
+  - **Multi View:** Samsung's Multi View has no API for apps.
+  - **Detection gap:** the REST API keeps reporting the last app (e.g. YouTube) as `visible` after switching to Live TV, and Developer Mode's shell has no foreground command. So HA cannot tell Live TV from "the last app", and the return can reopen that app instead of staying on Live TV.
+  - **Possible fix (later, optional):** read the input source from HA's SmartThings integration for the same TV (its media player reports the source, e.g. "TV" / "dtv").
