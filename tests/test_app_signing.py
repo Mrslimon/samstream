@@ -40,7 +40,7 @@ ACCOUNT = SamsungAccount("token", "user-1", "me@example.com")
 INSTALL_BUTTON = "button.65_neo_qled_8k_install_samstream_app"
 
 
-def identity(duids: list[str] | None = None) -> SigningIdentity:
+def identity(duids: list[str] | None = None, days: int = 365) -> SigningIdentity:
     """A key and a one-certificate chain, optionally listing DUIDs in its SAN."""
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "test")])
@@ -51,8 +51,8 @@ def identity(duids: list[str] | None = None) -> SigningIdentity:
         .issuer_name(name)
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(now)
-        .not_valid_after(now + dt.timedelta(days=365))
+        .not_valid_before(now - dt.timedelta(days=400))
+        .not_valid_after(now + dt.timedelta(days=days))
     )
     if duids is not None:
         uris = [x509.UniformResourceIdentifier("URN:tizen:packageid=")] + [
@@ -64,10 +64,13 @@ def identity(duids: list[str] | None = None) -> SigningIdentity:
     return SigningIdentity(key=key, chain=(builder.sign(key, hashes.SHA256()),))
 
 
-def setup_for(duids: list[str], source: str = SOURCE_SAMSUNG) -> SigningSetup:
+def setup_for(
+    duids: list[str], source: str = SOURCE_SAMSUNG, days: int = 365
+) -> SigningSetup:
+    """Signing setup whose certificates expire in `days` (negative: expired)."""
     return SigningSetup(
-        author=identity(),
-        distributor=identity(duids),
+        author=identity(days=days),
+        distributor=identity(duids, days=days),
         source=source,
         email="me@example.com",
     )

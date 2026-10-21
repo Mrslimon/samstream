@@ -43,6 +43,7 @@ _SIGNATURE_FILES = re.compile(
     r"(^|/)(author-signature|signature\d+)\.xml$", re.IGNORECASE
 )
 _APP_ID = re.compile(r"<tizen:application\b[^>]*\bid=\"([^\"]+)\"")
+_WIDGET_VERSION = re.compile(r"<widget\b[^>]*\bversion=\"([^\"]+)\"")
 
 
 class SigningError(SamstreamError):
@@ -77,15 +78,26 @@ class SigningIdentity:
         return cls(key=key, chain=(leaf, *intermediates))
 
 
-def package_app_id(wgt: bytes) -> str:
-    """Return the `tizen:application` id from config.xml (e.g. SmStrm0001.Samstream)."""
+def package_version(wgt: bytes) -> str:
+    """Return the `<widget version>` from config.xml, e.g. `0.1.0`."""
+    if match := _WIDGET_VERSION.search(_config_xml(wgt)):
+        return match.group(1)
+    msg = "config.xml has no widget version"
+    raise SigningError(msg)
+
+
+def _config_xml(wgt: bytes) -> str:
     try:
         with zipfile.ZipFile(io.BytesIO(wgt)) as archive:
-            config = archive.read("config.xml").decode()
+            return archive.read("config.xml").decode()
     except (zipfile.BadZipFile, KeyError) as err:
         msg = "Not a Tizen web app: config.xml missing"
         raise SigningError(msg) from err
-    if match := _APP_ID.search(config):
+
+
+def package_app_id(wgt: bytes) -> str:
+    """Return the `tizen:application` id from config.xml (e.g. SmStrm0001.Samstream)."""
+    if match := _APP_ID.search(_config_xml(wgt)):
         return match.group(1)
     msg = "config.xml has no tizen:application id"
     raise SigningError(msg)

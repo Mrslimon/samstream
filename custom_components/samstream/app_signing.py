@@ -15,9 +15,10 @@ from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.storage import Store
 
-from .const import DOMAIN
+from .const import DOMAIN, RENEW_BEFORE
 
 _STORE_VERSION = 1
 _STORE_KEY = f"{DOMAIN}.signing"
@@ -47,6 +48,10 @@ class SigningSetup:
             self.author.chain[0].not_valid_after_utc,
             self.distributor.chain[0].not_valid_after_utc,
         )
+
+    def needs_renewal(self, now: dt.datetime | None = None) -> bool:
+        """Tell whether the certificates expire within RENEW_BEFORE (or already did)."""
+        return self.expires - RENEW_BEFORE <= (now or dt.datetime.now(dt.UTC))
 
     def covers(self, duid: str) -> bool:
         """Tell whether packages signed with this setup install on that TV."""
@@ -125,4 +130,26 @@ async def async_save_signing(hass: HomeAssistant, setup: SigningSetup) -> None:
             "author": _identity_to_dict(setup.author),
             "distributor": _identity_to_dict(setup.distributor),
         }
+    )
+
+
+EXPIRY_ISSUE = "certificate_expiry"
+
+
+async def async_check_certificate_expiry(hass: HomeAssistant) -> None:
+    """Raise (or clear) the repair issue about expiring signing certificates."""
+    setup = await async_load_signing(hass)
+    now = dt.datetime.now(dt.UTC)
+    if setup is None or not setup.needs_renewal(now):
+        ir.async_delete_issue(hass, DOMAIN, EXPIRY_ISSUE)
+        return
+    expired = setup.expires <= now
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        EXPIRY_ISSUE,
+        is_fixable=False,
+        severity=ir.IssueSeverity.ERROR if expired else ir.IssueSeverity.WARNING,
+        translation_key="certificate_expired" if expired else "certificate_expiring",
+        translation_placeholders={"date": setup.expires.date().isoformat()},
     )

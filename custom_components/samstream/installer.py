@@ -23,7 +23,12 @@ from aiosamstream.samsung_cert import (
     request_author,
     request_distributor,
 )
-from aiosamstream.signing import SigningError, SigningIdentity, sign_wgt
+from aiosamstream.signing import (
+    SigningError,
+    SigningIdentity,
+    package_version,
+    sign_wgt,
+)
 from cryptography.hazmat.primitives.asymmetric import rsa
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
@@ -37,6 +42,7 @@ from .app_signing import (
     SOURCE_IMPORT,
     SOURCE_SAMSUNG,
     SigningSetup,
+    async_check_certificate_expiry,
     async_load_signing,
     async_save_signing,
 )
@@ -238,17 +244,22 @@ async def _install_replacing_other_author(
 async def async_obtain_samsung_certificates(
     hass: HomeAssistant, entry: SamstreamConfigEntry, account: SamsungAccount
 ) -> SigningSetup:
-    """Get (or extend) Samsung certificates so this TV accepts HA-signed apps."""
+    """Get, extend (new TV) or renew (expiring) Samsung certificates.
+
+    The key is kept in every case, so apps already installed can still be updated.
+    """
     duid = await async_read_duid(hass, entry)
     current = await async_load_signing(hass)
     session = async_get_clientsession(hass)
     try:
         if current is not None and current.source == SOURCE_SAMSUNG:
-            if current.covers(duid):
+            renew = current.needs_renewal()
+            if current.covers(duid) and not renew:
                 return current
-            # Keep the author key, so apps already installed can still be updated.
             key = current.author.key
-            author = current.author
+            author = (
+                await request_author(session, account, key) if renew else current.author
+            )
         else:
             key = await hass.async_add_executor_job(_new_signing_key)
             author = await request_author(session, account, key)
@@ -267,6 +278,7 @@ async def async_obtain_samsung_certificates(
         email=account.email,
     )
     await async_save_signing(hass, setup)
+    await async_check_certificate_expiry(hass)
     return setup
 
 
@@ -302,7 +314,18 @@ async def async_import_certificates(
             translation_placeholders={"duid": duid},
         )
     await async_save_signing(hass, setup)
+    await async_check_certificate_expiry(hass)
     return setup
+
+
+async def async_bundled_version(hass: HomeAssistant) -> str | None:
+    """Version of the TV app shipped with the integration (None if missing)."""
+    try:
+        wgt = await hass.async_add_executor_job(BUNDLED_PACKAGE.read_bytes)
+        return package_version(wgt)
+    except OSError, SigningError:
+        _LOGGER.warning("No usable bundled Samstream app at %s", BUNDLED_PACKAGE)
+        return None
 
 
 def _new_signing_key() -> rsa.RSAPrivateKey:

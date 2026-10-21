@@ -20,3 +20,6 @@ ATTR_PATH: Final = "path"
 SCAN_INTERVAL: Final = timedelta(seconds=10)
 # Installed apps rarely change; rescanning ~18 known IDs takes about 0.5 s.
 APP_SCAN_INTERVAL: Final = timedelta(minutes=30)
+# Samsung certificates last a year; warn (and renew on sign-in) this early.
+RENEW_BEFORE: Final = timedelta(days=30)
+CERT_CHECK_INTERVAL: Final = timedelta(hours=12)

@@ -12,6 +12,7 @@ from aiosamstream.signing import (
     SigningError,
     SigningIdentity,
     package_app_id,
+    package_version,
     sign_wgt,
 )
 from cryptography import x509
@@ -31,7 +32,8 @@ TIZEN_PROP_DISTRIBUTOR = (
 )
 DSIG = "http://www.w3.org/2000/09/xmldsig#"
 CONFIG = (
-    b'<?xml version="1.0"?><widget xmlns:tizen="http://tizen.org/ns/widgets">'
+    b'<?xml version="1.0"?><widget xmlns:tizen="http://tizen.org/ns/widgets" '
+    b'version="0.1.0">'
     b'<tizen:application id="SmStrm0001.Samstream" package="SmStrm0001"/></widget>'
 )
 
@@ -215,6 +217,15 @@ def test_p12_without_key(
 
 def test_package_app_id() -> None:
     assert package_app_id(make_wgt()) == "SmStrm0001.Samstream"
+
+
+def test_package_version() -> None:
+    assert package_version(make_wgt()) == "0.1.0"
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w") as archive:
+        archive.writestr("config.xml", b"<widget/>")
+    with pytest.raises(SigningError, match="no widget version"):
+        package_version(out.getvalue())
 
 
 @pytest.mark.parametrize(

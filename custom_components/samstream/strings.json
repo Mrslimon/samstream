@@ -153,6 +153,11 @@
       "install_app": {
         "name": "Install Samstream app"
       }
+    },
+    "update": {
+      "samstream_app": {
+        "name": "Samstream TV app"
+      }
     }
   },
   "exceptions": {
@@ -232,6 +237,14 @@
     "developer_mode": {
       "title": "Developer Mode needed on {name}",
       "description": "Home Assistant could not connect to {name} to install the Samstream app. The TV only accepts app installs from the one computer set in its Developer Mode.\n\nThe TV's developer host is now **{developer_host}**, and Home Assistant is at **{ha_host}**.\n\n1. On the TV, open **Apps**.\n2. Press **1 2 3 4 5** on the remote (or on the on-screen keypad).\n3. Turn **Developer mode** on, enter **{ha_host}** as the Host PC IP, then choose **OK**.\n4. Restart the TV: hold the power button until the Samsung logo appears.\n5. Run the install again; this message disappears once it works.\n\nIf {ha_host} is not this server's address on your network, set the local network URL under **Settings → System → Network**."
+    },
+    "certificate_expiring": {
+      "title": "Samstream signing certificates expire on {date}",
+      "description": "Home Assistant signs the Samstream TV app with Samsung certificates that last one year. Renew them before {date}: open Samstream → Configure → App signing and sign in with Samsung again. The key stays the same, so the app on your TVs keeps updating."
+    },
+    "certificate_expired": {
+      "title": "Samstream signing certificates expired on {date}",
+      "description": "Home Assistant can no longer install or update the Samstream TV app. Open Samstream → Configure → App signing and sign in with Samsung again to renew the certificates. The app already on your TVs keeps working."
     }
   }
 }

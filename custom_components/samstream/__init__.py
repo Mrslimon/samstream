@@ -14,10 +14,13 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import service
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.typing import ConfigType, VolDictType
 
-from .const import ATTR_APP_ID, ATTR_PATH, CONF_TOKEN, DOMAIN
+from .app_signing import async_check_certificate_expiry
+from .const import ATTR_APP_ID, ATTR_PATH, CERT_CHECK_INTERVAL, CONF_TOKEN, DOMAIN
 from .coordinator import SamstreamCoordinator
+from .installer import async_bundled_version
 from .signin import SamstreamSignInView
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -28,6 +31,7 @@ PLATFORMS: list[Platform] = [
     Platform.MEDIA_PLAYER,
     Platform.REMOTE,
     Platform.SENSOR,
+    Platform.UPDATE,
 ]
 
 
@@ -37,6 +41,8 @@ class SamstreamData:
 
     tv: SamsungTV
     coordinator: SamstreamCoordinator
+    # Version of the TV app bundled with the integration (the update target).
+    bundled_version: str | None = None
 
 
 type SamstreamConfigEntry = ConfigEntry[SamstreamData]
@@ -83,7 +89,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: SamstreamConfigEntry) ->
     )
     coordinator = SamstreamCoordinator(hass, entry, tv)
     await coordinator.async_config_entry_first_refresh()
-    entry.runtime_data = SamstreamData(tv=tv, coordinator=coordinator)
+    entry.runtime_data = SamstreamData(
+        tv=tv,
+        coordinator=coordinator,
+        bundled_version=await async_bundled_version(hass),
+    )
 
     connections = set()
     if mac := entry.data.get(CONF_MAC):
@@ -99,6 +109,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: SamstreamConfigEntry) ->
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+
+    async def _check_certificates(_now: object = None) -> None:
+        await async_check_certificate_expiry(hass)
+
+    await _check_certificates()
+    entry.async_on_unload(
+        async_track_time_interval(hass, _check_certificates, CERT_CHECK_INTERVAL)
+    )
     return True
 
 
