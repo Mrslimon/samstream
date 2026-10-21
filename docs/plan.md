@@ -223,3 +223,10 @@ Source: PatrickSt1991/Samsung-Jellyfin-Installer (MIT), `Apps2Samsung.Core/Certi
   - **Text input:** `samstream.send_text`, using `SendInputString` + `SendInputEnd` for the TV's on-screen keyboard fields.
   - **Hold:** a `samstream.hold_key` action for long presses, on top of the existing `remote.send_command` `hold_secs`.
   - **Mouse:** move, left click and right click through the remote channel's `ProcessMouseDevice` (not wrapped by `samsungtvws`), plus a touchpad-style control in the Lovelace card from milestone 13.
+
+### 7c result (2026-10-21)
+- **Full list over sdb:** `vd_applist` returns every installed app (23 on the QN800C, against 7 found by the catalog). This includes regional apps like شاهد MBC, TOD by beIN, OSN+ and الشرق NOW.
+- **Which ID to use:** each block has `app_id`, the store ID the REST status endpoint understands for all 23, and `app_tizen_id`, which REST rejects for system apps. We use `app_id`.
+- **Fallback:** the catalog plus "Extra app IDs" is still used when sdb is unavailable (Developer Mode off).
+- **Foreground check:** the last app on screen is re-checked first (one request while it stays). The full check runs only when it changes.
+- **Still open:** home, Live TV and HDMI still show as "unknown". Neither the REST API nor `vd_applist` exposes them; SmartThings could, as a later option.

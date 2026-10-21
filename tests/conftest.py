@@ -62,7 +62,15 @@ def mock_tv() -> Generator[MagicMock]:
     tv.foreground_app = AsyncMock(return_value=None)
     tv.launch_app = AsyncMock()
     tv.close_app = AsyncMock()
-    with patch("custom_components.samstream.SamsungTV", return_value=tv):
+    # No sdb in tests by default: the coordinator falls back to the catalog.
+    with (
+        patch("custom_components.samstream.SamsungTV", return_value=tv),
+        patch(
+            "custom_components.samstream.coordinator.async_list_apps",
+            AsyncMock(return_value=None),
+        ) as list_apps,
+    ):
+        tv.list_apps = list_apps
         yield tv
 
 

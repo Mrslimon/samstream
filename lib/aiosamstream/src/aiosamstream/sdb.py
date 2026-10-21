@@ -26,6 +26,7 @@ from typing import Self
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
+from .apps import ListedApp, parse_app_list
 from .const import SDB_PORT
 from .exceptions import SdbConnectionError, SdbError
 
@@ -295,8 +296,17 @@ class SdbClient:
         return await self.shell(f"0 vd_appuninstall {app_id}")
 
     async def app_list(self) -> str:
-        """Raw `vd_applist` listing (parsed in milestone 7c)."""
+        """Return the raw `vd_applist` listing."""
         return await self.shell("0 vd_applist")
+
+    async def installed_apps(self) -> list[ListedApp]:
+        """Every visible installed app, including ones no catalog knows."""
+        listing = await self.app_list()
+        apps = parse_app_list(listing)
+        if not apps and "apps count: 0" not in listing:
+            msg = f"No app listing from {self.host}"
+            raise SdbError(msg)
+        return apps
 
     # --- connection internals -------------------------------------------------
 

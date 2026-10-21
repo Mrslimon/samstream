@@ -1,10 +1,18 @@
 """App status, discovery, foreground detection, launch and close."""
 
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from aiosamstream import KNOWN_APPS, AppStatus, SamstreamConnectionError, SamsungTV
+from aiosamstream import (
+    KNOWN_APPS,
+    AppStatus,
+    ListedApp,
+    SamstreamConnectionError,
+    SamsungTV,
+    parse_app_list,
+)
 from samsungtvws.exceptions import HttpApiError, ResponseError
 
 YOUTUBE = {"id": "111299001912", "name": "YouTube", "running": True, "visible": False}
@@ -155,3 +163,17 @@ async def test_close_app_unreachable() -> None:
 
 def test_catalog_has_samstream() -> None:
     assert KNOWN_APPS["SmStrm0001.Samstream"] == "Samstream"
+
+
+def test_parse_app_list() -> None:
+    text = (Path(__file__).parent / "fixtures/vd_applist_excerpt.txt").read_text(
+        encoding="utf-8"
+    )
+    assert parse_app_list(text) == [
+        ListedApp("111299001912", "9Ur5IzDKqV.TizenYouTube", "YouTube", "2.1.527"),
+        ListedApp("111477000821", "Ggl33q588H.MBC", "شاهد MBC", "6.68.1"),
+    ]
+
+
+def test_parse_app_list_empty() -> None:
+    assert parse_app_list("get app list...\napps count: 0\n") == []

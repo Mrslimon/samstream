@@ -7,6 +7,8 @@ are only fallbacks: the TV reports its own.
 
 from __future__ import annotations
 
+import re
+from dataclasses import dataclass
 from typing import Final
 
 from .const import SAMSTREAM_APP_ID
@@ -33,3 +35,46 @@ KNOWN_APPS: Final[dict[str, str]] = {
     "11091000000": "Facebook Watch",
     SAMSTREAM_APP_ID: "Samstream",
 }
+
+
+# vd_applist prints blocks of "-------<key>   =<value>-------" lines between rules.
+_FIELD = re.compile(r"^\s*-{3,}\s*(?P<key>[^\s=]+)\s*=\s*(?P<value>.*?)\s*-{3,}\s*$")
+
+
+@dataclass(frozen=True, slots=True)
+class ListedApp:
+    """One installed app from `vd_applist` (needs Developer Mode / sdb)."""
+
+    # The store ID the REST API understands (e.g. 111299001912), not the Tizen ID.
+    app_id: str
+    tizen_id: str
+    name: str
+    version: str | None
+
+
+def parse_app_list(text: str) -> list[ListedApp]:
+    """Parse `0 vd_applist` output; hidden apps are left out."""
+    blocks: list[dict[str, str]] = []
+    current: dict[str, str] = {}
+    for line in text.splitlines():
+        if match := _FIELD.match(line):
+            current[match.group("key")] = match.group("value")
+        elif current and "----" in line and "=" not in line:
+            blocks.append(current)
+            current = {}
+    if current:
+        blocks.append(current)
+    listed = []
+    for block in blocks:
+        app_id = block.get("app_id") or block.get("app_tizen_id")
+        if not app_id or block.get("is_hidden") == "1":
+            continue
+        listed.append(
+            ListedApp(
+                app_id=app_id,
+                tizen_id=block.get("app_tizen_id", app_id),
+                name=block.get("app_title") or app_id,
+                version=block.get("app_version") or None,
+            )
+        )
+    return listed

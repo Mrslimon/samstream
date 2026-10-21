@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 from aiosamstream import (
     SAMSTREAM_APP_ID,
     InstallResult,
+    ListedApp,
     SdbClient,
     SdbConnectionError,
     SdbError,
@@ -141,6 +142,22 @@ async def _sdb(
         yield client
     finally:
         await client.close()
+
+
+async def async_list_apps(
+    hass: HomeAssistant, entry: SamstreamConfigEntry
+) -> list[ListedApp] | None:
+    """Return the TV's full app list over sdb; None when sdb is not available.
+
+    Background use: no repair issue here (the install path raises that).
+    """
+    key = await async_get_sdb_key(hass)
+    try:
+        async with SdbClient(entry.data[CONF_HOST], key) as sdb:
+            return await sdb.installed_apps()
+    except SdbError as err:
+        _LOGGER.debug("No sdb app list from %s: %s", entry.title, err)
+        return None
 
 
 async def async_read_duid(hass: HomeAssistant, entry: SamstreamConfigEntry) -> str:

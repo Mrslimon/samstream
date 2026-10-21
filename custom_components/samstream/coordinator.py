@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from aiosamstream import (
     KNOWN_APPS,
+    AppStatus,
     DeviceInfo,
     SamstreamConnectionError,
     SamstreamError,
@@ -26,6 +27,7 @@ from .const import (
     DOMAIN,
     SCAN_INTERVAL,
 )
+from .installer import async_list_apps
 
 if TYPE_CHECKING:
     from . import SamstreamConfigEntry
@@ -86,6 +88,8 @@ class SamstreamCoordinator(DataUpdateCoordinator[SamstreamState]):
         # Installed apps (id -> name the TV reports), refreshed while the TV is on.
         self.apps: dict[str, str] = {}
         self.app_versions: dict[str, str | None] = {}
+        # "tv" (full list over sdb) or "catalog" (known IDs probed over REST).
+        self.app_source = "catalog"
         # True while the Samstream app is being installed (one install at a time).
         self.installing = False
         self._apps_scanned_at: float | None = None
@@ -125,12 +129,13 @@ class SamstreamCoordinator(DataUpdateCoordinator[SamstreamState]):
         await self._async_scan_apps()
         app_id = app_name = None
         try:
-            foreground = await self.tv.foreground_app(self.apps)
+            foreground = await self._async_foreground(previous)
         except SamstreamError as err:
             _LOGGER.debug("No app status from %s: %s", self.config_entry.title, err)
         else:
             if foreground is not None:
-                app_id, app_name = foreground.app_id, foreground.name
+                app_id = foreground.app_id
+                app_name = self.apps.get(foreground.app_id, foreground.name)
         return SamstreamState(
             is_on=True,
             volume=volume,
@@ -139,6 +144,17 @@ class SamstreamCoordinator(DataUpdateCoordinator[SamstreamState]):
             app_id=app_id,
             app_name=app_name,
         )
+
+    async def _async_foreground(
+        self, previous: SamstreamState | None
+    ) -> AppStatus | None:
+        """App on screen: re-check the last one first (one request while it stays)."""
+        last = previous.app_id if previous else None
+        if last is not None and last in self.apps:
+            status = await self.tv.app_status(last)
+            if status is not None and status.visible:
+                return status
+        return await self.tv.foreground_app(self.apps)
 
     async def _async_scan_apps(self) -> None:
         """Find installed apps: on first contact, then every APP_SCAN_INTERVAL.
@@ -152,13 +168,29 @@ class SamstreamCoordinator(DataUpdateCoordinator[SamstreamState]):
         ):
             return
         extra = parse_app_ids(self.config_entry.options.get(CONF_EXTRA_APPS, ""))
-        try:
-            installed = await self.tv.installed_apps([*KNOWN_APPS, *extra])
-        except SamstreamError as err:
-            _LOGGER.debug("App scan on %s failed: %s", self.config_entry.title, err)
-            return
-        self.apps = {app.app_id: app.name for app in installed}
-        self.app_versions = {app.app_id: app.version for app in installed}
+        listed = await async_list_apps(self.hass, self.config_entry)
+        if listed is not None:
+            # Developer Mode: the TV lists every app, catalog not needed.
+            apps = {app.app_id: app.name for app in listed}
+            versions = {app.app_id: app.version for app in listed}
+            self.app_source = "tv"
+            missing = [app_id for app_id in extra if app_id not in apps]
+        else:
+            apps, versions = {}, {}
+            self.app_source = "catalog"
+            missing = [*KNOWN_APPS, *extra]
+        if missing:
+            try:
+                found = await self.tv.installed_apps(missing)
+            except SamstreamError as err:
+                _LOGGER.debug("App scan on %s failed: %s", self.config_entry.title, err)
+                if listed is None:
+                    return
+                found = []
+            apps |= {app.app_id: app.name for app in found}
+            versions |= {app.app_id: app.version for app in found}
+        self.apps = apps
+        self.app_versions = versions
         self._apps_scanned_at = now
 
     @property

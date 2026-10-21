@@ -2,6 +2,7 @@
 
 import base64
 import struct
+from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
@@ -195,3 +196,27 @@ def decode_android_pubkey(blob_b64: bytes) -> int:
     raw = base64.b64decode(blob_b64)
     words, _n0inv = struct.unpack("<II", raw[:8])
     return int.from_bytes(raw[8 : 8 + words * 4], "little")
+
+
+async def test_installed_apps(sdbd: Any) -> None:
+    sdbd.shell["0 vd_applist"] = [
+        (Path(__file__).parent / "fixtures/vd_applist_excerpt.txt").read_text(
+            encoding="utf-8"
+        )
+    ]
+    async with client(sdbd) as sdb:
+        apps = await sdb.installed_apps()
+    assert [app.app_id for app in apps] == ["111299001912", "111477000821"]
+
+
+async def test_installed_apps_empty_tv(sdbd: Any) -> None:
+    sdbd.shell["0 vd_applist"] = ["get app list...\napps count: 0\n"]
+    async with client(sdbd) as sdb:
+        assert await sdb.installed_apps() == []
+
+
+async def test_installed_apps_garbage(sdbd: Any) -> None:
+    sdbd.shell["0 vd_applist"] = ["command not found\n"]
+    async with client(sdbd) as sdb:
+        with pytest.raises(SdbError, match="No app listing"):
+            await sdb.installed_apps()

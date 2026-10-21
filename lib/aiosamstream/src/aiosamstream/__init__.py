@@ -1,6 +1,6 @@
 """Async client for Samsung Tizen TVs and the Samstream player app."""
 
-from .apps import KNOWN_APPS
+from .apps import KNOWN_APPS, ListedApp, parse_app_list
 from .const import SAMSTREAM_APP_ID
 from .exceptions import (
     SamstreamAuthError,
@@ -21,6 +21,7 @@ __all__ = [
     "AppStatus",
     "DeviceInfo",
     "InstallResult",
+    "ListedApp",
     "SamstreamAuthError",
     "SamstreamConnectionError",
     "SamstreamError",
@@ -30,5 +31,6 @@ __all__ = [
     "SdbConnectionError",
     "SdbError",
     "generate_key",
+    "parse_app_list",
     "send_magic_packet",
 ]
