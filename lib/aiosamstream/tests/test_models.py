@@ -45,3 +45,9 @@ def test_standby_and_missing_name() -> None:
 
     assert info.power_on is False
     assert info.name == "Samsung TV"
+
+
+def test_frame_flag() -> None:
+    frame = DeviceInfo.from_api({"device": {"FrameTVSupport": "true"}})
+    assert frame.frame_tv is True
+    assert DeviceInfo.from_api({"device": {}}).frame_tv is False

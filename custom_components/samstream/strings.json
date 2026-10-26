@@ -116,6 +116,7 @@
         "title": "Samstream TV app",
         "description": "Applied the next time Samstream opens on the TV. Needs the app installed or updated by Home Assistant at least once.",
         "data": {
+          "frame_power": "Turning the Frame off",
           "language": "Language",
           "theme": "Theme",
           "tv_corner": "Corner for the TV picture",
@@ -127,7 +128,8 @@
           "theme": "Colors of the home screen; video always plays on black.",
           "auto_update": "When Home Assistant has a newer Samstream TV app (after an integration update), install it by itself the next time the TV is on and Samstream is not on screen.",
           "resume_playback": "When Samstream goes back to the app it interrupted, press Play so it continues. Home Assistant cannot see whether you had paused it with the TV's own remote; turn this off if that leaves apps playing that you had paused. Pauses made through Home Assistant are always kept.",
-          "tv_corner": "Where Live TV or the HDMI input stays visible when a camera plays with the TV picture in a corner."
+          "tv_corner": "Where Live TV or the HDMI input stays visible when a camera plays with the TV picture in a corner.",
+          "frame_power": "The Frame's Power key switches to Art Mode. Choose Fully off to make 'turn off' (and the camera's return) switch it off completely, like a long press on its remote."
         }
       }
     },
@@ -520,6 +522,12 @@
         "top_right": "Top right",
         "bottom_left": "Bottom left",
         "bottom_right": "Bottom right"
+      }
+    },
+    "frame_power": {
+      "options": {
+        "art": "Art Mode",
+        "off": "Fully off"
       }
     }
   }

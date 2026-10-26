@@ -76,7 +76,7 @@ async def test_apps_websocket(
     assert answer["success"], answer
     assert answer["result"] == {
         "home": "Home",
-        "sources": ["Live TV", "HDMI 1", "HDMI 2", "HDMI 3", "HDMI 4"],
+        "sources": ["Input list", "Live TV", "HDMI 1", "HDMI 2", "HDMI 3", "HDMI 4"],
         "current": None,
         "apps": [
             {

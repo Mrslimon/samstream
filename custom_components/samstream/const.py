@@ -18,6 +18,9 @@ CONF_THEME: Final = "theme"
 CONF_AUTO_UPDATE: Final = "auto_update"
 # Press Play on the app Samstream interrupted when going back to it.
 CONF_RESUME: Final = "resume_playback"
+# The Frame: what turning it off does ("art": Art Mode, "off": fully off).
+CONF_FRAME_POWER: Final = "frame_power"
+FRAME_POWER_MODES: Final = ("art", "off")
 
 # TV app UI: "auto" follows the TV's own language.
 LANGUAGES: Final = ("auto", "ar", "en")
@@ -53,8 +56,11 @@ CONF_TV_CORNER: Final = "tv_corner"
 DEFAULT_TV_CORNER: Final = "top_right"
 # Sources before the apps, and the remote key each one presses. The TV keeps
 # its own names for inputs; these keys work whatever the input is called.
+SOURCE_INPUTS: Final = "Input list"
 SOURCE_KEYS: Final = {
     SOURCE_HOME: "KEY_HOME",
+    # The TV's own input picker: works on every model, whatever inputs it has.
+    SOURCE_INPUTS: "KEY_SOURCE",
     "Live TV": "KEY_TV",
     "HDMI 1": "KEY_HDMI1",
     "HDMI 2": "KEY_HDMI2",

@@ -45,6 +45,10 @@ REST_RETRY_DELAY = 0.3
 _CONNECTION_ERRORS = (ConnectionFailure, OSError, WebSocketException, TimeoutError)
 
 
+# A long press of Power: how a Frame's remote turns it fully off.
+FULL_OFF_HOLD_SECONDS = 3.0
+
+
 class SamsungTV:
     """One Samsung TV, addressed by host, sharing the caller's aiohttp session."""
 
@@ -277,9 +281,15 @@ class SamsungTV:
                 else:
                     return
 
-    async def power_off(self) -> None:
-        """Put the TV in standby."""
-        await self.send_keys(["KEY_POWER"])
+    async def power_off(self, *, full: bool = False) -> None:
+        """Put the TV in standby (a Frame: Art Mode, or fully off with `full`).
+
+        A Frame's remote switches it fully off with a long press of Power.
+        """
+        if full:
+            await self.send_keys(["KEY_POWER"], hold=FULL_OFF_HOLD_SECONDS)
+        else:
+            await self.send_keys(["KEY_POWER"])
 
     async def power_on(self, mac: str | None, wol_target: str = DEFAULT_TARGET) -> None:
         """Wake the TV: KEY_POWER from network standby, Wake-on-LAN otherwise."""

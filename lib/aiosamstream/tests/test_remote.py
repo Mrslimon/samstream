@@ -210,3 +210,9 @@ async def test_power_off(remote: type[FakeRemote]) -> None:
     await tv().power_off()
 
     assert remote.sent[0][0].params["DataOfCmd"] == "KEY_POWER"
+
+
+async def test_full_power_off_holds_power(remote: type[FakeRemote]) -> None:
+    await tv().power_off(full=True)
+    expected = SendRemoteKey.hold("KEY_POWER", 3.0)
+    assert [type(c) for c in remote.sent[0]] == [type(c) for c in expected]

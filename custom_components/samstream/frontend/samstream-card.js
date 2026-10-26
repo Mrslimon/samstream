@@ -561,6 +561,7 @@ var Y = {
 		off: "Off",
 		home: "Home",
 		liveTv: "Live TV",
+		inputList: "Inputs",
 		tvCorner: "Keep Live TV / HDMI in a corner",
 		power: "Power",
 		cameras: "Cameras",
@@ -607,6 +608,7 @@ var Y = {
 		off: "مطفأ",
 		home: "الرئيسية",
 		liveTv: "البث المباشر",
+		inputList: "المدخلات",
 		tvCorner: "إبقاء البث المباشر / HDMI في الزاوية",
 		power: "التشغيل",
 		cameras: "الكاميرات",
@@ -697,7 +699,7 @@ var Z, Ae = [
 						mode: "list",
 						options: q.map((t) => ({
 							value: t,
-							label: e()[Le(t)]
+							label: e()[Re(t)]
 						}))
 					} }
 				},
@@ -904,9 +906,9 @@ var Z, Ae = [
               @click=${() => this.selectSource(n)}
             >
               <div class="tile home">
-                <ha-icon icon=${n.startsWith("HDMI") ? "mdi:video-input-hdmi" : "mdi:television-classic"}></ha-icon>
+<ha-icon icon=${Le(n)}></ha-icon>
               </div>
-              <span>${n === "Live TV" ? e.liveTv : n}</span>
+              <span>${n === "Live TV" ? e.liveTv : n === "Input list" ? e.inputList : n}</span>
             </button>`)}
           ${(this.apps?.apps ?? []).map((e) => P`<button
               class="app ${e.id === n ? "current" : ""}"
@@ -1497,6 +1499,9 @@ Z = $, Z.properties = {
     }
   `;
 function Le(e) {
+	return e.startsWith("HDMI") ? "mdi:video-input-hdmi" : e === "Input list" ? "mdi:import" : "mdi:television-classic";
+}
+function Re(e) {
 	return e;
 }
 customElements.get("samstream-card") || (customElements.define("samstream-card", $), (window.customCards ??= []).push({

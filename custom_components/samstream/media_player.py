@@ -41,6 +41,7 @@ from homeassistant.util.json import JsonValueType
 
 from . import SamstreamConfigEntry
 from .const import (
+    CONF_FRAME_POWER,
     CONF_RESUME,
     CONF_TV_CORNER,
     DEFAULT_TV_CORNER,
@@ -227,9 +228,21 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         )
         await coordinator.async_request_refresh()
 
+    @property
+    def _frame(self) -> bool:
+        info = self.coordinator.data.info
+        return bool(info and info.frame_tv)
+
+    def _power_off(self) -> Any:
+        """Power key press for "off": a Frame goes to Art Mode unless set to off."""
+        full = self._frame and (
+            self.coordinator.config_entry.options.get(CONF_FRAME_POWER, "art") == "off"
+        )
+        return self.coordinator.tv.power_off(full=full)
+
     async def async_turn_off(self) -> None:
-        """Standby."""
-        await self._async_call(self.coordinator.tv.power_off())
+        """Standby (a Frame: Art Mode, or fully off when set so)."""
+        await self._async_call(self._power_off())
         # The TV keeps answering for a few seconds while it shuts down.
         self.coordinator.async_set_updated_data(
             replace(self.coordinator.data, is_on=False, volume=None, muted=None)
@@ -766,6 +779,10 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
     async def _async_turn_off_verified(self) -> None:
         """Back to standby (Samstream woke the TV); check it, retry once."""
         tv = self.coordinator.tv
+        if self._frame:
+            # A Frame reports "on" in Art Mode too: a retry would flip it back.
+            await self._async_call(self._power_off())
+            return
         for _attempt in range(2):
             await self._async_call(tv.power_off())
             for _ in range(OFF_WAIT_SECONDS):

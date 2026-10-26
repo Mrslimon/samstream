@@ -327,9 +327,9 @@ export class SamstreamCard extends LitElement {
               @click=${() => this.selectSource(source)}
             >
               <div class="tile home">
-                <ha-icon icon=${source.startsWith("HDMI") ? "mdi:video-input-hdmi" : "mdi:television-classic"}></ha-icon>
+<ha-icon icon=${sourceIcon(source)}></ha-icon>
               </div>
-              <span>${source === "Live TV" ? t.liveTv : source}</span>
+              <span>${source === "Live TV" ? t.liveTv : source === "Input list" ? t.inputList : source}</span>
             </button>`,
           )}
           ${(this.apps?.apps ?? []).map(
@@ -979,6 +979,12 @@ export class SamstreamCard extends LitElement {
       text-align: center;
     }
   `;
+}
+
+function sourceIcon(source: string): string {
+  if (source.startsWith("HDMI")) return "mdi:video-input-hdmi";
+  if (source === "Input list") return "mdi:import";
+  return "mdi:television-classic";
 }
 
 /** Label key of a section in the editor. */

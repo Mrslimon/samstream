@@ -68,6 +68,8 @@ class DeviceInfo:
     developer_ip: str | None
     token_auth: bool
     resolution: str | None
+    # The Frame: KEY_POWER switches to Art Mode, and PowerState stays "on" there.
+    frame_tv: bool = False
 
     @classmethod
     def from_api(cls, data: Mapping[str, Any]) -> DeviceInfo:
@@ -94,4 +96,5 @@ class DeviceInfo:
             developer_ip=_text(device.get("developerIP")),
             token_auth=_flag(device.get("TokenAuthSupport")),
             resolution=_text(device.get("resolution")),
+            frame_tv=_flag(device.get("FrameTVSupport")),
         )

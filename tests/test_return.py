@@ -461,3 +461,57 @@ async def test_no_corner_over_a_streaming_app(
 def command_sent(hass: HomeAssistant) -> dict:
     entry = hass.config_entries.async_entries(DOMAIN)[0]
     return session_answer(hass, entry, 0)["command"]
+
+
+def _frame(hass: HomeAssistant, tv: MagicMock | None = None) -> None:
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data.coordinator
+    info = replace(coordinator.data.info, frame_tv=True)
+    coordinator.async_set_updated_data(replace(coordinator.data, info=info))
+    if tv is not None:
+        # Later polls (after waking the TV) must keep reporting a Frame.
+        tv.device_info = AsyncMock(return_value=info)
+
+
+async def test_frame_off_is_one_press(hass: HomeAssistant, mock_tv: MagicMock) -> None:
+    """A Frame reports "on" in Art Mode: a retry would flip it back to TV."""
+    _frame(hass, mock_tv)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data.coordinator
+    coordinator.async_set_updated_data(replace(coordinator.data, is_on=False))
+    mock_tv.is_on = AsyncMock(return_value=True)
+    mock_tv.app_status = AsyncMock(return_value=SimpleNamespace(visible=True))
+    with patch(SLEEP, AsyncMock()):
+        await play(hass)
+    await stop(hass)
+    mock_tv.power_off.assert_awaited_once_with(full=False)
+
+
+@pytest.mark.parametrize(
+    ("mode", "press"), [("art", {"full": False}), ("off", {"full": True})]
+)
+async def test_frame_power_option(
+    hass: HomeAssistant, mock_tv: MagicMock, mode: str, press: dict
+) -> None:
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    hass.config_entries.async_update_entry(entry, options={"frame_power": mode})
+    await hass.async_block_till_done()
+    _frame(hass)
+    await hass.services.async_call(
+        "media_player", "turn_off", {"entity_id": TV}, blocking=True
+    )
+    mock_tv.power_off.assert_awaited_once_with(**press)
+
+
+async def test_frame_option_only_on_frames(hass: HomeAssistant) -> None:
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "tv_app"}
+    )
+    assert "frame_power" not in result["data_schema"]({})
+
+    _frame(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "tv_app"}
+    )
+    assert result["data_schema"]({})["frame_power"] == "art"

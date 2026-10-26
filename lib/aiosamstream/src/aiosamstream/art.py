@@ -135,7 +135,7 @@ class ArtConnection:
             raise SamstreamConnectionError(msg)
         try:
             frame = json.loads(incoming.data)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return {}
         return frame if isinstance(frame, dict) else {}
 

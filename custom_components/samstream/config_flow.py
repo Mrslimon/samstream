@@ -57,6 +57,7 @@ from .const import (
     CONF_AUTO_UPDATE,
     CONF_DISTRIBUTOR_P12,
     CONF_EXTRA_APPS,
+    CONF_FRAME_POWER,
     CONF_LANGUAGE,
     CONF_RESUME,
     CONF_THEME,
@@ -68,6 +69,7 @@ from .const import (
     DEFAULT_THEME,
     DEFAULT_TV_CORNER,
     DOMAIN,
+    FRAME_POWER_MODES,
     LANGUAGES,
     THEMES,
 )
@@ -344,10 +346,24 @@ class SamstreamOptionsFlow(OptionsFlow):
                 data={**self.config_entry.options, **user_input}
             )
         options = self.config_entry.options
+        fields: dict[Any, Any] = {}
+        if _is_frame(self.config_entry):
+            fields[
+                vol.Required(
+                    CONF_FRAME_POWER, default=options.get(CONF_FRAME_POWER, "art")
+                )
+            ] = SelectSelector(
+                SelectSelectorConfig(
+                    options=list(FRAME_POWER_MODES),
+                    translation_key=CONF_FRAME_POWER,
+                    mode=SelectSelectorMode.LIST,
+                )
+            )
         return self.async_show_form(
             step_id="tv_app",
             data_schema=vol.Schema(
                 {
+                    **fields,
                     vol.Required(
                         CONF_LANGUAGE,
                         default=options.get(CONF_LANGUAGE, DEFAULT_LANGUAGE),
@@ -628,3 +644,12 @@ def _signing_status(setup: SigningSetup | None) -> str:
         f"{setup.source}{who}, {len(setup.duids)} TV(s), "
         f"valid until {setup.expires.date().isoformat()}"
     )
+
+
+def _is_frame(entry: ConfigEntry) -> bool:
+    """Tell whether this is a Frame TV (from its last device info)."""
+    runtime = getattr(entry, "runtime_data", None)
+    info = (
+        runtime.coordinator.data.info if runtime and runtime.coordinator.data else None
+    )
+    return bool(info and info.frame_tv)

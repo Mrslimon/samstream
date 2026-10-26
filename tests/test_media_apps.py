@@ -44,6 +44,7 @@ async def test_sources_and_app_on_screen(
     state = hass.states.get(TV)
     assert state.attributes["source_list"] == [
         "Home",
+        "Input list",
         "Live TV",
         "HDMI 1",
         "HDMI 2",
@@ -124,7 +125,8 @@ async def test_select_home_presses_home(
 
 
 @pytest.mark.parametrize(
-    ("source", "key"), [("Live TV", "KEY_TV"), ("HDMI 2", "KEY_HDMI2")]
+    ("source", "key"),
+    [("Input list", "KEY_SOURCE"), ("Live TV", "KEY_TV"), ("HDMI 2", "KEY_HDMI2")],
 )
 @pytest.mark.usefixtures("setup_entry")
 async def test_select_input(
@@ -265,6 +267,7 @@ async def test_full_app_list_from_sdb(
     state = hass.states.get(TV)
     assert state.attributes["source_list"] == [
         "Home",
+        "Input list",
         "Live TV",
         "HDMI 1",
         "HDMI 2",
