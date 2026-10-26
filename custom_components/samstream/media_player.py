@@ -9,7 +9,12 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any
 
-from aiosamstream import SAMSTREAM_APP_ID, SamstreamConnectionError, SamstreamError
+from aiosamstream import (
+    SAMSTREAM_APP_ID,
+    SamstreamConnectionError,
+    SamstreamError,
+    youtube_id,
+)
 from homeassistant.components import media_source
 from homeassistant.components.camera import async_get_stream_source
 from homeassistant.components.media_player import (
@@ -817,6 +822,47 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
             await self._async_call(tv.move_pointer(move_x, move_y))
         if click:
             await self._async_call(tv.click(click))
+
+    async def async_open_url(self, *, url: str) -> None:
+        """Open a link on the TV (the `open_url` action).
+
+        A YouTube link opens the YouTube app on that video; any other URL opens
+        the TV's web browser. Samstream opens the app from the inside (Tizen app
+        control), because the TV ignores a remote launch that carries a URL.
+        """
+        video = youtube_id(url)
+        if not video and not url.lower().startswith(("http://", "https://")):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="url_required"
+            )
+        if not self.coordinator.data.is_on:
+            await self.async_turn_on()
+            await self._async_wait_until_on()
+            await self.coordinator.async_request_refresh()
+        # Casting leaves Samstream behind another app: no camera return to keep.
+        self._cancel_timed_return()
+        self._interruption = None
+        if video:
+            # YouTube plays a chosen video over the Lounge protocol (HA-side);
+            # the Samstream app is not involved.
+            await self._async_call(self.coordinator.tv.cast_youtube(video))
+            return
+        # Any other URL opens in the TV browser, launched by the Samstream app
+        # (Tizen app-control), because the TV ignores a remote launch with a URL.
+        entry = self.coordinator.config_entry
+        ensure_tv_secret(self.hass, entry)
+        set_command(self.hass, entry, {"action": "open", "url": url})
+        await self._async_launch(SAMSTREAM_APP_ID)
+
+    async def async_art_mode(self) -> None:
+        """Toggle Art Mode on a Frame TV (the `art_mode` action).
+
+        The power key flips the Frame between normal TV and Art Mode without
+        turning it fully off. Selecting the artwork needs SmartThings and is not
+        possible over the local channel on newer Frames.
+        """
+        await self._async_call(self.coordinator.tv.toggle_art_mode())
+        await self.coordinator.async_request_refresh()
 
     async def _async_key(self, key: str) -> None:
         await self._async_call(self.coordinator.tv.send_keys([key]))

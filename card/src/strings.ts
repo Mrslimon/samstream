@@ -39,6 +39,7 @@ export interface Strings {
   ok: string;
   volumeDown: string;
   volumeUp: string;
+  volume: string;
   mute: string;
   playPause: string;
   noCameras: string;
@@ -86,6 +87,7 @@ const STRINGS: Record<Language, Strings> = {
     ok: "OK",
     volumeDown: "Volume down",
     volumeUp: "Volume up",
+    volume: "Volume",
     mute: "Mute",
     playPause: "Play / pause",
     noCameras: "No cameras in Home Assistant yet.",
@@ -131,6 +133,7 @@ const STRINGS: Record<Language, Strings> = {
     ok: "موافق",
     volumeDown: "خفض الصوت",
     volumeUp: "رفع الصوت",
+    volume: "مستوى الصوت",
     mute: "كتم",
     playPause: "تشغيل / إيقاف مؤقت",
     noCameras: "لا توجد كاميرات في Home Assistant بعد.",

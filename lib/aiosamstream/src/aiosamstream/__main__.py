@@ -41,14 +41,47 @@ async def _run(args: argparse.Namespace, token: str | None) -> int:
                 return 1
             await send_magic_packet(mac, target=args.target)
             print(f"Magic packet sent to {mac} via {args.target}.")
+        elif args.command == "art":
+            return await _run_art(tv, args)
+    return 0
+
+
+async def _run_art(tv: SamsungTV, args: argparse.Namespace) -> int:
+    """Run one `art` subcommand (probing a Frame's art-app channel)."""
+    async with tv.art() as art:
+        if args.art == "status":
+            print(f"art mode: {'on' if await art.get_art_mode() else 'off'}")
+        elif args.art == "list":
+            items = await art.available()
+            print(f"{len(items)} artworks:")
+            for item in items:
+                print(f"  {item.get('content_id')}  {item.get('category_id')}")
+        elif args.art == "current":
+            print(f"current: {await art.current()}")
+        elif args.art in ("on", "off"):
+            await art.set_art_mode(on=args.art == "on")
+            print(f"art mode -> {args.art}")
+        elif args.art == "select":
+            if not args.content_id:
+                print("Pass --content-id.")
+                return 1
+            await art.select(args.content_id)
+            print(f"selected {args.content_id}")
     return 0
 
 
 def main() -> int:
     """Parse arguments and run one command."""
     parser = argparse.ArgumentParser(prog="python -m aiosamstream")
-    parser.add_argument("command", choices=["info", "pair", "wol"])
+    parser.add_argument("command", choices=["info", "pair", "wol", "art"])
     parser.add_argument("--host", required=True)
+    parser.add_argument(
+        "--art",
+        choices=["status", "list", "current", "on", "off", "select"],
+        default="status",
+        help="art subcommand (with `art`)",
+    )
+    parser.add_argument("--content-id", help="artwork id for `art --art select`")
     parser.add_argument("--token-file", default=".samstream-token")
     parser.add_argument("--wait", type=float, default=60, help="seconds to accept")
     parser.add_argument("--mac", help="for wol; read from the TV when omitted")

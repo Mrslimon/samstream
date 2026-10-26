@@ -67,6 +67,8 @@ const KEY_YELLOW = 405;
 const KEY_INFO = 457;
 const KEY_0 = 48;
 const KEY_9 = 57;
+// The YouTube Tizen app, forced when opening a YouTube link (samstream.open_url).
+const YOUTUBE_APP_ID = "111299001912";
 const HELP_VISIBLE_MS = 10_000;
 const TOAST_MS = 2_500;
 // The camera name and clock fold away after this; the LIVE badge stays.
@@ -508,6 +510,38 @@ export class App {
     return this.native
       ? [this.native, this.mse, this.mjpeg]
       : [this.mse, this.mjpeg];
+  }
+
+  /**
+   * Open another app from inside Samstream (`samstream.open_url`): the YouTube
+   * app on a video, or any URL in the TV's browser. Tizen's app-control launch
+   * works from the privileged app where the remote channel's launch does not.
+   */
+  openExternal(target: { youtube?: string; url?: string }): void {
+    const tizen = globalThis.tizen;
+    if (!tizen?.application?.launchAppControl || !tizen.ApplicationControl) {
+      this.log("open: tizen app-control missing (not a Samsung TV)");
+      return;
+    }
+    const view = "http://tizen.org/appcontrol/operation/view";
+    const uri = target.youtube
+      ? `https://www.youtube.com/watch?v=${target.youtube}`
+      : target.url;
+    if (!uri) return;
+    // A YouTube link is forced to the YouTube app; any other URL lets the TV
+    // choose (its browser). Then Samstream drops to the background behind it.
+    const appId = target.youtube ? YOUTUBE_APP_ID : null;
+    this.active?.stop();
+    try {
+      tizen.application.launchAppControl(
+        new tizen.ApplicationControl(view, uri),
+        appId,
+        () => this.log(`open: ${uri}`),
+        (error) => this.log(`open failed: ${error.name ?? ""} ${error.message ?? ""}`),
+      );
+    } catch (error) {
+      this.log(`open: ${String(error)}`);
+    }
   }
 
   private exit(): void {

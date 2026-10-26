@@ -285,3 +285,172 @@ Source: PatrickSt1991/Samsung-Jellyfin-Installer (MIT), `Apps2Samsung.Core/Certi
   - **Play/pause fix:** play/pause now alternates Pause / Play, because the TV reports no playback state; it starts over when the app changes.
 - **12 result (2026-10-21):** SSDP discovery with a confirm step, diagnostics download (redacted), translated go2rtc errors, icons for every action, developer host sensor disabled by default. `quality_scale.yaml` is filled in: everything done or exempt except the docs rules (documentation milestone). 275 tests, 97 % coverage.
 - **Logo download:** a **Download app logos** button (configuration) fetches each app's public site icon onto the user's own HA, into `/config/www/samstream/apps/<app id>.png`. Sources are Google's favicon service at 256 px or the site's `apple-touch-icon`, whichever is larger; apps are matched by words in their name (`logos.LOGO_SITES`, Latin whole words and Arabic substrings). The user's own files are never replaced, and the Samstream tile uses our brand icon. Logos are not shipped in the repo (third-party trademarks). On the QN800C: 20 of 23 apps.
+
+### Roadmap addition (2026-10-21): Advanced local things (local SmartThings over OCF)
+Prepared while `oicseek/` is still a spike (not finished). This supersedes the "SmartThings (local) … Not pursued" note above and realises the "possible fix: read the input source" left open at milestones 11 and 17. `oicseek/otm_pair.py` has proven the DTLS-PSK handshake (phase 1); phase 2 (ownership) and the resource reads are what the lib will wrap. See [[samstream-tv-corner-detection]] and [[samstream-ocf-dtls-posture]].
+
+- **Guiding principle — a capability gate, exactly like Developer Mode.**
+  - **Off (the default, and whenever onboarding is absent, lost or the TV is unreachable over OCF): zero behaviour change.** Every current feature keeps using today's REST/WS paths; no new sensors appear; the existing tests must pass unchanged.
+  - **On:** the coordinator *prefers* OCF data where it is richer, and new entities appear. OCF is only ever an override on top of today's logic, never a replacement that can break the off path.
+  - **No new hard dependency when off:** the OCF deps (`python-mbedtls`, `cbor2`) load lazily, only when the capability is enabled, so a base install without those wheels is unaffected. `manifest.json` keeps them out of `requirements` or lists them as an optional extra.
+
+- **What it unlocks (reliable local signals the REST/WS stack cannot give):**
+  - **True input / foreground:** Live TV vs each HDMI vs Home vs a specific app, read from the TV's own OCF resources — not inferred from the laggy per-app `visible` flag. Fixes the corner-mode race measured on the QN800C (YouTube reports `visible:false` for seconds after opening; Home/Live TV/HDMI are indistinguishable from a silent app).
+  - **Media playback:** title and real play/paused state → accurate `media_player` state and a real play/pause toggle (drops the "alternate Pause/Play because the TV reports no state" hack from milestone 15).
+  - **Power usage:** watts / energy, if the TV's OCF stack exposes it → a power sensor.
+  - Possibly current channel and a confirmation of volume/mute.
+
+- **Architecture.**
+  - New `lib/aiosamstream/ocf/` module: `/oic/res` discovery, **dynamic secure-port resolution per session** (`p.port` changes on every power cycle — never cache it across power states), a DTLS-PSK session (reuse `otm_pair.py`'s PBKDF2 PSK derivation and cipher), authenticated CBOR reads, ownership transfer (phase 2), and a thin resource→signal mapper.
+  - A **"local source" abstraction in the coordinator, mirroring `app_source` ("tv"/"catalog")**: when OCF is owned and reachable, foreground/input, media and power come from OCF; otherwise the coordinator falls back to exactly today's logic.
+  - `SamstreamState` stays **additive**: new optional fields (`input_source`, `media_title`, `playback_state`, `power_watts`, …) default `None`, so entities behave as now when OCF is off.
+  - **Credential storage like the token/cert:** the owned credential (device UUID + PSK, plus whatever ownership yields) goes in the config entry / `.storage`, never the repo. `oicseek/tv_cred.json` is only the dev artifact.
+
+- **Onboarding is the one write to the TV** (everything else is read or a remote key). Guard it behind an explicit user action; make re-onboarding safe; a factory reset clears it.
+
+- **Milestones (each verifiable; start once `oicseek` finishes the lib spike):**
+  - **18a. OCF client in the lib:** discover `/oic/res`, resolve the dynamic secure port, open a DTLS-PSK session, one authenticated read. **Verify:** an owned read returns 2.xx against the real TV; unit tests on mocked CBOR/DTLS.
+  - **18b. Ownership transfer (otm_pair phase 2) as a library call + CLI.** **Verify:** an RFOTM TV is owned once with the on-screen PIN; re-runs reconnect with the stored credential, no PIN.
+  - **18c. Resource map:** enumerate the TV's OCF resources and map which give input source, media and power. **Verify:** a documented resource→signal table for the QN800C, and a probe that prints each live.
+  - **18d. Coordinator integration behind the gate:** prefer OCF for foreground/input and media when owned, fall back otherwise. **Verify:** with the toggle off every existing test passes and behaviour is identical; with it on, the source sensor tells Live TV from the last app.
+  - **18e. Corner-mode fix via OCF:** `_async_corner` uses the OCF input source when available (Live TV/HDMI/Home → corner; any app → full). **Verify:** re-run the probe scenario (YouTube→full, Live TV→corner) with no transition misfire. The confirmation-sampling fallback (see [[samstream-tv-corner-detection]]) stays for the gate-off path.
+  - **18f. New entities:** power sensor, media title/state, real play/pause. **Verify:** entities update live; play/pause follows actual state when OCF is on.
+  - **18i. Accurate inputs (from the source-button bug, 2026-10-22).** The media_player `source_list` is a FIXED list (Home, Live TV, HDMI 1–4) regardless of what the TV has; on the QN800C (no HDMI devices, no antenna — only Samsung TV Plus) those entries are dead no-ops, and single input keys (`KEY_HDMI2`, `KEY_TV`) are unreliable across models anyway. `KEY_SOURCE` works (opens the picker), so key delivery is fine. Fix with OCF: list the TV's **real** inputs and select a named input reliably. Interim option: expose a "Source" entry that just sends `KEY_SOURCE` so the user picks visually, and/or add Samsung TV Plus.
+  - **18g. Onboarding config/options flow + credential storage + repairs + docs:** an "Advanced local things (local SmartThings)" toggle; turning it on runs the PIN onboarding (document how to make the TV show the PIN); a reauth/repair path when the credential is lost; a disabled-by-default "Local access: owned" diagnostic. **Release local control** (options flow + button, with a confirm): as owner, POST `/oic/sec/pstat {cm:1}` — the TV drops our ownership at once (doxm unowned, RFOTM) with **no Smart Hub reset and no lost apps**, so it can be added to SmartThings again (verified 2026-10-22: while we own it with isop=true the TV is hidden from the SmartThings app's "add device" scan; after this reset it appears). Disabling the toggle offers this step; the guided setup (milestone 22) offers it when the user wants SmartThings instead. **Verify:** enable from the UI, onboard, lose/restore the credential; disabling returns to today's behaviour; "Release" makes the TV addable in the SmartThings app.
+  - **18h. Hardening:** lazy/optional OCF deps, session lifecycle and reconnection on power cycle (new dynamic port), unreachable-OCF never fails an update (falls back), diagnostics redaction, coverage/mypy bar. **Verify:** install without the OCF wheels still loads; `quality_scale.yaml` stays green.
+
+- **18 revision (2026-10-23), after the read investigation.** Over the local owner session, every `/sec/tv/*` and `/capability/*` resource answers **4.00** to GET/OBSERVE (state is served only to the Samsung cloud), so 18c–18f as written (input/media/power *read* over local OCF) are not achievable. Local OCF stays: **commands** (POST works) + **diagnostic reads**. Live state comes from UPnP (volume/mute) and, optionally, HA's SmartThings integration. Revised work items:
+  - **18j. UPnP volume/mute (no OCF, no Developer Mode needed).** The TV's DLNA renderer (`http://<tv>:9197/dmr`, found via SSDP `urn:schemas-upnp-org:device:MediaRenderer:1`) exposes `RenderingControl` (`/upnp/control/RenderingControl1`: `GetVolume`, `SetVolume`, `GetMute`, `SetMute`, InstanceID 0, Channel `Master`). Add an async SOAP client in `aiosamstream` (`upnp.py`), resolve the control URL from the device description each session, poll in the coordinator while the TV is on, and give `media_player` **real `volume_level` + `is_volume_muted`** plus `volume_set` / `mute_volume` (instead of key-press up/down only). Fall back to keys when UPnP is unreachable. **Verify:** HA shows the TV's actual volume number; setting 25 in HA moves the TV to 25; mute state follows the remote.
+  - **18k. OCF diagnostic sensors (when OCF is owned).** Read-only resources that answer 2.05 locally, mapped to disabled-by-default diagnostic entities: firmware version (`/oic/p` `mnfv`, e.g. `T-OSCPCUABC-0090-2220.4`; the REST API reports `firmwareVersion: "Unknown"`) and build date (`/sec/provisioninginfo` `firmwareversion` `;25.04.22`); Wi-Fi signal/channel/band (`/sec/accesspointlist` entry whose `macAddress` matches the BSSID the REST API reports in `device.ssid`: `rssi`, `channel`, `frequency`); MAC addresses and feature flags (`/DevConfResURI`: `WOWLAN`, `BTWAKEUP`, `BTHIDPOWERON`, `DLNADMR`); partial serial / SmartThings agent version (`/sec/provisioninginfo` `deviceinfo`); "Local access: owned" from `/oic/sec/doxm`. Refresh slowly (e.g. every 10 min; Wi-Fi signal every 1 min). **Verify:** sensors populate after onboarding and survive a TV power cycle (dynamic port re-discovery).
+  - **18l. OCF commands with real IDs.** Use the IDs the SmartThings export shows for this TV family as POST payload values: inputs (`dtv`, `HDMI1`… from `supportedInputSourcesMap`), picture modes (`modeGen_589826`…), sound modes (`modeAmplify`, `modeStandard`). Confirm each payload key on the QN800C (POST executes but answers 4.00, so verify by eye / by the UPnP or REST side effect), then expose `select_source` by real name, picture-mode and sound-mode `select` entities (write-only: the current mode can't be read locally, so they act as buttons/options without a state, or use SmartThings state when available). **Verify:** selecting HDMI1 / a picture mode from HA changes the TV.
+  - **18m. Optional SmartThings-cloud state source.** When the user also has HA's SmartThings integration for this TV, read its entities for the state local paths can't give (current input, picture/sound mode, channel, now-playing). Gate: present → use; absent → those fields stay `None`. **Conflict:** local OCF ownership and SmartThings registration are mutually exclusive on the TV (verified 2026-10-22: SmartThings takes local ownership with its vendor OTM; while we own it the TV is hidden from the app), so the user picks **one**: local OCF (commands + diagnostics) *or* SmartThings (cloud state). The setup UX (milestone 22) explains the trade.
+- **Pitfalls (added to section 5):**
+  | Area | Risk | Mitigation |
+  |---|---|---|
+  | OCF port | `p.port` changes every power cycle | Re-discover the secure port each session; never cache across power states |
+  | OCF session | Standby/sleep drops the DTLS-PSK session | Reconnect with backoff; treat unreachable as "fall back to REST", never fail the coordinator update |
+  | Ownership | A write to the TV; a factory reset clears it; one owner credential per onboarding | Explicit user action only; safe re-onboarding; document coexistence with the SmartThings cloud app (verify on the TV) |
+  | Deps | `python-mbedtls`/`cbor2` wheels must exist for HA's Python/arch | Keep them an optional extra loaded only when the gate is on; base install unaffected |
+
+### Roadmap addition (2026-10-22): Frame Art Mode, ideas from ollo69/ha-samsungtv-smart
+Researched ollo69/ha-samsungtv-smart for features we lack. Its `set_art_mode` only *toggles* art (no artwork choice); `select_picture_mode`/`select_sound_mode` and channel/source extras are **cloud SmartThings**. See [[samstream-frame-art-findings]].
+
+- **19. Frame Art Mode.**
+  - **19a. Local toggle — DONE (2026-10-22, lab Frame QA55LS03DAUXEG @ .22).** New `samstream.art_mode` action toggles a Frame between normal TV and Art Mode via `KEY_POWER` (confirmed by eye; never fully powers off). `aiosamstream` gained an **async art-app client** (`art.py`: `ArtConnection` + `SamsungTV.art()/get_art_mode()/set_art_mode()/art_list()/toggle_art_mode()`) and a `python -m aiosamstream art` probe. 8 lib tests + a service test; ruff/mypy clean.
+  - **Hard limit found on the 2024 Frame:** the `com.samsung.art-app` channel is dead locally — ignores every request (status/list/set/select), no replies, no pushes, in both TV and Art states (reference `samsungtvws` 3.0.6 hangs the same way). REST `PowerState` is `"on"` in both modes, so there is **no local art-state readback** and **no local artwork selection**. The async client is kept because it is correct for Frames whose channel *is* live (older / account-linked).
+  - **19b. SmartThings/OCF art control (planned).** Selecting artwork, brightness, matte, and reliable on/off + state readback need either **cloud SmartThings** (as ollo69/TheFab21 and HA core do) or the **local-OCF** path (milestone 18) if it exposes the art resources. Deliver as: `set_art_mode` with `on/off` + `artwork` (state-aware, so on/off is deterministic), a browsable **Art** folder in the media browser (thumbnail grid → `select_image`), brightness, and an art-mode binary sensor. Gate it like Developer Mode / local-OCF: absent → the KEY_POWER toggle remains the only control. **Verify:** pick an artwork from HA and see it on the Frame; art-mode sensor tracks state.
+  - **19c. Power-button → Art option (Frame):** optional setting so a power action goes to Art Mode instead of standby (ollo69 has this). Trivial once 19a/19b exist.
+
+- **20. Cast a URL / YouTube — app-driven (2026-10-22). Built; needs on-device verify.** Goal: YouTube link → YouTube app; other URL → the TV browser. See [[samstream-cast-findings]].
+  - **Why direct launch failed on the QN800C:** the remote-channel launch with a payload does nothing (neither `org.tizen.browser`+url nor a YouTube deep link), and DIAL (`:8080/ws/apps/YouTube`, needs `Origin: package:com.google.android.youtube` → 403 vs 200) only triggered a stuck **Multi View**, not playback — a bare `v=` cast no longer plays (that needs the YouTube **Lounge** protocol). Those direct-launch primitives were removed.
+  - **Chosen route — launch from inside the Samstream app.** The app is privileged (`application.launch`), so Tizen **`launchAppControl`** opens apps where the remote channel cannot. HA delivers `{"action":"open", youtube|url}` over the existing `/session` pull (the path cameras already use); the TV app calls `launchAppControl(view, uri)` — forcing the YouTube app for a YouTube id, else letting the TV pick its browser — then drops to the background.
+  - **Implemented:** `samstream.open_url` action (`url`), `media_player.async_open_url` (classifies via `aiosamstream.youtube_id`, delivers with `set_command`, no camera-return tracking); TV app `parseOpen` + `App.openExternal` + `main.ts` `open` dispatch + Tizen types (TV app **0.10.0**); `cast.py` `youtube_id()`. Tests: lib parser (9), TV app `parseOpen` (3), HA service test; lib ruff/mypy clean, TV app typecheck + 37 tests + build; HA tests pending CI.
+  - **Verified on the TV (app 0.10.0):** a web URL opens the **browser**; a YouTube link **launches the YouTube app but to its home page — it does not play the video** (the Tizen app ignores the deep-link URI, same as DIAL). So `open_url` ships as web→browser and youtube→opens-the-app. **Playing a chosen YouTube video needs the YouTube Lounge protocol (milestone 20b).**
+  - **20b. YouTube Lounge (play a specific video) — DONE (2026-10-22, verified playing on the QN800C).** A small vendored Lounge client in `aiosamstream` (`lounge.py`, no `pyytlounge` dep): `SamsungTV.cast_youtube(video_id)`; `media_player.async_open_url` routes a YouTube link to it (HA-side, no TV app). `samstream.open_url` now **plays the exact video**. 6 lib tests (bind parsing + mocked flow), ruff/mypy clean. Flow verified against the QN800C:
+    1. **Launch + screenId:** `POST http://<tv>:8080/ws/apps/YouTube` (empty body, header `Origin: package:com.google.android.youtube`) → 201; then GET the same URL **while running** — the `additionalData` now includes `<screenId>…</screenId>` (and `theme`, `deviceId`). (When stopped it only shows `yumi`/`oisi`/`passiveSessionId`, no screenId.)
+    2. **Lounge token:** `POST https://www.youtube.com/api/lounge/pairing/get_lounge_token_batch` form `screen_ids=<screenId>` → `screens[0].loungeToken`.
+    3. **Bind:** `POST https://www.youtube.com/api/lounge/bc/bind?RID=1&VER=8&CVER=1&auth_failure_option=send_error` form `{app:web, mdx-version:3, id:<screenId>, device:REMOTE_CONTROL, ui:false, theme:cl, loungeIdToken:<token>, capabilities:"que,dsdtr,atp,vsp", magnaKey:cloudPairedDevice, name:Samstream}`. Response = length-prefixed chunks of `[[id,[type,…]]]`; event `"c"` → SID, event `"S"` → gsessionid, max id → AID.
+    4. **Play:** `POST …/bc/bind` with query `{name, loungeIdToken, SID, gsessionid, AID, device:REMOTE_CONTROL, app:web, VER:8, v:2, RID:<next>}` and form `{count:1, ofs:0, req0__sc:setPlaylist, req0_videoId:<id>, req0_currentTime:0, req0_listId:""}`.
+    Needs internet from HA (youtube.com). Still TODO: confirm exact RID/ofs increments (casttube source 404'd on fetch — re-find a current reference or test live). `open_url` meanwhile ships as web→browser and youtube→opens-the-app.
+
+- **21. Multi View (lead, not yet pursued).** The milestone-20 DIAL cast unexpectedly triggered **Multi View** on the QN800C (left app + a content picker: Live TV, Browser, SmartView, Samsung TV Plus, USB/phone camera, rearrangeable). This contradicts the earlier "Multi View: no API" note (milestone 17/README) — it *can* be triggered externally. Worth investigating whether it can be opened/arranged on purpose (e.g. camera beside Live TV), which would be a better PiP than the TV-Window corner.
+### Roadmap addition (2026-10-22): guided first-run setup (the very last milestone)
+- **22. Guided setup UX — do this LAST, after every feature above is implemented**, so the guide covers the final feature set (Developer Mode install, per-user signing, local OCF onboarding, SmartThings options).
+  - **Goal:** someone who has never heard of Developer Mode, certificates or OCF gets from "add integration" to a working TV without leaving HA or reading docs.
+  - **One flow, TV and HA in step:** the config flow drives each step, and right after the bundled app is installed it **opens the Samstream app on the TV**. From then on the TV screen shows the matching instruction for each HA step (Arabic RTL too), e.g.:
+    - "Allow the connection on the TV" (token popup) — the TV says *which* button to press;
+    - "Developer Mode: open Apps, type 12345, set the HA IP …" with the HA IP pre-filled on screen;
+    - "**A PIN will appear on this screen now — type it into Home Assistant**" before the local-OCF onboarding triggers it (and a retry if it expires);
+    - Samsung account sign-in for the signing cert, with a QR code to finish on the phone.
+  - **HA side:** each step shows what is happening, progress, a clear error with a fix, and "retry this step" — never restart the whole flow. Optional steps (Developer Mode, local OCF, SmartThings) can be skipped and enabled later from the options flow.
+  - **Animated intro before the first step (added 2026-10-23).** The first screens of "Add integration" are a short animated walkthrough (Lottie/SVG, Arabic RTL, skippable) showing what Samstream does: cameras and messages on the TV, the remote, apps. Then one card per **optional capability**, each with what you **gain** and what you **give up**, and a toggle:
+    - **Developer Mode** — gain: the Samstream TV app (cameras, full-screen messages, video from HA's media library), the full installed-app list. Give up: nothing functional; the TV shows Developer Mode is on, and the HA IP is stored in it. Needs: typing 12345 in Apps and the HA IP (shown pre-filled).
+    - **Local control (OCF)** — gain: reliable input selection by name, picture/sound mode, power off, diagnostics (real firmware version, Wi-Fi signal), all local. Give up: **SmartThings control of this TV** — the TV can belong to only one of them; while Samstream owns it, the SmartThings app can't find or control it (it can be released any time from Samstream's options, no reset needed). Needs: an on-screen PIN typed into HA; if the TV was set up through SmartThings before, the Wi-Fi password may be asked.
+    - **SmartThings (instead of local OCF)** — gain: live state the TV only shares with Samsung's cloud (current input, picture/sound mode, channel, what's playing). Give up: needs internet and a Samsung account; slower updates; local OCF stays off.
+    - **UPnP volume/mute** — always on when reachable; no choice needed, shown as a "you also get" line.
+  - **Plain-language trade-offs everywhere:** the summary at the end lists, per capability, "on/off", what it gives, and how to change it later (options flow), so nothing is a one-way door.
+  - **Finish:** a "Samstream is ready" screen on the TV (test camera / message buttons) and a summary in HA of which capabilities are on.
+  - **Verify:** a fresh TV (factory reset) to working setup in one sitting with no docs; every step recoverable after a wrong action or a timeout.
+
+
+Milestone X: Bixby-to-Home-Assistant Voice Bridge (Automation Studio Capsule)
+Objective: Enable TV users to trigger Home Assistant automations via the Samsung remote control's microphone button using Bixby as the voice-intent frontend, while keeping HA as the execution backend.
+
+Core Architecture:
+
+Bixby (TV System) → Receives mic input, performs STT and intent parsing.
+
+Automation Studio Capsule → Samsung's official cloud tool. Acts as a "shell" that forwards the parsed intent via HTTP.
+
+Home Assistant Webhook/API → Receives the HTTP request and executes the automation.
+
+Key Implementation Steps:
+
+Create a Flow in Automation Studio: Include a "Capsule label" node and a "Capsule result" node.
+
+Add an HTTP Request Node: Point it to an HA Webhook endpoint (e.g., https://<ha_url>/api/webhook/bixby_trigger).
+
+Configure HA Automation: Create a webhook-triggered automation that listens for the request and executes the intended actions (e.g., calling OCF local control for lights or TV).
+
+Packaging: Publish the Capsule to the Bixby Developer Center (or keep it private for testing).
+
+User Experience: The user says, "Ask [Capsule Name] to turn all lights on" → Bixby recognizes the phrase → Capsule fires HTTP request → HA executes and returns a result → TV shows confirmation via the Capsule result node.
+
+Constraints & Technical Boundaries (CRITICAL):
+
+No Raw Audio: HA receives only the parsed intent/parameters, not the voice stream. HA's Assist pipeline (STT/NLU) is bypassed entirely.
+
+Bixby Grammar Required: Users must use Bixby's invocation syntax (e.g., "Ask [Name] to..."). Natural language processing is handled by Bixby, not HA.
+
+System-Level Limitation: This does not "replace" Bixby or hijack the mic button. It is an official, supported "bridge" that turns Bixby into a remote trigger for HA.
+
+Deliverables:
+
+□ Functional Automation Studio Capsule (private/test version).
+□ HA Webhook endpoint and example automation.
+□ Custom Bixby grammar for the Capsule ( for example xhoose the name after launching bixpy by user "Ask Home assitant X" or user can make it  "Ask Garvis X"  ").
+□ Documentation for users on how to invoke the Capsule and configure the Webhook.
+□ (Optional) Public Bixby Capsule submission for seamless installation.
+□ Investigate the possibility of replacing bixpy entirely and passing raw audio to Home assitant
+
+
+Milestone X: Research and Alternative Testing for Now Brief / Daily Board Screens
+Background and Conclusion
+The "Good Morning" screen you see, with three cards (including SmartThings data), is a feature called Now Brief (2024+ models) or Daily Board. It automatically activates when the TV detects a user approaching, and displays weather, memos, SmartThings device status, and other information. This is a system-level UI rendered by the Tizen system, not an OCF resource, so your local OCF control cannot inject content into it or replace it.
+
+Research Objectives (Three Directions)
+
+Direction 1: Verify Whether the System Screen Can Be Disabled
+
+In the TV settings, find the "Now Brief" option under Settings > All Settings > Advanced Features (or General > Privacy on some models), and turn off "Enable with User Detection".
+
+Test Objective: Confirm whether disabling this option completely prevents the screen from appearing when someone approaches, providing a "clean slate" for HA to trigger Samstream.
+
+Direction 2: Verify Whether External Presence Detection + HA Trigger Can Replace It
+
+Use a PIR sensor or Hikvision camera motion detection (already integrated into HA) to detect "someone in the room."
+
+Test Process: HA automation triggers → determine TV status → if TV is off/asleep, wake TV and launch Samstream; if TV is on, decide whether to interrupt based on conditions.
+
+Key Verification Point: After disabling the system Now Brief, whether Samstream can reliably occupy the screen when someone approaches, rather than Samsung's native UI.
+
+Direction 3: Investigate the Feasibility of Daily Board SDK (Long-term)
+
+Samsung's SDC24 introduced the Daily Board SDK for "selected partners" to add widgets. These widgets can display weather, SmartThings status, etc., and activate when the TV detects a user.
+
+Important Limitation: This SDK is not open to ordinary third-party developers; it is a partner program. You need to investigate whether Samsung has a public application channel, or whether a similar effect can be achieved through some form of "widget JSON configuration".
+
+Expected Outcome: If a channel exists, Samstream or HA data could potentially be displayed as a widget on the Daily Board screen. If no channel exists, this direction can be closed.
+
+Deliverables
+
+□ Document the location and effect of Now Brief / Daily Board settings (with screenshots).
+□ Record the reliability test results of HA external presence detection + Samstream trigger (success rate, latency, failure scenarios).
+□ Investigate the Daily Board SDK partner entry (whether public application is possible, required qualifications), and provide a conclusion.
+Dependencies
+
+Now Brief / Daily Board screen has been confirmed to exist on your TV model.
+
+HA presence detection sensors are available (PIR or camera motion).
+
+Samstream app is already installed and can be launched via HA.

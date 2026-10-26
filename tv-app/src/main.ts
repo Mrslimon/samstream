@@ -8,7 +8,7 @@ import "@fontsource/readex-pro/arabic-600.css";
 import "@fontsource/readex-pro/latin-600.css";
 import "./styles.css";
 import { App, type AppElements, type Connection } from "./app";
-import { parsePayload, readLaunchPayload } from "./launch";
+import { parseOpen, parsePayload, readLaunchPayload } from "./launch";
 import { resolveLanguage, strings } from "./i18n";
 import { parseMedia, parseNotice } from "./notice";
 import { fetchSession, loadSettings, xhrFetch } from "./settings";
@@ -129,6 +129,12 @@ async function boot(): Promise<void> {
       app.debug(`HA: media ${media.kind}`);
       playSeq = seq;
       app.playMedia(media);
+      return;
+    }
+    const open = action === "open" ? parseOpen(command) : undefined;
+    if (open) {
+      app.debug(`HA: open ${open.youtube ? `youtube ${open.youtube}` : open.url}`);
+      app.openExternal(open);
       return;
     }
     const payload = action === "play" ? parsePayload(command, haUrl) : undefined;

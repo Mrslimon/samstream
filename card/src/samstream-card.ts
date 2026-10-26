@@ -51,6 +51,7 @@ export class SamstreamCard extends LitElement {
     camera: { state: true },
     feedback: { state: true },
     severity: { state: true },
+    volumeDrag: { state: true },
   };
 
   hass!: Hass;
@@ -59,6 +60,9 @@ export class SamstreamCard extends LitElement {
   camera = "";
   feedback = "";
   severity: Severity = "info";
+  // While the volume slider is being dragged: the percentage to show, so the
+  // label leads the TV instead of waiting for the next (up to 10 s) poll.
+  volumeDrag: number | undefined;
   private appsFor: string | undefined;
   private feedbackTimer: ReturnType<typeof setTimeout> | undefined;
   private holdTimer: ReturnType<typeof setTimeout> | undefined;
@@ -133,6 +137,13 @@ export class SamstreamCard extends LitElement {
     if (this.apps === undefined || key !== this.appsFor) {
       this.appsFor = key;
       this.loadApps();
+    }
+    // Drop the held slider value once the TV reports the level we set.
+    if (this.volumeDrag !== undefined) {
+      const level = this.hass.states[this.config.entity]?.attributes.volume_level;
+      if (typeof level === "number" && Math.round(level * 100) === this.volumeDrag) {
+        this.volumeDrag = undefined;
+      }
     }
   }
 
@@ -380,21 +391,46 @@ export class SamstreamCard extends LitElement {
         : html`<button class="key" title=${label} @click=${send}><ha-icon icon=${icon}></ha-icon></button>`;
     };
     const volume = this.hass.states[this.config.entity]?.attributes.volume_level;
+    const hasVolume = typeof volume === "number";
+    const shown = this.volumeDrag ?? (hasVolume ? Math.round(volume * 100) : 0);
+    const onSlide = (event: Event) => {
+      this.volumeDrag = Number((event.target as HTMLInputElement).value);
+    };
     return html`
       <section>
         <h3>${t.media}</h3>
         <div class="media">
           ${media("media_play_pause", "mdi:play-pause", t.playPause)}
-          <span class="spacer"></span>
-          ${media("volume_down", "mdi:volume-minus", t.volumeDown, true)}
-          <span class="level">${typeof volume === "number" ? Math.round(volume * 100) : "–"}</span>
-          ${media("volume_up", "mdi:volume-plus", t.volumeUp, true)}
           <button class="key" title=${t.mute} @click=${() => this.toggleMute()}>
             <ha-icon icon="mdi:volume-off"></ha-icon>
           </button>
+          <input
+            class="volume"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            aria-label=${t.volume}
+            .value=${String(shown)}
+            ?disabled=${!hasVolume}
+            @input=${onSlide}
+            @change=${(event: Event) =>
+              this.setVolume(Number((event.target as HTMLInputElement).value))}
+          />
+          <span class="level">${hasVolume || this.volumeDrag !== undefined ? shown : "–"}</span>
         </div>
       </section>
     `;
+  }
+
+  private setVolume(percent: number): void {
+    this.volumeDrag = Math.min(100, Math.max(0, Math.round(percent)));
+    this.call(
+      "media_player",
+      "volume_set",
+      { entity_id: this.config.entity, volume_level: this.volumeDrag / 100 },
+      false,
+    );
   }
 
   private renderKeyboard(): TemplateResult {
@@ -692,6 +728,16 @@ export class SamstreamCard extends LitElement {
     }
     .media .spacer {
       flex: 1;
+    }
+    .media .volume {
+      flex: 1;
+      min-width: 0;
+      accent-color: var(--primary-color);
+      cursor: pointer;
+    }
+    .media .volume:disabled {
+      cursor: default;
+      opacity: 0.4;
     }
     .media .level {
       min-width: 2.5em;

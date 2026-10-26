@@ -23,6 +23,7 @@ from pytest_homeassistant_custom_component.common import (
 from custom_components.samstream.const import DOMAIN
 from custom_components.samstream.coordinator import default_wol_target
 from custom_components.samstream.keys import normalize_key
+from custom_components.samstream.tv_session import current_command
 
 from .conftest import MAC, TV_INFO
 
@@ -258,6 +259,47 @@ async def test_text_hold_and_pointer(hass: HomeAssistant, mock_tv: MagicMock) ->
         DOMAIN, "pointer", {ATTR_ENTITY_ID: TV, "click": "left"}, blocking=True
     )
     assert mock_tv.move_pointer.await_count == 1
+
+
+@pytest.mark.usefixtures("setup_entry")
+async def test_art_mode_toggles_with_power(
+    hass: HomeAssistant, mock_tv: MagicMock
+) -> None:
+    mock_tv.toggle_art_mode = AsyncMock()
+    await hass.services.async_call(
+        DOMAIN, "art_mode", {ATTR_ENTITY_ID: TV}, blocking=True
+    )
+    mock_tv.toggle_art_mode.assert_awaited_once_with()
+
+
+@pytest.mark.usefixtures("setup_entry")
+async def test_open_url_youtube_and_web(
+    hass: HomeAssistant, mock_tv: MagicMock
+) -> None:
+    mock_tv.launch_app = AsyncMock()
+    mock_tv.cast_youtube = AsyncMock()
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+
+    # A YouTube link casts the video over the Lounge protocol (HA-side).
+    await hass.services.async_call(
+        DOMAIN,
+        "open_url",
+        {ATTR_ENTITY_ID: TV, "url": "https://youtu.be/dQw4w9WgXcQ"},
+        blocking=True,
+    )
+    mock_tv.cast_youtube.assert_awaited_once_with("dQw4w9WgXcQ")
+
+    # Any other URL opens the TV browser via the Samstream app.
+    await hass.services.async_call(
+        DOMAIN,
+        "open_url",
+        {ATTR_ENTITY_ID: TV, "url": "https://example.com/page"},
+        blocking=True,
+    )
+    assert current_command(hass, entry) == {
+        "action": "open",
+        "url": "https://example.com/page",
+    }
 
 
 @pytest.mark.usefixtures("setup_entry")

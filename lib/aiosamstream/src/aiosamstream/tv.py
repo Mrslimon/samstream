@@ -20,6 +20,7 @@ from samsungtvws.exceptions import (
 from samsungtvws.remote import ChannelEmitCommand, RemoteControlCommand, SendRemoteKey
 from websockets.exceptions import WebSocketException
 
+from .art import ArtConnection
 from .const import CLIENT_NAME, REST_PORT, WS_PORT_SECURE
 from .exceptions import (
     SamstreamAuthError,
@@ -27,6 +28,7 @@ from .exceptions import (
     SamstreamError,
     SamstreamTimeoutError,
 )
+from .lounge import play_youtube
 from .models import AppStatus, DeviceInfo
 from .upnp import RenderingControl
 from .wol import DEFAULT_TARGET, send_magic_packet
@@ -144,6 +146,10 @@ class SamsungTV:
             await self._send_commands(
                 [ChannelEmitCommand.launch_app(app_id, "NATIVE_LAUNCH")]
             )
+
+    async def cast_youtube(self, video_id: str) -> None:
+        """Play a YouTube video on the TV's YouTube app (DIAL launch + Lounge)."""
+        await play_youtube(self.host, self._session, video_id, timeout=self._timeout)
 
     async def close_app(self, app_id: str) -> None:
         """Close an app; the TV returns to what was on screen before it."""
@@ -299,6 +305,45 @@ class SamsungTV:
     async def wake_on_lan(self, mac: str, wol_target: str = DEFAULT_TARGET) -> None:
         """Send only a Wake-on-LAN packet (safe to repeat; never turns it off)."""
         await send_magic_packet(mac, target=wol_target)
+
+    def art(self) -> ArtConnection:
+        """Return an art-app channel (Frame TVs); use `async with tv.art()`."""
+        return ArtConnection(
+            self.host,
+            self._session,
+            token=self._token,
+            name=self._name,
+            timeout=self._timeout,
+        )
+
+    async def get_art_mode(self) -> bool:
+        """Report whether Art Mode is on now (Frame TVs)."""
+        async with self.art() as art:
+            return await art.get_art_mode()
+
+    async def set_art_mode(self, *, on: bool, artwork: str | None = None) -> None:
+        """Turn Art Mode on/off, optionally selecting `artwork` (a content id)."""
+        async with self.art() as art:
+            if artwork is not None:
+                await art.select(artwork, show=on)
+                if not on:
+                    await art.set_art_mode(on=False)
+            else:
+                await art.set_art_mode(on=on)
+
+    async def art_list(self) -> list[dict[str, object]]:
+        """Return the stored artwork (each item has a `content_id`)."""
+        async with self.art() as art:
+            return await art.available()
+
+    async def toggle_art_mode(self) -> None:
+        """Flip a Frame TV between normal TV and Art Mode (the power key).
+
+        The art-app channel is unreliable on newer Frame firmware (2024 sets
+        ignore it entirely), but the power key flips TV <-> Art dependably and
+        never fully powers the Frame off, so it is the portable control.
+        """
+        await self.send_keys(["KEY_POWER"])
 
     async def close(self) -> None:
         """Close the kept-open remote connection."""

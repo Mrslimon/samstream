@@ -13,10 +13,13 @@ from typing import Final
 
 from .const import SAMSTREAM_APP_ID
 
+# The YouTube Tizen app; launched with a `v=<id>` deep link to cast a video.
+YOUTUBE_APP_ID: Final = "111299001912"
+
 # Confirmed on a 2023 QN800C (Tizen 9): YouTube, Netflix, Prime Video, Spotify,
 # Apple TV, Browser. The others are widely published IDs.
 KNOWN_APPS: Final[dict[str, str]] = {
-    "111299001912": "YouTube",
+    YOUTUBE_APP_ID: "YouTube",
     "3201907018807": "Netflix",
     "3201910019365": "Prime Video",
     "3201901017640": "Disney+",

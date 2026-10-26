@@ -33,3 +33,15 @@ distributor.xml
 
 # Local dev secrets (sdb RSA key, etc.)
 .dev/
+
+# Pairing tokens for each TV, and TV state dumps
+.samstream-token*
+tv_state*.json
+
+# OCF research: private keys and TV credentials never go in git
+*.key
+oicseek/tv_cred*.json
+oicseek/tv_state*.json
+
+# Scratch files
+scratchpad/

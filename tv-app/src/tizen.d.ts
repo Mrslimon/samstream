@@ -19,6 +19,12 @@ export interface AVPlayStreamInfo {
   extra_info: string;
 }
 
+/** An opaque Tizen ApplicationControl (built with `new tizen.ApplicationControl`). */
+export interface TizenApplicationControl {
+  operation: string;
+  uri: string | null;
+}
+
 export interface AVPlay {
   open(url: string): void;
   close(): void;
@@ -61,7 +67,20 @@ declare global {
               appControl: { data: { key: string; value: string[] }[] };
             } | null;
           };
+          launchAppControl(
+            control: TizenApplicationControl,
+            id: string | null,
+            success?: () => void,
+            error?: (error: { name?: string; message?: string }) => void,
+          ): void;
         };
+        ApplicationControl: new (
+          operation: string,
+          uri?: string | null,
+          mime?: string | null,
+          category?: string | null,
+          data?: unknown[],
+        ) => TizenApplicationControl;
       }
     | undefined;
 }

@@ -16,6 +16,29 @@ export interface LaunchPayload {
   message: string;
 }
 
+/** `{action:"open", youtube|url}`: open another app from inside Samstream. */
+export interface OpenTarget {
+  youtube?: string;
+  url?: string;
+}
+
+const YT_ID = /^[A-Za-z0-9_-]{11}$/;
+
+/** Parse an `open` command into a YouTube video id or a web URL (one of them). */
+export function parseOpen(raw: unknown): OpenTarget | undefined {
+  if (typeof raw !== "object" || raw === null) {
+    return undefined;
+  }
+  const { youtube, url } = raw as { youtube?: unknown; url?: unknown };
+  if (typeof youtube === "string" && YT_ID.test(youtube)) {
+    return { youtube };
+  }
+  if (typeof url === "string" && /^https?:\/\//i.test(url)) {
+    return { url };
+  }
+  return undefined;
+}
+
 export interface AppControlData {
   key: string;
   value: string[];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsePayload, payloadFromAppControl } from "./launch";
+import { parseOpen, parsePayload, payloadFromAppControl } from "./launch";
 
 const HA = "http://192.168.1.5:8123";
 const PAYLOAD = {
@@ -46,5 +46,23 @@ describe("payloadFromAppControl", () => {
   it("returns nothing for a plain launch", () => {
     expect(payloadFromAppControl([], HA)).toBeUndefined();
     expect(payloadFromAppControl(undefined, HA)).toBeUndefined();
+  });
+});
+
+describe("parseOpen", () => {
+  it("reads a YouTube video id", () => {
+    expect(parseOpen({ youtube: "dQw4w9WgXcQ" })).toEqual({ youtube: "dQw4w9WgXcQ" });
+  });
+
+  it("reads a web URL", () => {
+    expect(parseOpen({ url: "https://example.com" })).toEqual({ url: "https://example.com" });
+  });
+
+  it("rejects bad ids, non-http URLs and junk", () => {
+    expect(parseOpen({ youtube: "short" })).toBeUndefined();
+    expect(parseOpen({ url: "ftp://example.com" })).toBeUndefined();
+    expect(parseOpen({ url: "javascript:alert(1)" })).toBeUndefined();
+    expect(parseOpen(null)).toBeUndefined();
+    expect(parseOpen({})).toBeUndefined();
   });
 });

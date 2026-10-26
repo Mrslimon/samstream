@@ -246,3 +246,21 @@ stop_stream:
     entity:
       integration: samstream
       domain: media_player
+
+art_mode:
+  target:
+    entity:
+      integration: samstream
+      domain: media_player
+
+open_url:
+  target:
+    entity:
+      integration: samstream
+      domain: media_player
+  fields:
+    url:
+      required: true
+      example: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+      selector:
+        text:

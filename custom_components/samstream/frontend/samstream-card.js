@@ -596,6 +596,7 @@ var Y = {
 		ok: "OK",
 		volumeDown: "Volume down",
 		volumeUp: "Volume up",
+		volume: "Volume",
 		mute: "Mute",
 		playPause: "Play / pause",
 		noCameras: "No cameras in Home Assistant yet.",
@@ -641,6 +642,7 @@ var Y = {
 		ok: "موافق",
 		volumeDown: "خفض الصوت",
 		volumeUp: "رفع الصوت",
+		volume: "مستوى الصوت",
 		mute: "كتم",
 		playPause: "تشغيل / إيقاف مؤقت",
 		noCameras: "لا توجد كاميرات في Home Assistant بعد.",
@@ -736,7 +738,10 @@ var Z, Ae = [
 	updated(e) {
 		if (!e.has("hass") || !this.hass || !this.config) return;
 		let t = `${this.hass.states[this.config.entity]?.attributes.app_id ?? null}|${be(this.hass, this.config.entity)}`;
-		(this.apps === void 0 || t !== this.appsFor) && (this.appsFor = t, this.loadApps());
+		if ((this.apps === void 0 || t !== this.appsFor) && (this.appsFor = t, this.loadApps()), this.volumeDrag !== void 0) {
+			let e = this.hass.states[this.config.entity]?.attributes.volume_level;
+			typeof e == "number" && Math.round(e * 100) === this.volumeDrag && (this.volumeDrag = void 0);
+		}
 	}
 	loadApps() {
 		this.hass.callWS({
@@ -949,22 +954,39 @@ var Z, Ae = [
 			return r ? P`<button class="key" title=${n} @pointerdown=${a.down} @pointerup=${a.up} @pointerleave=${a.cancel} @pointercancel=${a.cancel} @contextmenu=${Q}>
             <ha-icon icon=${t}></ha-icon>
           </button>` : P`<button class="key" title=${n} @click=${i}><ha-icon icon=${t}></ha-icon></button>`;
-		}, n = this.hass.states[this.config.entity]?.attributes.volume_level;
+		}, n = this.hass.states[this.config.entity]?.attributes.volume_level, r = typeof n == "number", i = this.volumeDrag ?? (r ? Math.round(n * 100) : 0);
 		return P`
       <section>
         <h3>${e.media}</h3>
         <div class="media">
           ${t("media_play_pause", "mdi:play-pause", e.playPause)}
-          <span class="spacer"></span>
-          ${t("volume_down", "mdi:volume-minus", e.volumeDown, !0)}
-          <span class="level">${typeof n == "number" ? Math.round(n * 100) : "–"}</span>
-          ${t("volume_up", "mdi:volume-plus", e.volumeUp, !0)}
           <button class="key" title=${e.mute} @click=${() => this.toggleMute()}>
             <ha-icon icon="mdi:volume-off"></ha-icon>
           </button>
+          <input
+            class="volume"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            aria-label=${e.volume}
+            .value=${String(i)}
+            ?disabled=${!r}
+            @input=${(e) => {
+			this.volumeDrag = Number(e.target.value);
+		}}
+            @change=${(e) => this.setVolume(Number(e.target.value))}
+          />
+          <span class="level">${r || this.volumeDrag !== void 0 ? i : "–"}</span>
         </div>
       </section>
     `;
+	}
+	setVolume(e) {
+		this.volumeDrag = Math.min(100, Math.max(0, Math.round(e))), this.call("media_player", "volume_set", {
+			entity_id: this.config.entity,
+			volume_level: this.volumeDrag / 100
+		}, !1);
 	}
 	renderKeyboard() {
 		let e = this.text, t = () => {
@@ -1157,7 +1179,8 @@ Z = $, Z.properties = {
 	apps: { state: !0 },
 	camera: { state: !0 },
 	feedback: { state: !0 },
-	severity: { state: !0 }
+	severity: { state: !0 },
+	volumeDrag: { state: !0 }
 }, Z.styles = o`
     ha-card {
       padding: 16px;
@@ -1222,6 +1245,16 @@ Z = $, Z.properties = {
     }
     .media .spacer {
       flex: 1;
+    }
+    .media .volume {
+      flex: 1;
+      min-width: 0;
+      accent-color: var(--primary-color);
+      cursor: pointer;
+    }
+    .media .volume:disabled {
+      cursor: default;
+      opacity: 0.4;
     }
     .media .level {
       min-width: 2.5em;

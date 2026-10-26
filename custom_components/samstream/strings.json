@@ -248,6 +248,9 @@
     "message_required": {
       "message": "Enter a title or a message."
     },
+    "url_required": {
+      "message": "Enter an http(s) URL or a YouTube link."
+    },
     "media_unresolvable": {
       "message": "Cannot play this media item: {error}"
     },
@@ -440,6 +443,20 @@
     "stop_stream": {
       "name": "Return to previous",
       "description": "Closes the camera, message or video Samstream shows and goes back to what was on: reopens the app (resuming it if it was playing), or turns the TV off again if Samstream turned it on. Use it with presence or timers."
+    },
+    "art_mode": {
+      "name": "Toggle Art Mode",
+      "description": "On a Samsung Frame TV, switches between normal TV and Art Mode (the on-screen artwork). It flips between the two each time and never powers the TV fully off. Choosing which artwork to show is not possible over the local connection on newer Frames; it needs SmartThings."
+    },
+    "open_url": {
+      "name": "Open a link",
+      "description": "Opens a link on the TV: a YouTube link plays in the YouTube app, any other address opens in the TV's web browser.",
+      "fields": {
+        "url": {
+          "name": "URL",
+          "description": "A YouTube link (watch, youtu.be or Shorts) or any http(s) web address."
+        }
+      }
     }
   },
   "issues": {

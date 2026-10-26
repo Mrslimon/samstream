@@ -203,6 +203,22 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     service.async_register_platform_entity_service(
         hass,
         DOMAIN,
+        "art_mode",
+        entity_domain=MEDIA_PLAYER_DOMAIN,
+        schema={},
+        func="async_art_mode",
+    )
+    service.async_register_platform_entity_service(
+        hass,
+        DOMAIN,
+        "open_url",
+        entity_domain=MEDIA_PLAYER_DOMAIN,
+        schema={vol.Required("url"): cv.string},
+        func="async_open_url",
+    )
+    service.async_register_platform_entity_service(
+        hass,
+        DOMAIN,
         "install_app",
         entity_domain=MEDIA_PLAYER_DOMAIN,
         schema={vol.Optional(ATTR_PATH): cv.string},
