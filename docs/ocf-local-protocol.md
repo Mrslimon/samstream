@@ -231,9 +231,17 @@ owner PSK (needs the TLS1.2 master secret + client/server randoms, i.e. a key-ex
 whole handshake, so the binary identity is native and we compute the master secret ourselves. `derive_owner_psk`
 reproduces `dtls_tunnel.c`'s two-pass PRF byte for byte. `ocf/onboard.py` layers the proven pure-Python
 CoAP/CBOR (Block2 token reuse, separate-CON-response ACK, `application/cbor`) on top and drives the full
-sequence (discover → trigger PIN → ownership → install CA/ACE/cis → release). The integration runs onboarding
-inside Home Assistant via these modules; `oicseek/dtls_tunnel.c` and the `oicseek/*.py` scripts remain as the
-reference the port was validated against.
+sequence (discover → trigger PIN → ownership → install CA/ACE/cis → release). `oicseek/dtls_tunnel.c` and the
+`oicseek/*.py` scripts remain as the reference the port was validated against.
+
+**Onboarding is run from the LAN, not from inside HA.** In a bridge-networked Docker install the HA container
+cannot reach the TV over UDP (multicast doesn't cross the bridge; unicast to 5683 is dropped because the TV
+replies from a high port — NAT-return mismatch). So onboarding runs from a computer on the TV's own network with
+`scripts/onboard_tv.py onboard --tv <ip> --bundle <bundle>`, where the bundle (address, token, cloud UUID, CA)
+is shown by HA's "Connect the TV" screen. The tool owns the TV and points its `cis` at HA; the TV then dials the
+cloud (TCP 5684, which the TV reaches because it dials *out* to HA's published port — the whole reason the design
+has the TV connect to HA). The tool prints a credential to paste back into HA so HA can later release the TV.
+`scripts/onboard_tv.py release` (or the HA "hand back" screen, when the credential was pasted) does `pstat cm:1`.
 
 ---
 

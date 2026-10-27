@@ -156,7 +156,7 @@
       },
       "local_control_settings": {
         "title": "Connect the TV",
-        "description": "Home Assistant will connect the TV to itself over your network.\n\nThe TV will report to `{address}`.\nCloud ID: `{cloud_uuid}`\n\nKeep the access token as shown unless the TV already uses another. The TV must be able to reach this port — on Docker, publish it (`ports: - \"5684:5684\"`).",
+        "description": "Home Assistant will run a local cloud on your network for the TV to report to.\n\nThe TV will report to `{address}`.\nCloud ID: `{cloud_uuid}`\n\nKeep the access token unless the TV already uses another. The TV must be able to reach this port (on Docker, publish it: `ports: - \"5684:5684\"`). Next, you'll onboard the TV from a computer on its network.",
         "data": {
           "ocf_token": "Access token",
           "ocf_port": "Port",
@@ -179,6 +179,16 @@
           }
         }
       },
+      "local_control_connect": {
+        "title": "Connect the TV from a computer on its network",
+        "description": "Home Assistant can't reach the TV directly to set it up, so do it from a computer on the TV's own network.\n\n1. On that computer, in a checkout of this project, run:\n\n`{command}`\n\n2. When the TV shows an 8-digit PIN, type it into the tool.\n3. The tool prints a credential — paste it below (optional) so Home Assistant can hand the TV back later, then select Submit.\n\nThe TV ({tv_ip}) connects on its own; the next screen waits for it.",
+        "data": {
+          "credential": "Credential from the tool (optional)"
+        },
+        "data_description": {
+          "credential": "Paste what the onboarding tool printed, so Home Assistant can release the TV later. You can leave this empty."
+        }
+      },
       "local_control_pin": {
         "title": "Enter the PIN from the TV",
         "description": "Look at {name}: it is showing an 8-digit PIN.\n\nType it below. If no PIN appeared, make sure the TV is on, then try again.",
@@ -197,13 +207,13 @@
         "title": "The TV did not connect",
         "description": "The TV has not reported to Home Assistant yet. The usual reasons:\n\n- **It is still set up in SmartThings** on another phone or account. Remove it there first — a TV answers only one owner.\n- **The cloud port is not reachable from Home Assistant.** In Docker, publish it: `ports: - \"5684:5684\"`.\n- **The TV was off overnight**, so it lost the pairing. Turn it on, then try again for a fresh PIN.\n- Home Assistant must be on the TV's own network to set it up: on a bridge-networked Docker install it cannot reach the TV over Wi-Fi for onboarding — use host networking.",
         "menu_options": {
-          "local_control_pin": "Try again",
+          "local_control_connect": "Try again",
           "local_control_settings": "Change the cloud settings"
         }
       },
       "local_control_release": {
         "title": "Hand the TV back to SmartThings",
-        "description": "Home Assistant will release its ownership of the TV. The TV keeps its apps and settings — nothing is reset — and becomes available in the SmartThings app again.\n\nSelect Submit to hand it back and turn local control off."
+        "description": "Home Assistant will hand the TV back to SmartThings — it keeps its apps and settings and becomes available in the SmartThings app again.\n\nIf you pasted the credential during setup, select Submit and Home Assistant releases it. Otherwise run this on the LAN computer, then select Submit:\n\n`uv run python scripts/onboard_tv.py release --tv {tv_ip} --credential <the credential>`"
       }
     },
     "error": {
@@ -220,11 +230,13 @@
       "unknown": "Unexpected error, see the Home Assistant log.",
       "invalid_cloud_identity": "The CA certificate, key and cloud ID do not belong together, or one is not valid.",
       "token_too_short": "Use at least 16 characters.",
-      "invalid_pin": "Enter the 8 digits shown on the TV."
+      "invalid_pin": "Enter the 8 digits shown on the TV.",
+      "invalid_credential": "That does not look like the credential the tool printed. Copy the whole line.",
+      "no_address": "Home Assistant does not know its own address on your network yet. Set it in Settings → System → Network, then try again."
     },
     "progress": {
       "samsung_sign_in": "On a computer on your network that has a browser and Node.js, run:\n\n`{command}`\n\nIt opens the Samsung sign-in page. Sign in with your Samsung account; this screen continues by itself. The code works once and expires in 10 minutes.",
-      "onboarding": "![Connecting](/samstream_files/animations/loading.svg)\n\nTaking ownership of the TV and pointing it at Home Assistant, then waiting for it to connect. This can take up to a minute."
+      "onboarding": "![Connecting](/samstream_files/animations/loading.svg)\n\nWaiting for the TV to connect to Home Assistant. This can take up to a minute after onboarding."
     },
     "abort": {
       "signing_ready": "App signing is ready: {status}. Use the Install Samstream app button on the TV device.",

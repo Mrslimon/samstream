@@ -17,14 +17,16 @@ and 14.7. Run these in an executor; they block.
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import hashlib
+import json
 import logging
 import os
 import socket
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 from aiosamstream.exceptions import OcfOnboardError
 
@@ -92,6 +94,44 @@ class OnboardResult:
     obt_uuid: str  # our controller (owner) UUID
     owner_psk_hex: str  # the derived operational PSK
     secure_port: int
+
+
+@dataclass(frozen=True, slots=True)
+class OnboardBundle:
+    """The cloud details a LAN onboarding tool needs to point a TV at HA.
+
+    Home Assistant shows this (base64, via `encode_bundle`); the LAN tool decodes
+    it so the user never copies the CA, token and address by hand.
+    """
+
+    address: str  # the host the TV dials (HA's LAN address)
+    cis: str  # coaps+tcp://host:port written to the TV
+    cloud_uuid: str  # the cloud identity (server cert CN + ACL subject)
+    obt_uuid: str  # HA's controller UUID, so HA can later release the TV
+    token: str  # the access token the TV presents at sign-up
+    ca_pem: str  # HA's cloud CA, installed on the TV as a trust anchor
+
+
+def encode_bundle(bundle: OnboardBundle) -> str:
+    """Pack a bundle into one copy-pasteable base64 string."""
+    return base64.urlsafe_b64encode(json.dumps(asdict(bundle)).encode()).decode()
+
+
+def decode_bundle(blob: str) -> OnboardBundle:
+    """Read a bundle produced by `encode_bundle` (raises on malformed input)."""
+    data = json.loads(base64.urlsafe_b64decode(blob.strip().encode()))
+    return OnboardBundle(**{k: data[k] for k in OnboardBundle.__dataclass_fields__})
+
+
+def encode_credential(result: OnboardResult) -> str:
+    """Pack the owner credential so the LAN tool can hand it back to HA."""
+    return base64.urlsafe_b64encode(json.dumps(asdict(result)).encode()).decode()
+
+
+def decode_credential(blob: str) -> OnboardResult:
+    """Read a credential produced by `encode_credential` (raises on malformed)."""
+    data = json.loads(base64.urlsafe_b64decode(blob.strip().encode()))
+    return OnboardResult(**{k: data[k] for k in OnboardResult.__dataclass_fields__})
 
 
 # --------------------------------------------------------------------------- #

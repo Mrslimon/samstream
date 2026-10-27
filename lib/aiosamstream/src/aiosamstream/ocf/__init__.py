@@ -13,7 +13,18 @@ from .certs import (
 )
 from .cloud import CloudDevice, OcfCloud
 from .dtls import DtlsPskClient, derive_owner_psk
-from .onboard import OnboardResult, discover, onboard_tv, release_tv, trigger_pin
+from .onboard import (
+    OnboardBundle,
+    OnboardResult,
+    decode_bundle,
+    decode_credential,
+    discover,
+    encode_bundle,
+    encode_credential,
+    onboard_tv,
+    release_tv,
+    trigger_pin,
+)
 from .state import OcfTvState
 
 __all__ = [
@@ -22,9 +33,14 @@ __all__ = [
     "DtlsPskClient",
     "OcfCloud",
     "OcfTvState",
+    "OnboardBundle",
     "OnboardResult",
+    "decode_bundle",
+    "decode_credential",
     "derive_owner_psk",
     "discover",
+    "encode_bundle",
+    "encode_credential",
     "generate_identity",
     "issue_server_certificate",
     "load_identity",

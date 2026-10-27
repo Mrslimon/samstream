@@ -330,15 +330,17 @@ Prepared while `oicseek/` is still a spike (not finished). This supersedes the "
   - **18k. OCF diagnostic sensors (when OCF is owned).** Read-only resources that answer 2.05 locally, mapped to disabled-by-default diagnostic entities: firmware version (`/oic/p` `mnfv`, e.g. `T-OSCPCUABC-0090-2220.4`; the REST API reports `firmwareVersion: "Unknown"`) and build date (`/sec/provisioninginfo` `firmwareversion` `;25.04.22`); Wi-Fi signal/channel/band (`/sec/accesspointlist` entry whose `macAddress` matches the BSSID the REST API reports in `device.ssid`: `rssi`, `channel`, `frequency`); MAC addresses and feature flags (`/DevConfResURI`: `WOWLAN`, `BTWAKEUP`, `BTHIDPOWERON`, `DLNADMR`); partial serial / SmartThings agent version (`/sec/provisioninginfo` `deviceinfo`); "Local access: owned" from `/oic/sec/doxm`. Refresh slowly (e.g. every 10 min; Wi-Fi signal every 1 min). **Verify:** sensors populate after onboarding and survive a TV power cycle (dynamic port re-discovery).
   - **18l. OCF commands with real IDs.** Use the IDs the SmartThings export shows for this TV family as POST payload values: inputs (`dtv`, `HDMI1`… from `supportedInputSourcesMap`), picture modes (`modeGen_589826`…), sound modes (`modeAmplify`, `modeStandard`). Confirm each payload key on the QN800C (POST executes but answers 4.00, so verify by eye / by the UPnP or REST side effect), then expose `select_source` by real name, picture-mode and sound-mode `select` entities (write-only: the current mode can't be read locally, so they act as buttons/options without a state, or use SmartThings state when available). **Verify:** selecting HDMI1 / a picture mode from HA changes the TV.
   - **18m. Optional SmartThings-cloud state source.** When the user also has HA's SmartThings integration for this TV, read its entities for the state local paths can't give (current input, picture/sound mode, channel, now-playing). Gate: present → use; absent → those fields stay `None`. **Conflict:** local OCF ownership and SmartThings registration are mutually exclusive on the TV (verified 2026-10-22: SmartThings takes local ownership with its vendor OTM; while we own it the TV is hidden from the app), so the user picks **one**: local OCF (commands + diagnostics) *or* SmartThings (cloud state). The setup UX (milestone 22) explains the trade.
-  - **18n. Pure-Python onboarding inside HA — DONE (2026-10-27).** `dtls_tunnel.c` is replaced by a from-scratch
+  - **18n. Pure-Python onboarding, LAN-run — DONE (2026-10-27).** `dtls_tunnel.c` is replaced by a from-scratch
     DTLS 1.2 ECDHE-PSK client on `cryptography` (`aiosamstream/ocf/dtls.py`; binary PSK identity + owner-PSK
     derivation, no C compiler, no new deps). `aiosamstream/ocf/onboard.py` folds the old `oicseek` scripts
-    (discover → trigger PIN → Random-PIN ownership → install CA/ACE/cis → release) into one driver. The options
-    flow is a **6-screen guided setup** (intro → settings → PIN → progress/paired → troubleshooting → release)
-    that triggers the PIN and takes the 8 digits from the user, runs onboarding in an executor, and waits for the
-    TV to dial the cloud. New `paired` animation. See `docs/ocf-local-protocol.md §11`. Crypto has unit tests
-    (PRF/owner-PSK/CBC round-trip) + the full guided flow is tested with onboarding mocked; the live handshake is
-    verified against the lab TV.
+    (discover → trigger PIN → Random-PIN ownership → install CA/ACE/cis → release) into one driver.
+    **Onboarding runs from a computer on the TV's LAN** (`scripts/onboard_tv.py`), because HA in a bridge-networked
+    Docker container cannot reach the TV over UDP (multicast/CoAP; container IP is NAT'd). The options flow is a
+    guided setup (intro → settings → **connect: shows a one-line bundle to run the LAN tool with** → wait for the
+    TV to dial in → paired → troubleshooting → release); the tool prints a credential the user pastes back so HA
+    can later release the TV (`pstat cm:1`). New `paired` animation. See `docs/ocf-local-protocol.md §11`. Crypto
+    has unit tests (PRF/owner-PSK/CBC); the flow is tested with the dial-in mocked; the DTLS handshake, an
+    authenticated owner read, and the release are all **verified live against the lab TV** from a LAN host.
 - **Pitfalls (added to section 5):**
   | Area | Risk | Mitigation |
   |---|---|---|

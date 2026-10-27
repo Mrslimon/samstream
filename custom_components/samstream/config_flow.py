@@ -20,11 +20,11 @@ from aiosamstream import (
     SamsungTV,
 )
 from aiosamstream.ocf import (
-    discover,
+    OnboardBundle,
+    decode_credential,
+    encode_bundle,
     load_identity,
-    onboard_tv,
     release_tv,
-    trigger_pin,
 )
 from aiosamstream.samsung_cert import (
     SamsungCertError,
@@ -351,12 +351,8 @@ class SamstreamOptionsFlow(OptionsFlow):
         self._retry_form_shown = False
         self._voice_webhook = ""
         self._ocf_token = ""
-        # Guided local-control onboarding state.
-        self._ocf_port: int | None = None
-        self._ocf_device_uuid: str | None = None
-        self._ocf_pin = ""
-        self._onboard_task: asyncio.Task[None] | None = None
-        self._onboard_error: str | None = None
+        # Guided local-control onboarding: the task that waits for the TV to dial in.
+        self._onboard_task: asyncio.Task[bool] | None = None
 
     @callback
     def async_remove(self) -> None:
@@ -524,7 +520,7 @@ class SamstreamOptionsFlow(OptionsFlow):
     async def async_step_local_control_settings(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Set the cloud the TV will dial: token, port, address."""
+        """Set the cloud the TV will dial, then start it so the TV can connect."""
         service = async_get_service(self.hass)
         settings = await service.async_load()
         entry = self.config_entry
@@ -540,13 +536,16 @@ class SamstreamOptionsFlow(OptionsFlow):
                 errors[CONF_OCF_TOKEN] = "token_too_short"
             else:
                 self._ocf_token = token
-                self.hass.config_entries.async_update_entry(
-                    entry, data={**entry.data, CONF_OCF_TOKEN: token}
-                )
                 if new_settings != settings:
                     await service.async_save(new_settings)
-                self._ocf_port = None  # rediscover for the new/confirmed TV
-                return await self.async_step_local_control_pin()
+                # Turn local control on now, so the cloud is listening while the
+                # user runs the onboarding tool and the TV dials in.
+                self.hass.config_entries.async_update_entry(
+                    entry,
+                    data={**entry.data, CONF_OCF_TOKEN: token},
+                    options={**entry.options, CONF_OCF: True},
+                )
+                return await self.async_step_local_control_connect()
         return self.async_show_form(
             step_id="local_control_settings",
             data_schema=vol.Schema(
@@ -582,107 +581,109 @@ class SamstreamOptionsFlow(OptionsFlow):
             },
         )
 
-    async def async_step_local_control_pin(
+    async def async_step_local_control_connect(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Make the TV show its PIN, then take the 8 digits from the user."""
-        host = self.config_entry.data[CONF_HOST]
-        if user_input is None:
-            if self._ocf_port is None:
+        """Show the onboarding bundle to run on a LAN computer; then wait."""
+        service = async_get_service(self.hass)
+        settings = await service.async_load()
+        entry = self.config_entry
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            credential = str(user_input.get("credential", "")).strip()
+            if credential:
                 try:
-                    self._ocf_port, self._ocf_device_uuid = (
-                        await self.hass.async_add_executor_job(discover, host)
+                    cred = decode_credential(credential)
+                except (ValueError, KeyError):
+                    errors["credential"] = "invalid_credential"
+                else:
+                    self.hass.config_entries.async_update_entry(
+                        entry,
+                        data={
+                            **entry.data,
+                            CONF_OCF_OWNER_PSK: cred.owner_psk_hex,
+                            CONF_OCF_DEVICE_UUID: cred.device_uuid,
+                            CONF_OCF_SECURE_PORT: cred.secure_port,
+                        },
                     )
-                    await self.hass.async_add_executor_job(trigger_pin, host)
-                except OcfError as err:
-                    _LOGGER.warning("Local control: cannot reach %s: %s", host, err)
-                    return await self.async_step_local_control_trouble()
-            return self._show_pin_form()
-        pin = str(user_input.get("pin", "")).strip()
-        if not (pin.isdigit() and len(pin) == 8):  # noqa: PLR2004
-            return self._show_pin_form({"pin": "invalid_pin"})
-        self._ocf_pin = pin
-        self._onboard_task = None
-        self._onboard_error = None
-        return await self.async_step_local_control_wait()
-
-    def _show_pin_form(self, errors: dict[str, str] | None = None) -> ConfigFlowResult:
+            if not errors:
+                self._onboard_task = None
+                return await self.async_step_local_control_wait()
+        address = service.cloud_address()
+        cis = service.cis()
+        token = entry.data.get(CONF_OCF_TOKEN) or self._ocf_token or ""
+        schema = vol.Schema(
+            {
+                vol.Optional("credential"): TextSelector(
+                    TextSelectorConfig(multiline=True)
+                )
+            }
+        )
+        if address is None or cis is None:
+            return self.async_show_form(
+                step_id="local_control_connect",
+                data_schema=schema,
+                errors={"base": "no_address"},
+                description_placeholders={"tv_ip": "-", "bundle": "-", "command": "-"},
+            )
+        bundle = encode_bundle(
+            OnboardBundle(
+                address=address,
+                cis=cis,
+                cloud_uuid=settings.identity.cloud_uuid,
+                obt_uuid=settings.obt_uuid,
+                token=token,
+                ca_pem=settings.identity.ca_cert_pem.decode(),
+            )
+        )
+        tv_ip = entry.data[CONF_HOST]
+        command = (
+            "uv run python scripts/onboard_tv.py onboard "
+            f"--tv {tv_ip} --bundle {bundle}"
+        )
         return self.async_show_form(
-            step_id="local_control_pin",
-            data_schema=vol.Schema({vol.Required("pin"): str}),
-            errors=errors or {},
-            description_placeholders={"name": self.config_entry.title},
+            step_id="local_control_connect",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={
+                "tv_ip": tv_ip,
+                "bundle": bundle,
+                "command": command,
+            },
         )
 
     async def async_step_local_control_wait(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Run onboarding and wait for the TV to dial the cloud (paired on success)."""
+        """Wait for the TV to dial the cloud; show the paired screen on success."""
         if self._onboard_task is None:
-            self._onboard_task = self.hass.async_create_task(self._run_onboard())
+            self._onboard_task = self.hass.async_create_task(self._await_dial_in())
         if not self._onboard_task.done():
             return self.async_show_progress(
                 step_id="local_control_wait",
                 progress_action="onboarding",
                 progress_task=self._onboard_task,
             )
-        error = self._onboard_error
+        connected = bool(self._onboard_task.result())
         self._onboard_task = None
-        if error:
-            return self.async_show_progress_done(next_step_id="local_control_trouble")
-        return self.async_show_progress_done(next_step_id="local_control_done")
+        if connected:
+            return self.async_show_progress_done(next_step_id="local_control_done")
+        return self.async_show_progress_done(next_step_id="local_control_trouble")
 
-    async def _run_onboard(self) -> None:
-        """Own the TV, point it at the cloud, then wait for it to connect."""
-        entry = self.config_entry
+    async def _await_dial_in(self) -> bool:
+        """Return True once the TV holds a connection to the cloud, else time out."""
         service = async_get_service(self.hass)
-        settings = await service.async_load()
-        host = entry.data[CONF_HOST]
-        cis = service.cis()
-        if cis is None:
-            self._onboard_error = "no_address"
-            return
+        entry_id = self.config_entry.entry_id
         try:
-            result = await self.hass.async_add_executor_job(
-                partial(
-                    onboard_tv,
-                    host,
-                    self._ocf_pin,
-                    obt_uuid=settings.obt_uuid,
-                    ca_der=settings.identity.ca_der,
-                    cloud_uuid=settings.identity.cloud_uuid,
-                    cis=cis,
-                    access_token=self._ocf_token,
-                    device_uuid=self._ocf_device_uuid,
-                    secure_port=self._ocf_port,
-                )
-            )
-        except OcfError as err:
-            _LOGGER.warning("Local control onboarding failed: %s", err)
-            self._onboard_error = "onboard_failed"
-            return
-        # Keep the credential; turning local control on reloads and starts the cloud.
-        self.hass.config_entries.async_update_entry(
-            entry,
-            data={
-                **entry.data,
-                CONF_OCF_TOKEN: self._ocf_token,
-                CONF_OCF_OWNER_PSK: result.owner_psk_hex,
-                CONF_OCF_DEVICE_UUID: result.device_uuid,
-                CONF_OCF_SECURE_PORT: result.secure_port,
-            },
-            options={**entry.options, CONF_OCF: True},
-        )
-        await self._wait_for_dial_in(service, entry.entry_id)
-
-    async def _wait_for_dial_in(self, service: Any, entry_id: str) -> None:
-        async with asyncio.timeout(OCF_ONBOARD_TIMEOUT):
-            while True:
-                cloud = service.cloud
-                device = cloud.devices.get(entry_id) if cloud is not None else None
-                if device is not None and device.connected:
-                    return
-                await asyncio.sleep(1)
+            async with asyncio.timeout(OCF_ONBOARD_TIMEOUT):
+                while True:
+                    cloud = service.cloud
+                    device = cloud.devices.get(entry_id) if cloud is not None else None
+                    if device is not None and device.connected:
+                        return True
+                    await asyncio.sleep(1)
+        except TimeoutError:
+            return False
 
     async def async_step_local_control_done(
         self, user_input: dict[str, Any] | None = None
@@ -700,16 +701,19 @@ class SamstreamOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Show common reasons the TV did not connect, with a way to retry."""
-        self._ocf_port = None  # a retry re-discovers and re-triggers the PIN
         return self.async_show_menu(
             step_id="local_control_trouble",
-            menu_options=["local_control_pin", "local_control_settings"],
+            menu_options=["local_control_connect", "local_control_settings"],
         )
 
     async def async_step_local_control_release(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Hand the TV back to SmartThings and turn local control off."""
+        """Hand the TV back to SmartThings and turn local control off.
+
+        If the onboarding credential was pasted in, release it here; otherwise
+        the user releases it from the LAN tool (the screen explains this).
+        """
         entry = self.config_entry
         if user_input is not None:
             settings = await async_get_service(self.hass).async_load()
@@ -727,7 +731,9 @@ class SamstreamOptionsFlow(OptionsFlow):
                     )
             return self.async_create_entry(data={**entry.options, CONF_OCF: False})
         return self.async_show_form(
-            step_id="local_control_release", data_schema=vol.Schema({})
+            step_id="local_control_release",
+            data_schema=vol.Schema({}),
+            description_placeholders={"tv_ip": entry.data[CONF_HOST]},
         )
 
     async def _async_cloud_settings(
