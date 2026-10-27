@@ -36,7 +36,7 @@
       }
     },
     "progress": {
-      "wait_for_allow": "Look at {name}: a message asks whether to allow \"Home Assistant Samstream\". Choose **Allow** with the remote. Waiting up to 60 seconds."
+      "wait_for_allow": "![Pairing the TV with Home Assistant](/samstream_files/animations/pairing.svg)\n\nLook at {name}: a message asks whether to allow \"Home Assistant Samstream\". Choose **Allow** with the remote. Waiting up to 60 seconds."
     },
     "error": {
       "cannot_connect": "Cannot reach the TV. Check that it is on and that the IP address is correct.",
@@ -72,6 +72,8 @@
         "menu_options": {
           "tv_app": "TV app: language and theme",
           "network": "Network: Wake-on-LAN and extra apps",
+          "voice_bridge": "Voice bridge: Bixby, Alexa or the TV app to Assist",
+          "local_control": "Local control: SmartThings features over your own network",
           "app_signing": "App signing: certificates for installing Samstream"
         }
       },
@@ -131,6 +133,77 @@
           "tv_corner": "Where Live TV or the HDMI input stays visible when a camera plays with the TV picture in a corner.",
           "frame_power": "The Frame's Power key switches to Art Mode. Choose Fully off to make 'turn off' (and the camera's return) switch it off completely, like a long press on its remote."
         }
+      },
+      "voice_bridge": {
+        "title": "Voice bridge",
+        "description": "Send spoken text to Home Assistant Assist. Anything can POST JSON with a `text` field (for example: turn on the kitchen lights) to this address: a Bixby capsule on your phone, the Samstream TV app, a script. Assist runs it in this TV's area, a `samstream_voice` event fires for your automations, and the answer comes back as `speech`.\n\nAddress (keep it secret, anyone with it can talk to Assist):\n`{url}`\n\nFrom outside your home it needs a public address (Home Assistant Cloud or your own).",
+        "data": {
+          "voice_bridge": "Turn on the voice bridge",
+          "voice_show_reply": "Show the answer on this TV"
+        },
+        "data_description": {
+          "voice_bridge": "Turn off to disable the address; it stays the same when you turn it back on.",
+          "voice_show_reply": "Shows what was said and Assist's answer as a short message, only while the TV is on."
+        }
+      },
+      "local_control": {
+        "title": "Local control (local SmartThings)",
+        "description": "Home Assistant becomes the cloud your TV reports to, over your own network — its real inputs, picture and sound mode, channel, ambient light and more, with no Samsung account and no internet.\n\nA TV works with **either** local control **or** the SmartThings app, never both at once, and you can switch back any time.\n\nBefore you start: the TV must be on, Home Assistant must be able to reach it on your network, and the TV must be able to reach Home Assistant on the cloud port (on Docker, publish it: `ports: - \"5684:5684\"`).",
+        "menu_options": {
+          "local_control_settings": "Set up local control",
+          "local_control_release": "Turn off and hand the TV back to SmartThings"
+        }
+      },
+      "local_control_settings": {
+        "title": "Connect the TV",
+        "description": "Home Assistant will connect the TV to itself over your network.\n\nThe TV will report to `{address}`.\nCloud ID: `{cloud_uuid}`\n\nKeep the access token as shown unless the TV already uses another. The TV must be able to reach this port — on Docker, publish it (`ports: - \"5684:5684\"`).",
+        "data": {
+          "ocf_token": "Access token",
+          "ocf_port": "Port",
+          "ocf_host": "Address the TV connects to"
+        },
+        "data_description": {
+          "ocf_token": "The secret the TV presents to Home Assistant. Keep the one shown unless the TV already has another.",
+          "ocf_port": "TCP port for every TV (5684 is the standard).",
+          "ocf_host": "Leave empty to use Home Assistant's own address on your network."
+        },
+        "sections": {
+          "import_cloud": {
+            "name": "Use an existing local cloud",
+            "description": "Only if a TV already trusts another local cloud (for example one run from a computer): paste its CA certificate, CA key and cloud ID, so the TV keeps trusting it.",
+            "data": {
+              "cloud_uuid": "Cloud ID",
+              "ca_certificate": "CA certificate (PEM)",
+              "ca_key": "CA private key (PEM)"
+            }
+          }
+        }
+      },
+      "local_control_pin": {
+        "title": "Enter the PIN from the TV",
+        "description": "Look at {name}: it is showing an 8-digit PIN.\n\nType it below. If no PIN appeared, make sure the TV is on, then try again.",
+        "data": {
+          "pin": "PIN"
+        },
+        "data_description": {
+          "pin": "The 8 digits shown on the TV screen."
+        }
+      },
+      "local_control_done": {
+        "title": "Paired",
+        "description": "![Paired](/samstream_files/animations/paired.svg)\n\n{name} is now connected to Home Assistant over your network. Select Submit to finish."
+      },
+      "local_control_trouble": {
+        "title": "The TV did not connect",
+        "description": "The TV has not reported to Home Assistant yet. The usual reasons:\n\n- **It is still set up in SmartThings** on another phone or account. Remove it there first — a TV answers only one owner.\n- **The cloud port is not reachable from Home Assistant.** In Docker, publish it: `ports: - \"5684:5684\"`.\n- **The TV was off overnight**, so it lost the pairing. Turn it on, then try again for a fresh PIN.\n- Home Assistant must be on the TV's own network to set it up: on a bridge-networked Docker install it cannot reach the TV over Wi-Fi for onboarding — use host networking.",
+        "menu_options": {
+          "local_control_pin": "Try again",
+          "local_control_settings": "Change the cloud settings"
+        }
+      },
+      "local_control_release": {
+        "title": "Hand the TV back to SmartThings",
+        "description": "Home Assistant will release its ownership of the TV. The TV keeps its apps and settings — nothing is reset — and becomes available in the SmartThings app again.\n\nSelect Submit to hand it back and turn local control off."
       }
     },
     "error": {
@@ -144,10 +217,14 @@
       "file_not_allowed": "Files must be inside the Home Assistant config folder.",
       "bad_certificate": "The certificate files cannot be opened. Check the password.",
       "duid_not_covered": "This certificate does not list this TV. Create one that includes it, or sign in with Samsung.",
-      "unknown": "Unexpected error, see the Home Assistant log."
+      "unknown": "Unexpected error, see the Home Assistant log.",
+      "invalid_cloud_identity": "The CA certificate, key and cloud ID do not belong together, or one is not valid.",
+      "token_too_short": "Use at least 16 characters.",
+      "invalid_pin": "Enter the 8 digits shown on the TV."
     },
     "progress": {
-      "samsung_sign_in": "On a computer on your network that has a browser and Node.js, run:\n\n`{command}`\n\nIt opens the Samsung sign-in page. Sign in with your Samsung account; this screen continues by itself. The code works once and expires in 10 minutes."
+      "samsung_sign_in": "On a computer on your network that has a browser and Node.js, run:\n\n`{command}`\n\nIt opens the Samsung sign-in page. Sign in with your Samsung account; this screen continues by itself. The code works once and expires in 10 minutes.",
+      "onboarding": "![Connecting](/samstream_files/animations/loading.svg)\n\nTaking ownership of the TV and pointing it at Home Assistant, then waiting for it to connect. This can take up to a minute."
     },
     "abort": {
       "signing_ready": "App signing is ready: {status}. Use the Install Samstream app button on the TV device.",
@@ -161,6 +238,15 @@
       },
       "samstream_app": {
         "name": "Samstream app"
+      },
+      "local_control": {
+        "name": "Local control"
+      },
+      "tv_camera": {
+        "name": "TV camera"
+      },
+      "energy_saving": {
+        "name": "Energy saving"
       }
     },
     "sensor": {
@@ -173,6 +259,21 @@
           "home": "Home / Live TV",
           "other": "Other app"
         }
+      },
+      "channel": {
+        "name": "Channel"
+      },
+      "ambient_light": {
+        "name": "Ambient light"
+      },
+      "sound_detected": {
+        "name": "Sound detected"
+      },
+      "remote_battery": {
+        "name": "Remote battery"
+      },
+      "wifi_signal": {
+        "name": "Wi-Fi signal"
       }
     },
     "button": {
@@ -189,6 +290,20 @@
     "update": {
       "samstream_app": {
         "name": "Samstream TV app"
+      }
+    },
+    "select": {
+      "input_source": {
+        "name": "Input"
+      },
+      "picture_mode": {
+        "name": "Picture mode"
+      },
+      "sound_mode": {
+        "name": "Sound mode"
+      },
+      "sound_output": {
+        "name": "Sound output"
       }
     }
   },
@@ -267,6 +382,9 @@
     },
     "certificate_missing_tv": {
       "message": "The Samsung certificate does not include {name} yet (DUID {duid}). Sign in to Samsung again under Samstream → Configure → App signing: the new certificate covers all your TVs."
+    },
+    "local_control_unavailable": {
+      "message": "Local control is not connected to this TV right now."
     }
   },
   "services": {
@@ -464,7 +582,7 @@
   "issues": {
     "developer_mode": {
       "title": "Developer Mode needed on {name}",
-      "description": "Home Assistant could not connect to {name} to install the Samstream app. The TV only accepts app installs from the one computer set in its Developer Mode.\n\nThe TV's developer host is now **{developer_host}**, and Home Assistant is at **{ha_host}**.\n\n1. On the TV, open **Apps**.\n2. Press **1 2 3 4 5** on the remote (or on the on-screen keypad).\n3. Turn **Developer mode** on, enter **{ha_host}** as the Host PC IP, then choose **OK**.\n4. Restart the TV: hold the power button until the Samsung logo appears.\n5. Run the install again; this message disappears once it works.\n\nIf {ha_host} is not this server's address on your network, set the local network URL under **Settings → System → Network**.\n\nIf the TV's menu is in Arabic or another right-to-left language and installs still fail, the TV may store the address backwards: Home Assistant will tell you."
+      "description": "![Turning on Developer Mode on the TV](/samstream_files/animations/developer-mode.en.svg)\n\nHome Assistant could not connect to {name} to install the Samstream app. The TV only accepts app installs from the one computer set in its Developer Mode.\n\nThe TV's developer host is now **{developer_host}**, and Home Assistant is at **{ha_host}**.\n\n1. On the TV, open **Apps**.\n2. Press **1 2 3 4 5** on the remote (or on the on-screen keypad).\n3. Turn **Developer mode** on. The Host PC IP has four boxes, one per part: enter **{ha_host_boxes}**, then choose **OK**.\n   - TV menu in Arabic or another right-to-left language? The boxes run the other way, so enter the parts reversed: **{ha_host_rtl}** (first box first).\n4. Restart the TV: hold the power button until the Samsung logo appears.\n5. Run the install again; this message disappears once it works.\n\nIf {ha_host} is not this server's address on your network, set the local network URL under **Settings → System → Network**.\n\nIf installs still fail after that, Home Assistant checks whether the TV stored the address backwards and tells you."
     },
     "certificate_expiring": {
       "title": "Samstream signing certificates expire on {date}",
@@ -485,6 +603,26 @@
     "duid_not_covered": {
       "title": "Add {name} to your Samsung certificate",
       "description": "Home Assistant's Samsung certificate does not list **{name}** (DUID {duid}) yet, so the TV refuses the Samstream app. This happens when the TV was added, or its Developer Mode was not reachable, after you signed in.\n\n1. Open **Settings → Devices & services → Samstream**, then **Configure** on any of your TVs.\n2. Choose **App signing → Sign in with Samsung** and sign in as before.\n3. Run the install again.\n\nThe new certificate covers every Samstream TV Home Assistant knows, and apps already installed keep working."
+    },
+    "ocf_port_in_use": {
+      "title": "Local control cannot start",
+      "description": "Port {port} is already used on this machine. Choose another port in the Samstream options (Local control), or stop what uses it."
+    },
+    "ocf_no_address": {
+      "title": "Local control has no address for the TV",
+      "description": "Home Assistant does not know its own network address. Set it in Settings > System > Network, or enter it in the Samstream options (Local control)."
+    },
+    "ocf_not_reachable": {
+      "title": "Your TV cannot reach Home Assistant for local control",
+      "description": "Home Assistant listens on TCP {port}, but a test connection to it failed. Make sure nothing blocks TCP {port} on this machine."
+    },
+    "ocf_not_reachable_container": {
+      "title": "Open port {port} for local control",
+      "description": "Home Assistant runs in Docker and TCP {port} is not reachable from your network. Add `ports: - \"{port}:{port}\"` to the Home Assistant service in docker-compose (or use `network_mode: host`; with `docker run`, add `-p {port}:{port}`), then recreate the container. On Docker Desktop also allow TCP {port} in the computer's firewall."
+    },
+    "ocf_not_reachable_core": {
+      "title": "Open port {port} for local control",
+      "description": "TCP {port} is not reachable on this computer. Allow incoming TCP {port} in its firewall."
     }
   },
   "selector": {

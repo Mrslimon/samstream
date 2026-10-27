@@ -18,8 +18,9 @@ async def test_setup_registers_device_and_unloads(
 ) -> None:
     assert setup_entry.state is ConfigEntryState.LOADED
 
-    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, UUID)})
-    assert device is not None
+    registry = dr.async_get(hass)
+    [device] = dr.async_entries_for_config_entry(registry, setup_entry.entry_id)
+    assert (DOMAIN, UUID) in device.identifiers
     assert device.model == "QA65QN800CUXEG"
     assert (dr.CONNECTION_NETWORK_MAC, MAC) in device.connections
 

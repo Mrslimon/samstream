@@ -5,6 +5,8 @@ from .art import ArtConnection
 from .cast import youtube_id
 from .const import SAMSTREAM_APP_ID
 from .exceptions import (
+    OcfError,
+    OcfNotConnectedError,
     SamstreamAuthError,
     SamstreamConnectionError,
     SamstreamError,
@@ -26,6 +28,8 @@ __all__ = [
     "DeviceInfo",
     "InstallResult",
     "ListedApp",
+    "OcfError",
+    "OcfNotConnectedError",
     "SamstreamAuthError",
     "SamstreamConnectionError",
     "SamstreamError",

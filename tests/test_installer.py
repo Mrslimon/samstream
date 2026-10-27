@@ -28,9 +28,12 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.samstream.app_signing import async_save_signing
 from custom_components.samstream.const import DOMAIN
 from custom_components.samstream.installer import (
+    LRI,
+    PDI,
     async_get_sdb_key,
     developer_problem,
     ha_lan_host,
+    ip_boxes,
 )
 
 from .conftest import NETFLIX, YOUTUBE
@@ -198,15 +201,26 @@ async def test_unreachable_sdb_raises_repair_issue(
     issue = ir.async_get(hass).async_get_issue(DOMAIN, issue_id)
     assert issue is not None
     assert issue.translation_key == case.issue
+    host = case.ha_url.split("//")[1].split(":")[0]
     assert issue.translation_placeholders == {
         "name": '65" Neo QLED 8K',
-        "ha_host": case.ha_url.split("//")[1].split(":")[0],
+        "ha_host": host,
+        "ha_host_boxes": ip_boxes(host),
+        "ha_host_rtl": ip_boxes(host, reverse=True),
         "developer_host": case.shown_host,
     }
 
     sdb.connect.side_effect = None
     await _install(hass, str(package))
     assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is None
+
+
+def test_ip_boxes() -> None:
+    """One part per TV box; reversed for right-to-left menus; kept left-to-right."""
+    assert ip_boxes("192.168.1.5") == f"{LRI}192  |  168  |  1  |  5{PDI}"
+    assert ip_boxes("192.168.1.5", reverse=True) == f"{LRI}5  |  1  |  168  |  192{PDI}"
+    assert ip_boxes("ha.local") == "ha.local"
+    assert ip_boxes("?", reverse=True) == "?"
 
 
 def test_reversed_check_ignores_palindromes() -> None:

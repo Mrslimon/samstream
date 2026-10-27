@@ -12,7 +12,15 @@ from homeassistant.core import HomeAssistant
 
 from . import SamstreamConfigEntry
 from .app_signing import async_load_signing
-from .const import CONF_AUTHOR_P12, CONF_DISTRIBUTOR_P12, CONF_TOKEN, CONF_TV_SECRET
+from .const import (
+    CONF_AUTHOR_P12,
+    CONF_DISTRIBUTOR_P12,
+    CONF_OCF_OWNER_PSK,
+    CONF_OCF_TOKEN,
+    CONF_TOKEN,
+    CONF_TV_SECRET,
+)
+from .ocf import async_get_service
 from .tv_session import current_command
 
 TO_REDACT = {
@@ -21,6 +29,8 @@ TO_REDACT = {
     CONF_MAC,
     CONF_AUTHOR_P12,
     CONF_DISTRIBUTOR_P12,
+    CONF_OCF_TOKEN,
+    CONF_OCF_OWNER_PSK,
     "mac",
     "password",
     "email",
@@ -38,6 +48,8 @@ async def async_get_config_entry_diagnostics(
     state = coordinator.data
     signing = await async_load_signing(hass)
     command = current_command(hass, entry)
+    service = async_get_service(hass)
+    device = coordinator.ocf_device
     return async_redact_data(
         {
             "entry": {
@@ -66,6 +78,14 @@ async def async_get_config_entry_diagnostics(
                 "installing": coordinator.installing,
                 # The last command for the TV app (stream URLs redacted).
                 "last_command": command,
+            },
+            # Local control: never the CA key or the TV's token (redacted above).
+            "local_control": {
+                "listening": service.cloud is not None,
+                "problem": service.problem,
+                "address": service.cis(),
+                "tv_connected": device.connected if device else None,
+                "state": asdict(state.ocf) if state.ocf else None,
             },
             "signing": (
                 {

@@ -49,8 +49,9 @@ ignore = [
 "tests/**" = ["S101", "D", "PLR2004", "ANN401", "S106", "FBT003", "RUF012", "ARG001"]
 "lib/aiosamstream/tests/**" = ["S101", "D", "PLR2004", "ANN401", "S106", "FBT001", "FBT003", "RUF012", "ARG002", "INP001"]  # plain dir: only tests/ is a package
 "lib/aiosamstream/src/aiosamstream/__main__.py" = ["T201"]  # CLI output
+"lib/aiosamstream/src/aiosamstream/ocf/**" = ["ANN401"]  # CBOR bodies are dynamic data
 "custom_components/**" = ["ARG001", "ARG002", "ARG004", "ANN401"]  # HA-defined signatures
-"scripts/**" = ["T201", "D103", "INP001", "S603", "S607", "S310", "PLR2004", "PTH111", "E501"]  # dev tooling
+"scripts/**" = ["T201", "D101", "D102", "D103", "D107", "D401", "ANN401", "PLR0913", "PLR0917", "INP001", "S603", "S607", "S310", "PLR2004", "PTH111", "E501"]  # dev tooling
 
 [tool.mypy]
 python_version = "3.14"

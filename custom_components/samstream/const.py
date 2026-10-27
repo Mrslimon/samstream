@@ -20,7 +20,30 @@ CONF_AUTO_UPDATE: Final = "auto_update"
 CONF_RESUME: Final = "resume_playback"
 # The Frame: what turning it off does ("art": Art Mode, "off": fully off).
 CONF_FRAME_POWER: Final = "frame_power"
+# Voice bridge: a per-TV webhook whose text goes through HA Assist.
+CONF_VOICE: Final = "voice_bridge"
+CONF_VOICE_WEBHOOK: Final = "voice_webhook_id"
+CONF_VOICE_SHOW: Final = "voice_show_reply"
+EVENT_VOICE: Final = "samstream_voice"
+# How long Assist's answer stays on the TV.
+VOICE_REPLY_SECONDS: Final = 8
 FRAME_POWER_MODES: Final = ("art", "off")
+# Local control (local SmartThings over OCF): HA runs the cloud the TV dials.
+CONF_OCF: Final = "local_control"
+# The access token onboarding wrote to the TV; it identifies the TV (entry data).
+CONF_OCF_TOKEN: Final = "ocf_token"
+CONF_OCF_PORT: Final = "ocf_port"
+CONF_OCF_HOST: Final = "ocf_host"
+# The owner credential onboarding derived, kept to control and later release the TV.
+CONF_OCF_OWNER_PSK: Final = "ocf_owner_psk"
+CONF_OCF_DEVICE_UUID: Final = "ocf_device_uuid"
+CONF_OCF_SECURE_PORT: Final = "ocf_secure_port"
+DEFAULT_OCF_PORT: Final = 5684
+ISSUE_OCF_PORT: Final = "ocf_port"
+# How long onboarding waits for the TV to dial the cloud after it is pointed at us.
+OCF_ONBOARD_TIMEOUT: Final = 90
+# OCF state counts as live this long after the TV last reported (it re-dials ~2 s).
+OCF_FRESH: Final = timedelta(seconds=60)
 
 # TV app UI: "auto" follows the TV's own language.
 LANGUAGES: Final = ("auto", "ar", "en")

@@ -6,16 +6,25 @@ import asyncio
 import ipaddress
 import logging
 from collections.abc import Mapping
+from contextlib import suppress
+from functools import partial
 from typing import Any
 from urllib.parse import unquote, urlencode, urlparse
 
-import voluptuous as vol
 from aiosamstream import (
     DeviceInfo,
+    OcfError,
     SamstreamAuthError,
     SamstreamConnectionError,
     SamstreamTimeoutError,
     SamsungTV,
+)
+from aiosamstream.ocf import (
+    discover,
+    load_identity,
+    onboard_tv,
+    release_tv,
+    trigger_pin,
 )
 from aiosamstream.samsung_cert import (
     SamsungCertError,
@@ -23,6 +32,8 @@ from aiosamstream.samsung_cert import (
     parse_callback,
     sign_in_url,
 )
+from cryptography.exceptions import UnsupportedAlgorithm
+from homeassistant.components import webhook
 from homeassistant.config_entries import (
     SOURCE_REAUTH,
     ConfigEntry,
@@ -39,6 +50,7 @@ from homeassistant.const import (
     CONF_PASSWORD,
 )
 from homeassistant.core import callback
+from homeassistant.data_entry_flow import section
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
@@ -59,10 +71,20 @@ from .const import (
     CONF_EXTRA_APPS,
     CONF_FRAME_POWER,
     CONF_LANGUAGE,
+    CONF_OCF,
+    CONF_OCF_DEVICE_UUID,
+    CONF_OCF_HOST,
+    CONF_OCF_OWNER_PSK,
+    CONF_OCF_PORT,
+    CONF_OCF_SECURE_PORT,
+    CONF_OCF_TOKEN,
     CONF_RESUME,
     CONF_THEME,
     CONF_TOKEN,
     CONF_TV_CORNER,
+    CONF_VOICE,
+    CONF_VOICE_SHOW,
+    CONF_VOICE_WEBHOOK,
     CONF_WOL_TARGET,
     CORNERS,
     DEFAULT_LANGUAGE,
@@ -71,6 +93,7 @@ from .const import (
     DOMAIN,
     FRAME_POWER_MODES,
     LANGUAGES,
+    OCF_ONBOARD_TIMEOUT,
     THEMES,
 )
 from .coordinator import default_wol_target, parse_app_ids
@@ -79,6 +102,7 @@ from .installer import (
     async_obtain_samsung_certificates,
     resolve_package_path,
 )
+from .ocf import CloudSettings, async_get_service, new_token
 from .signin import (
     SIGN_IN_TIMEOUT,
     PendingSignIn,
@@ -86,8 +110,13 @@ from .signin import (
     helper_command,
     start_sign_in,
 )
+from .validation import vol
+from .voice import voice_webhook_url
 
 _LOGGER = logging.getLogger(__name__)
+
+# The access token identifies the TV to the local cloud: keep it unguessable.
+MIN_OCF_TOKEN = 16
 
 STEP_USER_DATA_SCHEMA = vol.Schema({vol.Required(CONF_HOST): str})
 
@@ -320,6 +349,14 @@ class SamstreamOptionsFlow(OptionsFlow):
         self._setup: SigningSetup | None = None
         self._error = ""
         self._retry_form_shown = False
+        self._voice_webhook = ""
+        self._ocf_token = ""
+        # Guided local-control onboarding state.
+        self._ocf_port: int | None = None
+        self._ocf_device_uuid: str | None = None
+        self._ocf_pin = ""
+        self._onboard_task: asyncio.Task[None] | None = None
+        self._onboard_error: str | None = None
 
     @callback
     def async_remove(self) -> None:
@@ -334,7 +371,14 @@ class SamstreamOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Choose what to configure."""
         return self.async_show_menu(
-            step_id="init", menu_options=["tv_app", "network", "app_signing"]
+            step_id="init",
+            menu_options=[
+                "tv_app",
+                "network",
+                "voice_bridge",
+                "local_control",
+                "app_signing",
+            ],
         )
 
     async def async_step_tv_app(
@@ -439,6 +483,271 @@ class SamstreamOptionsFlow(OptionsFlow):
             ),
             errors=errors,
         )
+
+    async def async_step_voice_bridge(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Turn the voice webhook on and show its (secret) address."""
+        options = self.config_entry.options
+        webhook_id = options.get(CONF_VOICE_WEBHOOK) or self._voice_webhook
+        if not webhook_id:
+            self._voice_webhook = webhook.async_generate_id()
+            webhook_id = self._voice_webhook
+        if user_input is not None:
+            return self.async_create_entry(
+                data={**options, **user_input, CONF_VOICE_WEBHOOK: webhook_id}
+            )
+        return self.async_show_form(
+            step_id="voice_bridge",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_VOICE, default=options.get(CONF_VOICE, False)
+                    ): bool,
+                    vol.Required(
+                        CONF_VOICE_SHOW, default=options.get(CONF_VOICE_SHOW, True)
+                    ): bool,
+                }
+            ),
+            description_placeholders={"url": voice_webhook_url(self.hass, webhook_id)},
+        )
+
+    async def async_step_local_control(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Intro: local control vs SmartThings, and the way back."""
+        menu = ["local_control_settings"]
+        if self.config_entry.options.get(CONF_OCF):
+            menu.append("local_control_release")
+        return self.async_show_menu(step_id="local_control", menu_options=menu)
+
+    async def async_step_local_control_settings(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Set the cloud the TV will dial: token, port, address."""
+        service = async_get_service(self.hass)
+        settings = await service.async_load()
+        entry = self.config_entry
+        token = entry.data.get(CONF_OCF_TOKEN) or self._ocf_token or new_token()
+        self._ocf_token = token
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            new_settings, error = await self._async_cloud_settings(settings, user_input)
+            token = str(user_input.get(CONF_OCF_TOKEN, "")).strip()
+            if error:
+                errors["base"] = error
+            elif len(token) < MIN_OCF_TOKEN:
+                errors[CONF_OCF_TOKEN] = "token_too_short"
+            else:
+                self._ocf_token = token
+                self.hass.config_entries.async_update_entry(
+                    entry, data={**entry.data, CONF_OCF_TOKEN: token}
+                )
+                if new_settings != settings:
+                    await service.async_save(new_settings)
+                self._ocf_port = None  # rediscover for the new/confirmed TV
+                return await self.async_step_local_control_pin()
+        return self.async_show_form(
+            step_id="local_control_settings",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_OCF_TOKEN, default=token): TextSelector(),
+                    vol.Required(CONF_OCF_PORT, default=settings.port): vol.All(
+                        vol.Coerce(int), vol.Range(min=1, max=65535)
+                    ),
+                    vol.Optional(
+                        CONF_OCF_HOST,
+                        description={"suggested_value": settings.host or ""},
+                    ): str,
+                    vol.Optional("import_cloud"): section(
+                        vol.Schema(
+                            {
+                                vol.Optional("cloud_uuid"): str,
+                                vol.Optional("ca_certificate"): TextSelector(
+                                    TextSelectorConfig(multiline=True)
+                                ),
+                                vol.Optional("ca_key"): TextSelector(
+                                    TextSelectorConfig(multiline=True)
+                                ),
+                            }
+                        ),
+                        {"collapsed": True},
+                    ),
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "address": service.cis() or "-",
+                "cloud_uuid": settings.identity.cloud_uuid,
+            },
+        )
+
+    async def async_step_local_control_pin(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Make the TV show its PIN, then take the 8 digits from the user."""
+        host = self.config_entry.data[CONF_HOST]
+        if user_input is None:
+            if self._ocf_port is None:
+                try:
+                    self._ocf_port, self._ocf_device_uuid = (
+                        await self.hass.async_add_executor_job(discover, host)
+                    )
+                    await self.hass.async_add_executor_job(trigger_pin, host)
+                except OcfError as err:
+                    _LOGGER.warning("Local control: cannot reach %s: %s", host, err)
+                    return await self.async_step_local_control_trouble()
+            return self._show_pin_form()
+        pin = str(user_input.get("pin", "")).strip()
+        if not (pin.isdigit() and len(pin) == 8):  # noqa: PLR2004
+            return self._show_pin_form({"pin": "invalid_pin"})
+        self._ocf_pin = pin
+        self._onboard_task = None
+        self._onboard_error = None
+        return await self.async_step_local_control_wait()
+
+    def _show_pin_form(self, errors: dict[str, str] | None = None) -> ConfigFlowResult:
+        return self.async_show_form(
+            step_id="local_control_pin",
+            data_schema=vol.Schema({vol.Required("pin"): str}),
+            errors=errors or {},
+            description_placeholders={"name": self.config_entry.title},
+        )
+
+    async def async_step_local_control_wait(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Run onboarding and wait for the TV to dial the cloud (paired on success)."""
+        if self._onboard_task is None:
+            self._onboard_task = self.hass.async_create_task(self._run_onboard())
+        if not self._onboard_task.done():
+            return self.async_show_progress(
+                step_id="local_control_wait",
+                progress_action="onboarding",
+                progress_task=self._onboard_task,
+            )
+        error = self._onboard_error
+        self._onboard_task = None
+        if error:
+            return self.async_show_progress_done(next_step_id="local_control_trouble")
+        return self.async_show_progress_done(next_step_id="local_control_done")
+
+    async def _run_onboard(self) -> None:
+        """Own the TV, point it at the cloud, then wait for it to connect."""
+        entry = self.config_entry
+        service = async_get_service(self.hass)
+        settings = await service.async_load()
+        host = entry.data[CONF_HOST]
+        cis = service.cis()
+        if cis is None:
+            self._onboard_error = "no_address"
+            return
+        try:
+            result = await self.hass.async_add_executor_job(
+                partial(
+                    onboard_tv,
+                    host,
+                    self._ocf_pin,
+                    obt_uuid=settings.obt_uuid,
+                    ca_der=settings.identity.ca_der,
+                    cloud_uuid=settings.identity.cloud_uuid,
+                    cis=cis,
+                    access_token=self._ocf_token,
+                    device_uuid=self._ocf_device_uuid,
+                    secure_port=self._ocf_port,
+                )
+            )
+        except OcfError as err:
+            _LOGGER.warning("Local control onboarding failed: %s", err)
+            self._onboard_error = "onboard_failed"
+            return
+        # Keep the credential; turning local control on reloads and starts the cloud.
+        self.hass.config_entries.async_update_entry(
+            entry,
+            data={
+                **entry.data,
+                CONF_OCF_TOKEN: self._ocf_token,
+                CONF_OCF_OWNER_PSK: result.owner_psk_hex,
+                CONF_OCF_DEVICE_UUID: result.device_uuid,
+                CONF_OCF_SECURE_PORT: result.secure_port,
+            },
+            options={**entry.options, CONF_OCF: True},
+        )
+        await self._wait_for_dial_in(service, entry.entry_id)
+
+    async def _wait_for_dial_in(self, service: Any, entry_id: str) -> None:
+        async with asyncio.timeout(OCF_ONBOARD_TIMEOUT):
+            while True:
+                cloud = service.cloud
+                device = cloud.devices.get(entry_id) if cloud is not None else None
+                if device is not None and device.connected:
+                    return
+                await asyncio.sleep(1)
+
+    async def async_step_local_control_done(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Paired — show the success screen and finish."""
+        if user_input is not None:
+            return self.async_create_entry(data={**self.config_entry.options})
+        return self.async_show_form(
+            step_id="local_control_done",
+            data_schema=vol.Schema({}),
+            description_placeholders={"name": self.config_entry.title},
+        )
+
+    async def async_step_local_control_trouble(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show common reasons the TV did not connect, with a way to retry."""
+        self._ocf_port = None  # a retry re-discovers and re-triggers the PIN
+        return self.async_show_menu(
+            step_id="local_control_trouble",
+            menu_options=["local_control_pin", "local_control_settings"],
+        )
+
+    async def async_step_local_control_release(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Hand the TV back to SmartThings and turn local control off."""
+        entry = self.config_entry
+        if user_input is not None:
+            settings = await async_get_service(self.hass).async_load()
+            owner = entry.data.get(CONF_OCF_OWNER_PSK)
+            if owner:
+                with suppress(OcfError):
+                    await self.hass.async_add_executor_job(
+                        partial(
+                            release_tv,
+                            entry.data[CONF_HOST],
+                            settings.obt_uuid,
+                            owner,
+                            entry.data.get(CONF_OCF_SECURE_PORT),
+                        )
+                    )
+            return self.async_create_entry(data={**entry.options, CONF_OCF: False})
+        return self.async_show_form(
+            step_id="local_control_release", data_schema=vol.Schema({})
+        )
+
+    async def _async_cloud_settings(
+        self, settings: CloudSettings, user_input: dict[str, Any]
+    ) -> tuple[CloudSettings, str | None]:
+        """Build the cloud settings the form asks for, or return an error key."""
+        identity = settings.identity
+        imported = user_input.get("import_cloud") or {}
+        if any(str(value).strip() for value in imported.values()):
+            try:
+                identity = await self.hass.async_add_executor_job(
+                    load_identity,
+                    str(imported.get("ca_certificate", "")).strip().encode(),
+                    str(imported.get("ca_key", "")).strip().encode(),
+                    str(imported.get("cloud_uuid", "")).strip(),
+                )
+            except (ValueError, TypeError, UnsupportedAlgorithm):
+                return settings, "invalid_cloud_identity"
+        host = str(user_input.get(CONF_OCF_HOST) or "").strip() or None
+        return CloudSettings(identity, int(user_input[CONF_OCF_PORT]), host), None
 
     async def async_step_app_signing(
         self, user_input: dict[str, Any] | None = None

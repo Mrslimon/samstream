@@ -140,7 +140,22 @@ class SamstreamStreamView(HomeAssistantView):
                 await _serve(socket, source)
         finally:
             await socket.close()
+            _drop_heartbeat(socket)
         return socket
+
+
+def _drop_heartbeat(socket: web.WebSocketResponse) -> None:
+    """Stop aiohttp re-arming the heartbeat once the socket is closed.
+
+    aiohttp 3.14 resets the heartbeat for data that arrives after close() (the
+    TV's own close frame), so a 30 s ping timer would outlive the connection.
+    Its reset path does nothing when no heartbeat interval is set.
+    """
+    if hasattr(socket, "_heartbeat"):
+        socket._heartbeat = None  # noqa: SLF001
+    cancel = getattr(socket, "_cancel_heartbeat", None)
+    if callable(cancel):
+        cancel()
 
 
 def _allowed(hass: HomeAssistant, name: str, secret: str) -> bool:

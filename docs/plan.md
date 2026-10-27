@@ -287,6 +287,11 @@ Source: PatrickSt1991/Samsung-Jellyfin-Installer (MIT), `Apps2Samsung.Core/Certi
 - **Logo download:** a **Download app logos** button (configuration) fetches each app's public site icon onto the user's own HA, into `/config/www/samstream/apps/<app id>.png`. Sources are Google's favicon service at 256 px or the site's `apple-touch-icon`, whichever is larger; apps are matched by words in their name (`logos.LOGO_SITES`, Latin whole words and Arabic substrings). The user's own files are never replaced, and the Samstream tile uses our brand icon. Logos are not shipped in the repo (third-party trademarks). On the QN800C: 20 of 23 apps.
 
 ### Roadmap addition (2026-10-21): Advanced local things (local SmartThings over OCF)
+> **Order (2026-10-27): OCF is the LAST item.** Everything that needs it waits with it and is not built
+> before it: 18a–18h, 18k, 18l, 18m, the real named-input list (18i), the OCF corner fix (18e) and
+> Frame artwork selection (19b). The local-cloud method is documented in `docs/ocf-local-protocol.md` §14.7;
+> drafts of the CBOR/CoAP layers are parked in `oicseek/lib_draft/` (not part of the library yet).
+
 Prepared while `oicseek/` is still a spike (not finished). This supersedes the "SmartThings (local) … Not pursued" note above and realises the "possible fix: read the input source" left open at milestones 11 and 17. `oicseek/otm_pair.py` has proven the DTLS-PSK handshake (phase 1); phase 2 (ownership) and the resource reads are what the lib will wrap. See [[samstream-tv-corner-detection]] and [[samstream-ocf-dtls-posture]].
 
 - **Guiding principle — a capability gate, exactly like Developer Mode.**
@@ -325,13 +330,22 @@ Prepared while `oicseek/` is still a spike (not finished). This supersedes the "
   - **18k. OCF diagnostic sensors (when OCF is owned).** Read-only resources that answer 2.05 locally, mapped to disabled-by-default diagnostic entities: firmware version (`/oic/p` `mnfv`, e.g. `T-OSCPCUABC-0090-2220.4`; the REST API reports `firmwareVersion: "Unknown"`) and build date (`/sec/provisioninginfo` `firmwareversion` `;25.04.22`); Wi-Fi signal/channel/band (`/sec/accesspointlist` entry whose `macAddress` matches the BSSID the REST API reports in `device.ssid`: `rssi`, `channel`, `frequency`); MAC addresses and feature flags (`/DevConfResURI`: `WOWLAN`, `BTWAKEUP`, `BTHIDPOWERON`, `DLNADMR`); partial serial / SmartThings agent version (`/sec/provisioninginfo` `deviceinfo`); "Local access: owned" from `/oic/sec/doxm`. Refresh slowly (e.g. every 10 min; Wi-Fi signal every 1 min). **Verify:** sensors populate after onboarding and survive a TV power cycle (dynamic port re-discovery).
   - **18l. OCF commands with real IDs.** Use the IDs the SmartThings export shows for this TV family as POST payload values: inputs (`dtv`, `HDMI1`… from `supportedInputSourcesMap`), picture modes (`modeGen_589826`…), sound modes (`modeAmplify`, `modeStandard`). Confirm each payload key on the QN800C (POST executes but answers 4.00, so verify by eye / by the UPnP or REST side effect), then expose `select_source` by real name, picture-mode and sound-mode `select` entities (write-only: the current mode can't be read locally, so they act as buttons/options without a state, or use SmartThings state when available). **Verify:** selecting HDMI1 / a picture mode from HA changes the TV.
   - **18m. Optional SmartThings-cloud state source.** When the user also has HA's SmartThings integration for this TV, read its entities for the state local paths can't give (current input, picture/sound mode, channel, now-playing). Gate: present → use; absent → those fields stay `None`. **Conflict:** local OCF ownership and SmartThings registration are mutually exclusive on the TV (verified 2026-10-22: SmartThings takes local ownership with its vendor OTM; while we own it the TV is hidden from the app), so the user picks **one**: local OCF (commands + diagnostics) *or* SmartThings (cloud state). The setup UX (milestone 22) explains the trade.
+  - **18n. Pure-Python onboarding inside HA — DONE (2026-10-27).** `dtls_tunnel.c` is replaced by a from-scratch
+    DTLS 1.2 ECDHE-PSK client on `cryptography` (`aiosamstream/ocf/dtls.py`; binary PSK identity + owner-PSK
+    derivation, no C compiler, no new deps). `aiosamstream/ocf/onboard.py` folds the old `oicseek` scripts
+    (discover → trigger PIN → Random-PIN ownership → install CA/ACE/cis → release) into one driver. The options
+    flow is a **6-screen guided setup** (intro → settings → PIN → progress/paired → troubleshooting → release)
+    that triggers the PIN and takes the 8 digits from the user, runs onboarding in an executor, and waits for the
+    TV to dial the cloud. New `paired` animation. See `docs/ocf-local-protocol.md §11`. Crypto has unit tests
+    (PRF/owner-PSK/CBC round-trip) + the full guided flow is tested with onboarding mocked; the live handshake is
+    verified against the lab TV.
 - **Pitfalls (added to section 5):**
   | Area | Risk | Mitigation |
   |---|---|---|
   | OCF port | `p.port` changes every power cycle | Re-discover the secure port each session; never cache across power states |
   | OCF session | Standby/sleep drops the DTLS-PSK session | Reconnect with backoff; treat unreachable as "fall back to REST", never fail the coordinator update |
   | Ownership | A write to the TV; a factory reset clears it; one owner credential per onboarding | Explicit user action only; safe re-onboarding; document coexistence with the SmartThings cloud app (verify on the TV) |
-  | Deps | `python-mbedtls`/`cbor2` wheels must exist for HA's Python/arch | Keep them an optional extra loaded only when the gate is on; base install unaffected |
+  | Deps | DTLS/CoAP/CBOR all need to run on HA's Python/arch | Done in pure Python on `cryptography` (already a dep); no `python-mbedtls`, no compiled helper |
 
 ### Roadmap addition (2026-10-22): Frame Art Mode, ideas from ollo69/ha-samsungtv-smart
 Researched ollo69/ha-samsungtv-smart for features we lack. Its `set_art_mode` only *toggles* art (no artwork choice); `select_picture_mode`/`select_sound_mode` and channel/source extras are **cloud SmartThings**. See [[samstream-frame-art-findings]].
@@ -369,6 +383,42 @@ Researched ollo69/ha-samsungtv-smart for features we lack. Its `set_art_mode` on
     - **Local control (OCF)** — gain: reliable input selection by name, picture/sound mode, power off, diagnostics (real firmware version, Wi-Fi signal), all local. Give up: **SmartThings control of this TV** — the TV can belong to only one of them; while Samstream owns it, the SmartThings app can't find or control it (it can be released any time from Samstream's options, no reset needed). Needs: an on-screen PIN typed into HA; if the TV was set up through SmartThings before, the Wi-Fi password may be asked.
     - **SmartThings (instead of local OCF)** — gain: live state the TV only shares with Samsung's cloud (current input, picture/sound mode, channel, what's playing). Give up: needs internet and a Samsung account; slower updates; local OCF stays off.
     - **UPnP volume/mute** — always on when reachable; no choice needed, shown as a "you also get" line.
+  - **Local control (OCF) steps in the guide (added 2026-10-27; built with OCF, last).** The guide walks the
+    local-cloud method from `docs/ocf-local-protocol.md` §14.7 one screen at a time, each with a check, a
+    clear failure message and "retry this step":
+    1. **Reachability check:** HA must accept the TV's connection on TCP 5684. HA OS/supervised: nothing
+       to do. **Docker:** the guide shows the exact `ports: - "5684:5684"` line for docker-compose (or
+       `network_mode: host`) and waits until a test connection succeeds.
+    2. **Wake the TV** (WoL + "keep it on" note): the PIN and the secure port rotate when it idles.
+    3. **PIN:** HA asks the TV to show its 8-digit PIN; the Samstream TV app first says "a PIN will appear
+       now"; the user types it into HA (timeout → "show a new PIN").
+    4. **Pair + point the TV at HA:** ownership, HA's certificate as trusted, the access entry, and the
+       cloud address — shown as a checklist that ticks off live.
+    5. **If the TV refuses the cloud address** (EasySetup not at the Wi-Fi step, typical after a TV restart
+       or a SmartThings setup): the one-time phone dance — release, add the TV in the SmartThings app,
+       delete it there, then back to step 3. Explained with pictures; skippable.
+    6. **Confirm:** "The TV is connected to Home Assistant" once it dials in and the first live state
+       (input, app, volume) shows on screen.
+    7. **Trade-off reminder + release:** while local control is on, SmartThings can't see the TV;
+       Options → "Release local control" gives it back without a reset.
+  - **Port 5684 detection (built with OCF, last).** The integration installs via HACS on any HA, so at
+    enable time it finds out whether the TV can reach HA on TCP 5684, and says exactly how to open it:
+    - Read `installation_type` from `homeassistant.helpers.system_info.async_get_system_info`:
+      *Home Assistant OS* / *Supervised* (core runs with host networking → port reachable as is),
+      *Container* (Docker: may be bridged), *Core* (venv: host firewall only).
+    - Probe: bind 5684 (or report "in use by …"); then connect from HA to `<HA LAN IP>:5684` — success
+      means it is reachable from the LAN; finally confirm with the TV's own dial-in.
+    - Container + probe failed → show the fix: compose `ports: - "5684:5684"` (or `network_mode: host`)
+      or `docker run -p 5684:5684`, then recreate the container. Docker Desktop (Windows/macOS) also needs
+      the host firewall to allow 5684. Core → open 5684 in the OS firewall. Port taken → offer another
+      port (the cloud address written to the TV carries the port).
+    - The user's existing laptop-based local SmartThings control (the oicseek cloud on 192.168.1.21) is
+      what the integration takes over when enabled: the guide re-points the TV's cloud address to HA.
+  - **Animations:** intro and step illustrations are made as **Lottie** (LottieFiles Creator in the
+    browser, or After Effects + Bodymovin). The TV app plays them with `lottie-web` (SVG renderer; works on
+    Chromium 56 — Rive does not, it needs WebAssembly). HA's config flow only renders markdown, so there
+    the same animations ship as **animated WebP/SVG images** exported from the Lottie; a full interactive
+    intro would need a small custom panel.
   - **Plain-language trade-offs everywhere:** the summary at the end lists, per capability, "on/off", what it gives, and how to change it later (options flow), so nothing is a one-way door.
   - **Finish:** a "Samstream is ready" screen on the TV (test camera / message buttons) and a summary in HA of which capabilities are on.
   - **Verify:** a fresh TV (factory reset) to working setup in one sitting with no docs; every step recoverable after a wrong action or a timeout.
@@ -415,6 +465,28 @@ Deliverables:
 □ Investigate the possibility of replacing bixpy entirely and passing raw audio to Home assitant
 
 
+Voice bridge research results (2026-10-27)
+- **Bixby capsules cannot run on a TV.** Capsule targets are `bixby-mobile`, `bixby-watch` and
+  `bixby-fridge` (public submission US/KR only); on-device testing is phone-only; no Arabic. A capsule is
+  still possible **on the phone** ("Hi Bixby, ask Home Assistant to …"): Bixby Developer Studio 8.x,
+  `capsule.bxb` + an action model + `endpoints.bxb` with a `remote-endpoint` (or JS `http.postUrl`) to a
+  **publicly reachable** URL (Nabu Casa / reverse proxy) → the Samstream voice webhook below. Private
+  submission + revision ID / QR code on the phone for testing.
+- **Google Assistant / Alexa on Samsung TVs** were system-level partner integrations (Settings > General >
+  Voice > Voice Assistant), not an SDK. Google Assistant was removed from Samsung TVs; **Alexa built-in**
+  remains on many models/markets — where offered, HA's Alexa integration (Nabu Casa) makes "Alexa, turn on
+  the kitchen lights" work from the TV remote's mic with no Samstream code. Check the menu on each TV.
+- **TV-native path (most promising): Samsung's VoiceInteraction API** (`webapis.voiceinteraction`, public
+  privilege `http://developer.samsung.com/privilege/voicecontrol`, Tizen 6+). While the Samstream app is in
+  front, the TV's assistant delivers utterances to the app: `ontitleselection(title)` receives the free
+  text of "Select <words>", and `onrequestcontentcontext()` lets the app list on-screen items (title +
+  aliases) to pick by voice. Plan: a Samstream "voice" screen that forwards that text to the HA voice
+  endpoint (→ Assist) and shows the reply. **Verify on the QN800C:** "Select kitchen lights" reaches the
+  app as text.
+- **HA side (built 2026-10-27):** a per-TV voice webhook (Configure → Voice bridge) that runs the text
+  through HA Assist, fires a `samstream_voice` event for automations, answers `{speech}` and can show the
+  reply on that TV.
+
 Milestone X: Research and Alternative Testing for Now Brief / Daily Board Screens
 Background and Conclusion
 The "Good Morning" screen you see, with three cards (including SmartThings data), is a feature called Now Brief (2024+ models) or Daily Board. It automatically activates when the TV detects a user approaching, and displays weather, memos, SmartThings device status, and other information. This is a system-level UI rendered by the Tizen system, not an OCF resource, so your local OCF control cannot inject content into it or replace it.
@@ -455,3 +527,47 @@ Now Brief / Daily Board screen has been confirmed to exist on your TV model.
 HA presence detection sensors are available (PIR or camera motion).
 
 Samstream app is already installed and can be launched via HA.
+
+### Roadmap addition (2026-10-27): security review (the FINAL step, after OCF and the guided setup)
+- **23. Security review of the whole integration against `CLAUDE.md` (project security rules).** Done
+  last, so it covers every feature. Each rule is checked and the result recorded here (pass / fixed /
+  not applicable, with the file it concerns). Applied to Samstream:
+  - **Secrets:** no tokens, certificates, `.p12`, camera URLs/credentials, owner PSKs or cloud keys in
+    the repo, the TV app bundle (`tv-app/src`, built `bundled/`), the Lovelace card or logs; everything
+    secret lives in config entries / `.storage`. Re-run the git-history secret scan; confirm
+    `.gitignore` covers `.env*`, `*.key`, `*.p12`, `oicseek/tv_cred*.json`, `tv_state*.json`.
+  - **Authentication on every HTTP view:** list every `HomeAssistantView` and webhook. Views the TV calls
+    (`/api/samstream/tv/{secret}/…`: session, stream, MJPEG, settings) must reject a wrong secret with
+    401/404 *before* any work, compare secrets in constant time (`hmac.compare_digest`), and only serve
+    the stream belonging to that TV (resource ownership). The sign-in hand-off view and the
+    frontend/card views get the same check. The voice webhook is a capability URL (64 hex chars,
+    `secrets.token_hex(32)`), POST only, input length-limited.
+  - **Rate limiting:** brute-force protection on the TV-secret views and the voice webhook (HA's
+    `ip_ban`/login-attempt handling or a per-IP counter); don't trust `X-Forwarded-For` unless HA's
+    `trusted_proxies` says so.
+  - **Input validation server-side:** every action schema (voluptuous), every TV-sent JSON body,
+    OCF/CoAP/CBOR parsing (length checks, no unbounded allocations), sdb packets, the voice text.
+    No `pickle`/`eval` anywhere; JSON only.
+  - **SSRF:** `play_stream url`, `open_url`, sound/media URLs and the cast path fetch user-supplied URLs —
+    decide per action (admin-only HA actions are trusted input) and document; any URL the TV app fetches
+    must stay http/https.
+  - **Output / XSS:** the TV app and the card never use `innerHTML` with message text, titles, app names
+    or Assist replies (use `textContent` / Lit templates); check the overlay and RTL code paths.
+  - **Errors:** HTTP views and the webhook return generic messages; details only in HA logs; no stack
+    traces or file paths to the TV or callers.
+  - **Production exposure:** no source maps in the shipped TV app or card (`build.sourcemap: false`);
+    no debug endpoints; the bundled `.wgt` holds no developer certificates.
+  - **Network services:** the local OCF cloud (TCP 5684) only talks to TVs that present the expected
+    identity, binds where documented, and is off unless OCF is enabled.
+  - **Dependencies:** exact pins where the project pins (npm lock files committed, `aiosamstream`
+    requirements bounded), and `pip-audit`/`npm audit` clean.
+  - **Verify:** a written checklist in this file with every item ticked, and the security scan
+    (`/security-review`) run on the final branch with no open findings.
+
+### OCF build order (2026-10-27, started)
+- **Runtime = HA runs the OCF cloud (TCP 5684, CoAP over TLS, RFC 8323).** Python's `ssl` and asyncio are enough, with no DTLS at runtime. Port `oicseek/cloud_server.py` into `aiosamstream.ocf`: framing, CBOR (`oicseek/lib_draft/cbor.py`), sign-up/sign-in/ping/rd handlers, per-TV session with GET/OBSERVE plus POST.
+- **State parsers** from the captured bodies: `contentinfo` (input/title/app id), `inputsource` (supportedModes/currentMode), `audio` (volume/mute), `switch/binary`, `channel`, `mode/picture`, `mode/sound`, `mediaOutput`, `networkinfo` (rssi/ch). Picture/sound mode names come back in the TV's language (Arabic), so decode the bytes as UTF-8 properly.
+- **Identity:** the CA and the end-entity cert (CN = cloud UUID, SAN = HA IP) live in HA `.storage`. Import the existing laptop identity (`oicseek/ca.key`, cloud UUID) so only `cis` has to be re-pointed at HA.
+- **Onboarding:** pointing the TV at HA still needs the DTLS owner session (the oicseek tools on a PC) until a supported DTLS path exists.
+- **Not yet verified:** commands (POST) over the cloud channel.
+- **Privacy:** `/sec/tv/appdata/ssoservice` carries the Samsung account email. Never log it or store it, and redact it in diagnostics.

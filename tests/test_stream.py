@@ -100,6 +100,34 @@ async def go2rtc(hass: HomeAssistant, aiohttp_server: Any) -> AsyncIterator[Fake
     await session.close()
 
 
+class RecordingSocket(web.WebSocketResponse):
+    """The relay's server-side socket, kept so a test can wait for its close."""
+
+    opened: list[web.WebSocketResponse] = []
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        RecordingSocket.opened.append(self)
+
+
+@pytest.fixture
+def server_sockets() -> AsyncIterator[list[web.WebSocketResponse]]:
+    RecordingSocket.opened = []
+    with patch(
+        "custom_components.samstream.stream_relay.web.WebSocketResponse",
+        RecordingSocket,
+    ):
+        yield RecordingSocket.opened
+
+
+async def server_closed(sockets: list[web.WebSocketResponse]) -> None:
+    """Wait until the relay finished its side of the close handshake."""
+    async with asyncio.timeout(5):
+        while not sockets or not all(s.closed for s in sockets):  # noqa: ASYNC110
+            await asyncio.sleep(0.01)
+        await asyncio.sleep(0)
+
+
 @pytest.fixture(autouse=True)
 async def internal_url(hass: HomeAssistant) -> None:
     await async_process_ha_core_config(
@@ -287,6 +315,7 @@ async def test_relay(
     assert "copy" in ffmpeg.args  # remux only, never transcode
 
 
+@pytest.mark.usefixtures("server_sockets")
 async def test_relay_reports_unplayable_video(
     hass: HomeAssistant,
     setup_entry: MockConfigEntry,
@@ -306,10 +335,12 @@ async def test_relay_reports_unplayable_video(
             answer = await socket.receive_json(timeout=5)
             closed = await socket.receive(timeout=5)
 
+    await server_closed(RecordingSocket.opened)
     assert answer["type"] == "error"
     assert closed.type is aiohttp.WSMsgType.CLOSE
 
 
+@pytest.mark.usefixtures("server_sockets")
 async def test_relay_needs_the_mse_request(
     hass: HomeAssistant,
     setup_entry: MockConfigEntry,
@@ -328,6 +359,7 @@ async def test_relay_needs_the_mse_request(
             await socket.send_str("not json")
             closed = await socket.receive(timeout=5)
 
+    await server_closed(RecordingSocket.opened)
     assert closed.type is aiohttp.WSMsgType.CLOSE
     ffmpeg.assert_not_called()
 

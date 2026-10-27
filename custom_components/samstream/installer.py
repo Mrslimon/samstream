@@ -431,6 +431,24 @@ def developer_problem(developer_host: str, ha_host: str) -> tuple[str, str]:
     return "developer_mode", "sdb_unreachable"
 
 
+# Unicode isolates: keep a run left-to-right inside right-to-left text.
+LRI, PDI = chr(0x2066), chr(0x2069)
+
+
+def ip_boxes(host: str, *, reverse: bool = False) -> str:
+    """Write the IP as the TV's four boxes take it: `192 | 168 | 1 | 5`.
+
+    `reverse` is the order an Arabic (right-to-left) TV menu needs. The text is
+    isolated left-to-right, so an Arabic page does not reorder the numbers.
+    """
+    parts = host.split(".")
+    if len(parts) != 4 or not all(part.isdigit() for part in parts):  # noqa: PLR2004
+        return host
+    if reverse:
+        parts.reverse()
+    return LRI + "  |  ".join(parts) + PDI
+
+
 def _developer_placeholders(
     hass: HomeAssistant, entry: SamstreamConfigEntry
 ) -> dict[str, str]:
@@ -440,8 +458,11 @@ def _developer_placeholders(
         current = "off"
     else:
         current = info.developer_ip or "?"
+    host = ha_lan_host(hass) or "?"
     return {
         "name": entry.title,
-        "ha_host": ha_lan_host(hass) or "?",
+        "ha_host": host,
+        "ha_host_boxes": ip_boxes(host),
+        "ha_host_rtl": ip_boxes(host, reverse=True),
         "developer_host": current,
     }

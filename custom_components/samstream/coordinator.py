@@ -5,7 +5,7 @@ from __future__ import annotations
 import ipaddress
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from aiosamstream import (
@@ -16,8 +16,9 @@ from aiosamstream import (
     SamstreamError,
     SamsungTV,
 )
+from aiosamstream.ocf import CloudDevice, OcfTvState
 from homeassistant.const import CONF_HOST
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
@@ -25,6 +26,7 @@ from .const import (
     CONF_EXTRA_APPS,
     CONF_WOL_TARGET,
     DOMAIN,
+    OCF_FRESH,
     SCAN_INTERVAL,
 )
 from .installer import async_list_apps
@@ -49,6 +51,8 @@ class SamstreamState:
     # App in the foreground; None for home, live TV, HDMI or an unknown app.
     app_id: str | None = None
     app_name: str | None = None
+    # What the TV reports over local control (OCF); None when that is off.
+    ocf: OcfTvState | None = None
 
 
 def parse_app_ids(text: str) -> list[str]:
@@ -96,6 +100,8 @@ class SamstreamCoordinator(DataUpdateCoordinator[SamstreamState]):
         # True while the Samstream app is being installed (one install at a time).
         self.installing = False
         self._apps_scanned_at: float | None = None
+        # The TV's connection to HA's local OCF cloud, when local control is on.
+        self.ocf_device: CloudDevice | None = None
 
     @property
     def wol_target(self) -> str:
@@ -139,14 +145,63 @@ class SamstreamCoordinator(DataUpdateCoordinator[SamstreamState]):
             if foreground is not None:
                 app_id = foreground.app_id
                 app_name = self.apps.get(foreground.app_id, foreground.name)
-        return SamstreamState(
-            is_on=True,
-            volume=volume,
-            muted=muted,
-            info=info,
+        return self._with_ocf(
+            SamstreamState(
+                is_on=True,
+                volume=volume,
+                muted=muted,
+                info=info,
+                app_id=app_id,
+                app_name=app_name,
+            )
+        )
+
+    def ocf_state(self) -> OcfTvState | None:
+        """Return the TV's local-control state if it reported within OCF_FRESH."""
+        device = self.ocf_device
+        if device is None or device.last_seen is None:
+            return None
+        if time.monotonic() - device.last_seen > OCF_FRESH.total_seconds():
+            return None
+        return device.state
+
+    def _with_ocf(self, state: SamstreamState) -> SamstreamState:
+        """Prefer what the TV itself reports over local control.
+
+        Its input tells Live TV, HDMI and apps apart, which the per-app REST
+        `visible` flag cannot (and it lags for seconds after an app opens).
+        """
+        ocf = self.ocf_state()
+        if ocf is None or not state.is_on:
+            return replace(state, ocf=None) if state.ocf else state
+        app_id, app_name = state.app_id, state.app_name
+        if ocf.content_input == "webapp" and ocf.app_id:
+            app_id = ocf.app_id
+            app_name = self.apps.get(app_id) or ocf.content_title or app_id
+        elif ocf.content_input:  # Live TV, an HDMI input, ...: no app in front
+            app_id = app_name = None
+        return replace(
+            state,
+            ocf=ocf,
             app_id=app_id,
             app_name=app_name,
+            volume=state.volume if state.volume is not None else ocf.volume,
+            muted=state.muted if state.muted is not None else ocf.muted,
         )
+
+    @callback
+    def async_ocf_updated(self, _device: CloudDevice) -> None:
+        """Push new local-control state to the entities.
+
+        Not `async_set_updated_data`: that resets the poll timer, and the TV
+        reports every few seconds, so the power check would never run.
+        """
+        if self.data is None or not self.data.is_on:
+            return
+        state = self._with_ocf(self.data)
+        if state != self.data:
+            self.data = state
+            self.async_update_listeners()
 
     async def async_current_app(self) -> str | None:
         """App on screen right now (fresh check); None for home or Live TV."""

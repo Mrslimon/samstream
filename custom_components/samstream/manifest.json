@@ -8,6 +8,7 @@
   "dependencies": [
     "frontend",
     "http",
+    "webhook",
     "websocket_api"
   ],
   "documentation": "https://github.com/Mrslimon/samstream",
@@ -24,6 +25,7 @@
   "version": "0.1.0",
   "after_dependencies": [
     "camera",
+    "conversation",
     "go2rtc",
     "media_source"
   ],

@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-import voluptuous as vol
 from aiosamstream import SamsungTV
 from homeassistant.components.media_player.const import DOMAIN as MEDIA_PLAYER_DOMAIN
 from homeassistant.config_entries import ConfigEntry
@@ -31,10 +30,13 @@ from .const import (
 from .coordinator import SamstreamCoordinator
 from .frontend import async_setup_frontend
 from .installer import async_bundled_version
+from .ocf import async_get_service as async_get_ocf_service
 from .signin import SamstreamSignInView
 from .stream_relay import SamstreamMjpegView, SamstreamStreamView
 from .tv_session import SamstreamTvSessionView
 from .tv_settings import SamstreamTvSettingsView
+from .validation import vol
+from .voice import async_setup_voice
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -42,6 +44,7 @@ PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
     Platform.BUTTON,
     Platform.MEDIA_PLAYER,
+    Platform.SELECT,
     Platform.SENSOR,
     Platform.UPDATE,
 ]
@@ -261,7 +264,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: SamstreamConfigEntry) ->
         name=entry.data.get(CONF_NAME) or entry.title,
     )
 
+    coordinator.ocf_device = await async_get_ocf_service(hass).async_register(
+        entry, coordinator.async_ocf_updated
+    )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    async_setup_voice(hass, entry)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
     async def _check_certificates(_now: object = None) -> None:
@@ -286,6 +293,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: SamstreamConfigEntry) -
     """Unload a config entry and close the TV connection."""
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
+        await async_get_ocf_service(hass).async_unregister(entry)
         await entry.runtime_data.tv.close()
     return unloaded
 

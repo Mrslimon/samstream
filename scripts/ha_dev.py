@@ -106,6 +106,16 @@ def install_lib() -> None:
     print(in_container(f"uv pip install --system -e {REMOTE_LIB} 2>&1 | tail -5"))
 
 
+def ensure_lib() -> None:
+    """Reinstall the library if the container was recreated (an update wipes it)."""
+    check = (
+        "python3 -c 'import aiosamstream' 2>/dev/null && echo present || echo missing"
+    )
+    if "missing" in in_container(check):
+        print("aiosamstream is not installed in the container (recreated?), installing")
+        install_lib()
+
+
 def api(path: str, method: str = "GET") -> int:
     request = urllib.request.Request(
         ENV["HA_URL"].rstrip("/") + path,
@@ -121,7 +131,7 @@ def api(path: str, method: str = "GET") -> int:
             return int(response.status)
     except urllib.error.HTTPError as err:
         return err.code
-    except urllib.error.URLError, TimeoutError, ConnectionError:
+    except (urllib.error.URLError, TimeoutError, ConnectionError):
         return 0
 
 
@@ -155,8 +165,21 @@ ARCHIVE
 PYTEST_ARGS="{pytest_args}"
 HA_VERSION=$(python3 -c "import homeassistant.const as c; print(c.__version__)")
 echo "testing against Home Assistant $HA_VERSION"
-# Lets uv pick the pytest-homeassistant-custom-component release made for this HA.
+# Keep HA's own dependencies at the versions the image ships (a new upstream
+# release, e.g. voluptuous 0.16, must not change what HA itself runs), and let uv
+# pick the pytest-homeassistant-custom-component release made for this HA.
+python3 - > /tmp/image-constraints.txt <<'PY'
+from importlib.metadata import PackageNotFoundError, requires, version
+import re
+for req in requires("homeassistant") or []:
+    name = re.split(r"[ ;<>=!~\\[(]", req, maxsplit=1)[0]
+    try:
+        print(f"{{name}}=={{version(name)}}")
+    except PackageNotFoundError:
+        pass
+PY
 uv pip install --system -q --index-strategy unsafe-best-match "homeassistant==$HA_VERSION" \
+    -c /tmp/image-constraints.txt \
     pytest-homeassistant-custom-component pytest-cov mypy -e lib/aiosamstream
 # The image installs HA from /usr/src/homeassistant in a way mypy cannot follow.
 HA_SRC=$(dirname "$(python3 -c 'import homeassistant, os; print(os.path.dirname(homeassistant.__file__))')")
@@ -168,7 +191,9 @@ pytest -q -p no:cacheprovider ${{PYTEST_ARGS:-tests lib/aiosamstream/tests}} \
 
 def test(pytest_args: list[str]) -> None:
     """Run mypy + pytest in a throwaway container built from the live HA image."""
-    image = ssh(f"docker inspect {CONTAINER} --format {{{{.Config.Image}}}}")
+    # The running container's image ID, not its tag: a newer pull of the tag that
+    # the container has not been recreated from is not what HA runs.
+    image = ssh(f"docker inspect {CONTAINER} --format {{{{.Image}}}}")
     image_name = image.stdout.decode().strip()
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
@@ -198,6 +223,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.command in {"sync", "deploy"}:
         sync()
+    if args.command == "deploy":
+        ensure_lib()
     if args.command == "install-lib":
         install_lib()
     if args.command in {"restart", "deploy"}:

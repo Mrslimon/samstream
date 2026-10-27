@@ -11,10 +11,11 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
-import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.components.frontend import add_extra_js_url
-from homeassistant.components.http import StaticPathConfig
+
+# Moved to http.server in 2026.10; still re-exported from the package.
+from homeassistant.components.http import StaticPathConfig  # type: ignore[attr-defined,unused-ignore]
 from homeassistant.components.websocket_api.connection import ActiveConnection
 from homeassistant.components.websocket_api.decorators import (
     async_response,
@@ -25,6 +26,7 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN, SOURCE_HOME, SOURCE_KEYS
 from .logos import async_app_logos
+from .validation import vol
 
 URL_BASE = "/samstream_files"
 CARD_FILE = "samstream-card.js"

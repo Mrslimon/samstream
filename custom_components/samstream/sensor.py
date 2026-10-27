@@ -2,13 +2,29 @@
 
 from __future__ import annotations
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
-from homeassistant.const import EntityCategory
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
+
+from aiosamstream.ocf import OcfTvState
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorEntityDescription,
+    SensorStateClass,
+)
+from homeassistant.const import (
+    LIGHT_LUX,
+    PERCENTAGE,
+    SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+    EntityCategory,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.typing import StateType
 
 from . import SamstreamConfigEntry
-from .const import ATTR_APP_ID, SCREEN_HOME, SCREEN_OTHER
+from .const import ATTR_APP_ID, CONF_OCF, SCREEN_HOME, SCREEN_OTHER
 from .coordinator import SamstreamCoordinator
 from .entity import SamstreamEntity
 
@@ -22,9 +38,13 @@ async def async_setup_entry(
 ) -> None:
     """Add the current app and developer host sensors."""
     coordinator = entry.runtime_data.coordinator
-    async_add_entities(
-        [CurrentAppSensor(coordinator), DeveloperHostSensor(coordinator)]
-    )
+    entities: list[SensorEntity] = [
+        CurrentAppSensor(coordinator),
+        DeveloperHostSensor(coordinator),
+    ]
+    if entry.options.get(CONF_OCF):
+        entities += [OcfSensor(coordinator, d) for d in OCF_SENSORS]
+    async_add_entities(entities)
 
 
 class CurrentAppSensor(SamstreamEntity, SensorEntity):
@@ -85,3 +105,101 @@ class DeveloperHostSensor(SamstreamEntity, SensorEntity):
         """Developer host IP, None when Developer Mode is off."""
         info = self.coordinator.data.info
         return info.developer_ip if info and info.developer_mode else None
+
+
+def _channel(ocf: OcfTvState) -> str | None:
+    if ocf.content_input == "webapp":
+        return None
+    return ocf.channel_name or ocf.channel_number
+
+
+@dataclass(frozen=True, kw_only=True)
+class OcfSensorDescription(SensorEntityDescription):
+    """A sensor fed by what the TV reports over local control."""
+
+    value_fn: Callable[[OcfTvState], StateType]
+    attrs_fn: Callable[[OcfTvState], dict[str, Any]] = lambda _: {}
+
+
+OCF_SENSORS: tuple[OcfSensorDescription, ...] = (
+    OcfSensorDescription(
+        key="channel",
+        translation_key="channel",
+        value_fn=_channel,
+        attrs_fn=lambda s: {"number": s.channel_number},
+    ),
+    OcfSensorDescription(
+        key="ambient_light",
+        translation_key="ambient_light",
+        device_class=SensorDeviceClass.ILLUMINANCE,
+        native_unit_of_measurement=LIGHT_LUX,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda s: s.illuminance,
+        attrs_fn=lambda s: {"level": s.brightness_level},
+    ),
+    OcfSensorDescription(
+        key="sound_detected",
+        translation_key="sound_detected",
+        value_fn=lambda s: s.sound_detected,
+        attrs_fn=lambda s: {"sound_types": list(s.sound_types)},
+    ),
+    OcfSensorDescription(
+        key="remote_battery",
+        translation_key="remote_battery",
+        device_class=SensorDeviceClass.BATTERY,
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda s: s.remote_battery,
+    ),
+    OcfSensorDescription(
+        key="wifi_signal",
+        translation_key="wifi_signal",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda s: s.wifi_dbm,
+        attrs_fn=lambda s: {
+            "frequency": s.wifi_frequency,
+            "channel": s.wifi_channel,
+            "protocol": s.wifi_protocol,
+            "disconnects": s.wifi_disconnects,
+        },
+    ),
+)
+
+
+class OcfSensor(SamstreamEntity, SensorEntity):
+    """A value the TV reports over local control; unavailable until it does."""
+
+    entity_description: OcfSensorDescription
+
+    def __init__(
+        self, coordinator: SamstreamCoordinator, description: OcfSensorDescription
+    ) -> None:
+        """Create the sensor for the coordinator's TV."""
+        super().__init__(coordinator, description.key)
+        self.entity_description = description
+
+    @property
+    def available(self) -> bool:
+        """While the TV reports over local control (a channel can be empty)."""
+        ocf = self.coordinator.data.ocf
+        if not super().available or ocf is None:
+            return False
+        key = self.entity_description.key
+        return key == "channel" or self.entity_description.value_fn(ocf) is not None
+
+    @property
+    def native_value(self) -> StateType:
+        """The reported value."""
+        ocf = self.coordinator.data.ocf
+        return self.entity_description.value_fn(ocf) if ocf else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Details that come with the value."""
+        ocf = self.coordinator.data.ocf
+        return self.entity_description.attrs_fn(ocf) if ocf else {}
