@@ -142,6 +142,35 @@ def pairing() -> Composition:
     return c
 
 
+def connecting() -> Composition:
+    """TV and Home Assistant with signal dots flowing between them (no check).
+
+    Shown while waiting for the user to press Allow on the TV; it must NOT show
+    the paired check before that happens.
+    """
+    c = Composition("connecting", 600, 300, 90)
+    for index in range(5):
+        x = 230 + index * 35
+        offset = index * 8
+        c.shape(
+            f"dot{index}",
+            group(ellipse([16, 16]), fill(ACCENT)),
+            position=(x, 150),
+            scale=[
+                (offset, (60, 60)),
+                (offset + 15, (130, 130)),
+                (offset + 30, (60, 60)),
+                (offset + 45, (60, 60)),
+                (offset + 60, (130, 130)),
+                (offset + 75, (60, 60)),
+            ],
+            opacity=[(offset, 40), (offset + 15, 100), (offset + 30, 40)],
+        )
+    c.shape("tv", _tv_icon(0, 0), position=(120, 150))
+    c.shape("home", _home_icon(0, 0), position=(480, 150))
+    return c
+
+
 def connect() -> Composition:
     """A TV settings toggle flipping on — the Wake-on-LAN step of connecting.
 
@@ -788,7 +817,7 @@ def write_svg(name: str, svg: str) -> Path:
 
 
 if __name__ == "__main__":
-    for build in (loading, pairing, paired, connect, developer_mode):
+    for build in (loading, pairing, paired, connecting, connect, developer_mode):
         path_written = write(build())
         print(f"{path_written.name}: {path_written.stat().st_size} bytes")
     data = {
@@ -797,6 +826,7 @@ if __name__ == "__main__":
     written = [
         write_svg("pairing.svg", to_svg(data["pairing"], display_width=360)),
         write_svg("paired.svg", to_svg(data["paired"], display_width=160)),
+        write_svg("connecting.svg", to_svg(data["connecting"], display_width=360)),
         write_svg("connect.svg", to_svg(data["connect"], display_width=360)),
         write_svg("loading.svg", to_svg(data["loading"], display_width=120)),
     ]

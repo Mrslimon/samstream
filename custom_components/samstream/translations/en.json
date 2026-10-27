@@ -44,10 +44,14 @@
       "local_offer_guide": {
         "title": "Set up local control",
         "description": "![Local SmartThings](/samstream_files/animations/connect.svg)\n\nAfter you select Submit, open **Settings → Devices & services → Samstream → {name} → Configure → Local control** to connect the TV.\n\nIf Home Assistant can reach the TV over your network you just enter the 8-digit PIN it shows. If it runs in Docker it usually can't reach the TV directly — on Windows even host mode is on the Docker VM's network, not your LAN — so it will give you a short command to run once on a computer on the TV's network."
+      },
+      "developer_mode": {
+        "title": "Enable Developer Mode (to install the Samstream app)",
+        "description": "![Enabling Developer Mode](/samstream_files/animations/developer-mode.en.svg)\n\nTo let Home Assistant install its companion app on {name}, turn on Developer Mode on the TV:\n\n1. Open **Apps** from the Home screen.\n2. On the remote number pad, enter **1 2 3 4 5** (press the **123** button first if your remote has one).\n3. In the dialog, switch **Developer mode** to **On**, type **Home Assistant's IP address** (one part per box), then select **OK**.\n4. Hold **Power** for about 5 seconds until the TV restarts.\n\nThis is only needed to install the app — you can also do it later. Select Submit to continue."
       }
     },
     "progress": {
-      "wait_for_allow": "![Pairing the TV with Home Assistant](/samstream_files/animations/pairing.svg)\n\nLook at {name}: a message asks whether to allow \"Home Assistant Samstream\". Choose **Allow** with the remote. Waiting up to 60 seconds."
+      "wait_for_allow": "![Pairing the TV with Home Assistant](/samstream_files/animations/connecting.svg)\n\nLook at {name}: a message asks whether to allow \"Home Assistant Samstream\". Choose **Allow** with the remote. Waiting up to 60 seconds."
     },
     "error": {
       "cannot_connect": "Cannot reach the TV. Check that it is on and that the IP address is correct.",

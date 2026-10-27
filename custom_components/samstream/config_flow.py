@@ -233,7 +233,20 @@ class SamstreamConfigFlow(ConfigFlow, domain=DOMAIN):
             return self.async_show_progress_done(next_step_id="pair_failed")
         if self.source == SOURCE_REAUTH:
             return self.async_show_progress_done(next_step_id="finish")
-        return self.async_show_progress_done(next_step_id="local_offer")
+        return self.async_show_progress_done(next_step_id="developer_mode")
+
+    async def async_step_developer_mode(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Guidance: enable Developer Mode so HA can install the Samstream app."""
+        if user_input is not None:
+            return await self.async_step_local_offer()
+        return self.async_show_form(
+            step_id="developer_mode",
+            data_schema=vol.Schema({}),
+            description_placeholders={"name": self._tv_name},
+            last_step=False,
+        )
 
     async def async_step_local_offer(
         self, user_input: dict[str, Any] | None = None
