@@ -334,13 +334,18 @@ Prepared while `oicseek/` is still a spike (not finished). This supersedes the "
     DTLS 1.2 ECDHE-PSK client on `cryptography` (`aiosamstream/ocf/dtls.py`; binary PSK identity + owner-PSK
     derivation, no C compiler, no new deps). `aiosamstream/ocf/onboard.py` folds the old `oicseek` scripts
     (discover → trigger PIN → Random-PIN ownership → install CA/ACE/cis → release) into one driver.
-    **Onboarding runs from a computer on the TV's LAN** (`scripts/onboard_tv.py`), because HA in a bridge-networked
-    Docker container cannot reach the TV over UDP (multicast/CoAP; container IP is NAT'd). The options flow is a
-    guided setup (intro → settings → **connect: shows a one-line bundle to run the LAN tool with** → wait for the
-    TV to dial in → paired → troubleshooting → release); the tool prints a credential the user pastes back so HA
-    can later release the TV (`pstat cm:1`). New `paired` animation. See `docs/ocf-local-protocol.md §11`. Crypto
-    has unit tests (PRF/owner-PSK/CBC); the flow is tested with the dial-in mocked; the DTLS handshake, an
-    authenticated owner read, and the release are all **verified live against the lab TV** from a LAN host.
+    **Onboarding is in-HA-first with a LAN fallback.** The connect step probes whether HA can reach the TV over
+    UDP: if it can, it shows **"enter the 8-digit PIN"** and HA does ownership + cloud-pointing itself (seamless);
+    if it can't (HA in a bridge-networked Docker container — multicast/CoAP are NAT'd, proven: no UDP path at all,
+    not even known-port DTLS), it falls back to a one-line **`scripts/onboard_tv.py`** command run on a computer on
+    the TV's LAN, which prints a credential the user pastes back so HA can later release the TV (`pstat cm:1`). The
+    options flow: intro → settings (turns local control on, cloud starts) → connect (PIN or LAN) → wait for dial-in
+    → paired → troubleshooting → release. The initial config flow also **offers local control right after pairing**
+    (`local_offer` step). Animations: new `connect` (Wake-on-LAN toggle) on the "Connect your Samsung TV" step and
+    the offer; `pairing` on the PIN step; `paired` on success; `loading` while waiting. See
+    `docs/ocf-local-protocol.md §11`. Crypto has unit tests (PRF/owner-PSK/CBC); the flows are tested with the
+    dial-in mocked (both PIN and LAN modes); the DTLS handshake, an authenticated owner read, and the release are
+    **verified live against the lab TV** from a LAN host.
 - **Pitfalls (added to section 5):**
   | Area | Risk | Mitigation |
   |---|---|---|

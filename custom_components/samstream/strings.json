@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Connect your Samsung TV",
-        "description": "Turn the TV on, then enter its IP address. You will be asked to allow the connection on the TV once.\n\nSo Home Assistant can also turn the TV **on** (for a doorbell camera at night), switch on Wake-on-LAN on the TV first:\n1. **Settings → All Settings → Connection → Network → Expert Settings**.\n2. Turn on **Power On with Mobile** (on some models **Power On with Network** or **Wake on LAN**).\n3. Optional: **Settings → All Settings → Connection → External Device Manager → Device Connection Manager → Access Notification → First Time Only**, so the TV does not ask again.\n\nA fixed IP for the TV (a DHCP reservation on your router) keeps everything working after restarts.",
+        "description": "![Connecting your TV](/samstream_files/animations/connect.svg)\n\nTurn the TV on, then enter its IP address. You will be asked to allow the connection on the TV once.\n\nSo Home Assistant can also turn the TV **on** (for a doorbell camera at night), switch on Wake-on-LAN on the TV first:\n1. **Settings → All Settings → Connection → Network → Expert Settings**.\n2. Turn on **Power On with Mobile** (on some models **Power On with Network** or **Wake on LAN**).\n3. Optional: **Settings → All Settings → Connection → External Device Manager → Device Connection Manager → Access Notification → First Time Only**, so the TV does not ask again.\n\nA fixed IP for the TV (a DHCP reservation on your router) keeps everything working after restarts.",
         "data": {
           "host": "Host"
         },
@@ -33,6 +33,13 @@
       "discovery_confirm": {
         "title": "Add {name}?",
         "description": "Home Assistant found {name} ({model}) at {host}. Select Submit, then choose **Allow** on the TV."
+      },
+      "local_offer": {
+        "title": "Local SmartThings (optional)",
+        "description": "![Local SmartThings](/samstream_files/animations/connect.svg)\n\nHome Assistant can also control {name} over your own network — its real inputs, picture and sound modes, channel, ambient light and more, with no Samsung account and no internet. The SmartThings app can't control the TV while this is on, and you can switch back any time.\n\nTick the box to set it up now; Home Assistant guides you (you enter the PIN the TV shows, or run a one-line helper if it can't reach the TV directly).",
+        "data": {
+          "set_up": "Set up local SmartThings"
+        }
       }
     },
     "progress": {
@@ -179,7 +186,7 @@
           }
         }
       },
-      "local_control_connect": {
+      "local_control_connect_lan": {
         "title": "Connect the TV from a computer on its network",
         "description": "Home Assistant can't reach the TV directly to set it up, so do it from a computer on the TV's own network.\n\n1. On that computer, in a checkout of this project, run:\n\n`{command}`\n\n2. When the TV shows an 8-digit PIN, type it into the tool.\n3. The tool prints a credential — paste it below (optional) so Home Assistant can hand the TV back later, then select Submit.\n\nThe TV ({tv_ip}) connects on its own; the next screen waits for it.",
         "data": {
@@ -191,7 +198,7 @@
       },
       "local_control_pin": {
         "title": "Enter the PIN from the TV",
-        "description": "Look at {name}: it is showing an 8-digit PIN.\n\nType it below. If no PIN appeared, make sure the TV is on, then try again.",
+        "description": "![Connecting the TV](/samstream_files/animations/pairing.svg)\n\nLook at {name}: it is showing an 8-digit PIN.\n\nType it below. If no PIN appeared, make sure the TV is on, then try again.",
         "data": {
           "pin": "PIN"
         },

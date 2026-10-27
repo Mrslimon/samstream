@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from aiosamstream import OcfError
 from aiosamstream.ocf import (
     CloudDevice,
     OnboardResult,
@@ -159,19 +160,82 @@ async def test_options_guided_onboarding(
     )
     assert result["errors"] == {"base": "invalid_cloud_identity"}
 
-    # Valid settings: local control turns on (cloud starts) and the bundle shows.
-    result = await options.async_configure(flow, {**base, CONF_OCF_TOKEN: TOKEN})
+    # Valid settings: local control turns on, and HA (reaching the TV, mocked)
+    # asks for the PIN.
+    onboarded = OnboardResult(
+        device_uuid=UUID,
+        obt_uuid="5f3d8a21-1c7b-4e62-9a40-7e2b1d6c8f33",
+        owner_psk_hex="ab" * 16,
+        secure_port=40000,
+    )
+    with (
+        patch(
+            "custom_components.samstream.config_flow.discover",
+            return_value=(40000, UUID),
+        ),
+        patch("custom_components.samstream.config_flow.trigger_pin"),
+    ):
+        result = await options.async_configure(flow, {**base, CONF_OCF_TOKEN: TOKEN})
     await hass.async_block_till_done()
     assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "local_control_connect"
-    assert result["description_placeholders"]["bundle"]
+    assert result["step_id"] == "local_control_pin"
     assert setup_entry.options[CONF_OCF] is True
 
-    # A bad credential paste is rejected.
-    result = await options.async_configure(flow, {"credential": "YWJj"})
-    assert result["errors"] == {"credential": "invalid_credential"}
+    result = await options.async_configure(flow, {"pin": "nope"})
+    assert result["errors"] == {"pin": "invalid_pin"}
 
-    # Paste the tool's credential; the TV "dials in" (mocked) -> paired -> created.
+    # The 8 digits: HA onboards (mocked) and the TV "dials in" -> paired -> created.
+    progress = (FlowResultType.SHOW_PROGRESS, FlowResultType.SHOW_PROGRESS_DONE)
+    with (
+        patch(
+            "custom_components.samstream.config_flow.onboard_tv",
+            return_value=onboarded,
+        ) as onboard,
+        patch.object(
+            SamstreamOptionsFlow, "_await_dial_in", new=AsyncMock(return_value=True)
+        ),
+    ):
+        result = await options.async_configure(flow, {"pin": "12345678"})
+        while result["type"] in progress:
+            await hass.async_block_till_done()
+            result = await options.async_configure(flow)
+        if result["type"] is FlowResultType.FORM:  # the paired screen
+            assert result["step_id"] == "local_control_done"
+            result = await options.async_configure(flow, {})
+    onboard.assert_called_once()
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+    assert setup_entry.data[CONF_OCF_TOKEN] == TOKEN
+    assert setup_entry.data[CONF_OCF_OWNER_PSK] == "ab" * 16
+    assert setup_entry.options[CONF_OCF] is True
+    assert async_get_service(hass).cloud is not None  # the reload started the cloud
+
+
+async def test_options_onboarding_falls_back_to_lan(
+    hass: HomeAssistant, setup_entry: MockConfigEntry, cloud_port: int
+) -> None:
+    """When HA cannot reach the TV, the connect step shows the LAN helper."""
+    options = hass.config_entries.options
+    result = await options.async_init(setup_entry.entry_id)
+    result = await options.async_configure(
+        result["flow_id"], {"next_step_id": "local_control"}
+    )
+    flow = result["flow_id"]
+    result = await options.async_configure(
+        flow, {"next_step_id": "local_control_settings"}
+    )
+    base = {CONF_OCF_PORT: cloud_port, CONF_OCF_HOST: "127.0.0.1"}
+    with patch(
+        "custom_components.samstream.config_flow.discover",
+        side_effect=OcfError("unreachable"),
+    ):
+        result = await options.async_configure(flow, {**base, CONF_OCF_TOKEN: TOKEN})
+    await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "local_control_connect_lan"
+    assert result["description_placeholders"]["command"].startswith("uv run")
+
+    # Pasting the credential the LAN tool printed lets HA release later.
     credential = encode_credential(
         OnboardResult(
             device_uuid=UUID,
@@ -180,6 +244,8 @@ async def test_options_guided_onboarding(
             secure_port=40000,
         )
     )
+    result = await options.async_configure(flow, {"credential": "YWJj"})
+    assert result["errors"] == {"credential": "invalid_credential"}
     progress = (FlowResultType.SHOW_PROGRESS, FlowResultType.SHOW_PROGRESS_DONE)
     with patch.object(
         SamstreamOptionsFlow, "_await_dial_in", new=AsyncMock(return_value=True)
@@ -188,15 +254,11 @@ async def test_options_guided_onboarding(
         while result["type"] in progress:
             await hass.async_block_till_done()
             result = await options.async_configure(flow)
-        if result["type"] is FlowResultType.FORM:  # the paired screen
-            assert result["step_id"] == "local_control_done"
+        if result["type"] is FlowResultType.FORM:
             result = await options.async_configure(flow, {})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
-    assert setup_entry.data[CONF_OCF_TOKEN] == TOKEN
     assert setup_entry.data[CONF_OCF_OWNER_PSK] == "ab" * 16
-    assert setup_entry.options[CONF_OCF] is True
-    assert async_get_service(hass).cloud is not None  # the reload started the cloud
 
 
 async def test_options_release_hands_the_tv_back(

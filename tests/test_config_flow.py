@@ -84,6 +84,11 @@ async def _finish_pairing(hass: HomeAssistant, result: dict) -> dict:
     while result["type"] in progress:
         await hass.async_block_till_done()
         result = await hass.config_entries.flow.async_configure(result["flow_id"])
+    # New setups now offer local control after pairing; skip it to reach the entry.
+    if result["type"] is FlowResultType.FORM and result.get("step_id") == "local_offer":
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"set_up": False}
+        )
     return result
 
 

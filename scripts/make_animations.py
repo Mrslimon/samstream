@@ -142,6 +142,50 @@ def pairing() -> Composition:
     return c
 
 
+def connect() -> Composition:
+    """A TV settings toggle flipping on — the Wake-on-LAN step of connecting.
+
+    No text (lottie-web draws it letter by letter, which breaks Arabic joining):
+    a faux settings row with a toggle a pointer taps from off to on.
+    """
+    c = Composition("connect", 600, 300, 72)
+    off, on = 487, 523  # the knob's x when off / on; it slides at frame 24-30
+    # Pointer: moves in from the corner and presses the toggle.
+    c.shape(
+        "cursor",
+        group(ellipse([26, 26]), fill(INK), name="dot"),
+        position=[(0, (620, 250)), (18, (505, 150)), (72, (505, 150))],
+        scale=[(18, (100, 100)), (24, (66, 66)), (30, (100, 100))],
+        opacity=[(0, 0), (8, 100), (60, 100), (70, 0)],
+        ease=EASE_OUT,
+    )
+    c.shape(
+        "knob",
+        group(ellipse([30, 30]), fill(SURFACE), stroke(MUTED, 2), name="k"),
+        position=[(0, (off, 150)), (24, (off, 150)), (30, (on, 150)), (72, (on, 150))],
+        ease=POP,
+    )
+    c.shape(
+        "pill",
+        group(
+            rect([74, 40], 20),
+            fill_keys([(0, WELL), (24, WELL), (30, ACCENT), (72, ACCENT)]),
+            name="track",
+        ),
+        position=(505, 150),
+    )
+    c.shape("label1", group(rect([150, 14], 7), fill(MUTED)), position=(360, 128))
+    c.shape("label2", group(rect([96, 14], 7), fill(WELL)), position=(333, 160))
+    c.shape(
+        "panel",
+        group(rect([300, 150], 24), fill(SURFACE), name="fill"),
+        group(rect([300, 150], 24), stroke(WELL, 5), name="edge"),
+        position=(420, 150),
+    )
+    c.shape("tv", _tv_icon(0, 0), position=(135, 150))
+    return c
+
+
 def paired() -> Composition:
     """A success check that pops in — shown when the TV has connected to HA."""
     c = Composition("paired", 300, 200, 60)
@@ -744,7 +788,7 @@ def write_svg(name: str, svg: str) -> Path:
 
 
 if __name__ == "__main__":
-    for build in (loading, pairing, paired, developer_mode):
+    for build in (loading, pairing, paired, connect, developer_mode):
         path_written = write(build())
         print(f"{path_written.name}: {path_written.stat().st_size} bytes")
     data = {
@@ -753,6 +797,7 @@ if __name__ == "__main__":
     written = [
         write_svg("pairing.svg", to_svg(data["pairing"], display_width=360)),
         write_svg("paired.svg", to_svg(data["paired"], display_width=160)),
+        write_svg("connect.svg", to_svg(data["connect"], display_width=360)),
         write_svg("loading.svg", to_svg(data["loading"], display_width=120)),
     ]
     for lang, captions in CAPTIONS.items():
