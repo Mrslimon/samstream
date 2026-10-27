@@ -241,10 +241,25 @@ class SamstreamConfigFlow(ConfigFlow, domain=DOMAIN):
         """Offer local SmartThings right after pairing (set it up in options)."""
         if user_input is not None:
             self._setup_local = bool(user_input.get("set_up"))
+            if self._setup_local:
+                return await self.async_step_local_offer_guide()
             return await self.async_step_finish()
         return self.async_show_form(
             step_id="local_offer",
             data_schema=vol.Schema({vol.Required("set_up", default=False): bool}),
+            description_placeholders={"name": self._tv_name},
+            last_step=False,
+        )
+
+    async def async_step_local_offer_guide(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Set expectations before finishing: local control is set up in options."""
+        if user_input is not None:
+            return await self.async_step_finish()
+        return self.async_show_form(
+            step_id="local_offer_guide",
+            data_schema=vol.Schema({}),
             description_placeholders={"name": self._tv_name},
             last_step=False,
         )

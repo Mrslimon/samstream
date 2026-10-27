@@ -40,6 +40,10 @@
         "data": {
           "set_up": "Set up local SmartThings"
         }
+      },
+      "local_offer_guide": {
+        "title": "Set up local control",
+        "description": "![Local SmartThings](/samstream_files/animations/connect.svg)\n\nAfter you select Submit, open **Settings → Devices & services → Samstream → {name} → Configure → Local control** to connect the TV.\n\nIf Home Assistant can reach the TV over your network you just enter the 8-digit PIN it shows. If it runs in Docker it usually can't reach the TV directly — on Windows even host mode is on the Docker VM's network, not your LAN — so it will give you a short command to run once on a computer on the TV's network."
       }
     },
     "progress": {
@@ -188,7 +192,7 @@
       },
       "local_control_connect_lan": {
         "title": "Connect the TV from a computer on its network",
-        "description": "Home Assistant can't reach the TV directly to set it up, so do it from a computer on the TV's own network.\n\n1. On that computer, in a checkout of this project, run:\n\n`{command}`\n\n2. When the TV shows an 8-digit PIN, type it into the tool.\n3. The tool prints a credential — paste it below (optional) so Home Assistant can hand the TV back later, then select Submit.\n\nThe TV ({tv_ip}) connects on its own; the next screen waits for it.",
+        "description": "Home Assistant can't reach this TV directly over your network — it runs in Docker, and on Windows even host mode is on the Docker VM's network, not your LAN. So set the TV up from a computer on its own network:\n\n1. On that computer, in a checkout of this project, run:\n\n`{command}`\n\n2. When the TV shows an 8-digit PIN, type it into the tool.\n3. The tool prints a credential — paste it below (optional) so Home Assistant can hand the TV back later, then select Submit.\n\nThe TV ({tv_ip}) connects on its own; the next screen waits for it.",
         "data": {
           "credential": "Credential from the tool (optional)"
         },
