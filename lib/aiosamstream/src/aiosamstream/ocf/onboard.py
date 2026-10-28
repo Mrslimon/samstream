@@ -18,7 +18,6 @@ and 14.7. Run these in an executor; they block.
 from __future__ import annotations
 
 import base64
-import contextlib
 import hashlib
 import json
 import logging
@@ -54,7 +53,6 @@ _U8_MAX = 0xFF  # a value above this needs two bytes
 _CBOR_UINT16 = 0x19  # CBOR head byte for a following uint16
 
 _PLAIN_PORT = 5683
-_MCAST = "224.0.1.187"
 _PBKDF2_ITERS = 1000
 _PIN_IDENTITY = b"oic.sec.doxm.rdp"
 
@@ -284,23 +282,13 @@ def _scan_secure_port(buffer: bytes) -> int | None:
     return None
 
 
-def _local_ip(ip: str) -> str:
-    """Return the host address that routes to `ip` (the multicast interface)."""
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        sock.connect((ip, 9))
-        return str(sock.getsockname()[0])
-    finally:
-        sock.close()
-
-
 def discover(ip: str) -> tuple[int, str]:
-    """Return (secure port, device UUID), reading both over plain CoAP.
+    """Return (secure port, device UUID), read from the TV's IP over plain CoAP.
 
     Raises `OcfOnboardError` if the TV does not answer — it must be awake and
     reachable over UDP (from a bridge-networked Docker host it is not; see
     docs/ocf-local-protocol.md section 10). Unicast to the TV's 5683 is flaky,
-    so retry it, then fall back to multicast.
+    so retry it.
     """
     port = None
     for _ in range(3):
@@ -308,8 +296,6 @@ def discover(ip: str) -> tuple[int, str]:
         port = _scan_secure_port(res.payload) if res else None
         if port is not None:
             break
-    if port is None:
-        port = _discover_multicast(ip)
     if port is None:
         msg = f"could not find {ip}'s secure port; is the TV on and reachable?"
         raise OcfOnboardError(msg)
@@ -320,30 +306,6 @@ def discover(ip: str) -> tuple[int, str]:
         msg = f"could not read {ip}'s device UUID"
         raise OcfOnboardError(msg)
     return port, device_uuid
-
-
-def _discover_multicast(ip: str) -> int | None:
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    # Send out the interface that routes to the TV (needed with multiple NICs).
-    with contextlib.suppress(OSError):
-        sock.setsockopt(
-            socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(_local_ip(ip))
-        )
-    sock.settimeout(3)
-    packet = _build_coap(GET, os.urandom(4), os.urandom(2), 1, RES, None, None)
-    try:
-        for _ in range(4):
-            sock.sendto(packet, (_MCAST, _PLAIN_PORT))
-            try:
-                datagram, source = sock.recvfrom(16384)
-            except TimeoutError:
-                continue
-            if source[0] == ip and (port := _scan_secure_port(datagram)) is not None:
-                return port
-    finally:
-        sock.close()
-    return None
 
 
 def trigger_pin(ip: str) -> None:
