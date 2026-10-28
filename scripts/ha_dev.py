@@ -29,6 +29,10 @@ ROOT = Path(__file__).resolve().parent.parent
 INTEGRATION = ROOT / "custom_components" / "samstream"
 LIBRARY = ROOT / "lib" / "aiosamstream"
 REMOTE_LIB = "/config/samstream-dev/aiosamstream"
+# A wheel kept under /config survives the container being recreated. With
+# UV_FIND_LINKS pointing here (compose env), HA's own requirement install picks
+# it up, so the integration comes back without a manual `deploy`.
+REMOTE_WHEELS = "/config/samstream-dev/wheels"
 LOG_MARKERS = ("samstream", "aiosamstream", "samsungtvws", "Traceback")
 STARTUP_TIMEOUT = 300
 
@@ -96,9 +100,19 @@ def upload(source: Path, remote_parent: str, name: str) -> None:
     print(f"synced {source.relative_to(ROOT)} -> {remote_parent}/{name}")
 
 
+def build_wheel() -> None:
+    """Build the synced library into REMOTE_WHEELS, inside the container."""
+    in_container(
+        f"rm -rf {REMOTE_WHEELS} && "
+        f"uv build --wheel --quiet --out-dir {REMOTE_WHEELS} {REMOTE_LIB}"
+    )
+    print(f"built aiosamstream wheel -> {REMOTE_WHEELS}")
+
+
 def sync() -> None:
     upload(INTEGRATION, "/config/custom_components", "samstream")
     upload(LIBRARY, "/config/samstream-dev", "aiosamstream")
+    build_wheel()
 
 
 def install_lib() -> None:
