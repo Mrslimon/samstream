@@ -27,6 +27,22 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 HEADER = struct.Struct("<6I")
 
 
+@pytest.fixture(autouse=True)
+def _honour_enable_socket(request: pytest.FixtureRequest) -> None:
+    """Re-allow sockets for `enable_socket` tests inside HA's test harness.
+
+    HA's pytest plugin disables sockets in its own runtest-setup hook, which can
+    run after pytest-socket applied the marker; autouse fixtures run after both.
+    """
+    if request.node.get_closest_marker("enable_socket") is None:
+        return
+    try:
+        import pytest_socket  # noqa: PLC0415  # only present in the HA harness
+    except ImportError:
+        return
+    pytest_socket.enable_socket()
+
+
 @dataclass
 class FakeSdbd:
     """`auth`: "none", "verify" (check the signature) or "pubkey" (reject it)."""

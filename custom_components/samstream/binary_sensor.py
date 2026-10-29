@@ -45,8 +45,45 @@ async def async_setup_entry(
                 BinarySensorDeviceClass.CONNECTIVITY,
             ),
             OcfBinarySensor(coordinator, "energy_saving", lambda s: s.energy_saving),
+            *(
+                OcfBinarySensor(
+                    coordinator,
+                    key,
+                    _accessibility(menu),
+                    category=None,
+                )
+                for key, menu in ACCESSIBILITY
+            ),
+            OcfBinarySensor(
+                coordinator,
+                "motion",
+                _motion,
+                BinarySensorDeviceClass.MOTION,
+                category=None,
+            ),
         ]
     async_add_entities(entities)
+
+
+# Accessibility settings the TV reports (entity key, the TV's menu id).
+ACCESSIBILITY = (
+    ("voice_guide", "voiceguide_on"),
+    ("high_contrast", "highcontrast"),
+    ("color_inversion", "color-inversion"),
+    ("grayscale", "grayscale"),
+)
+
+
+def _accessibility(menu: str) -> Callable[[OcfTvState], bool | None]:
+    """Read one accessibility setting by the TV's menu id."""
+    return lambda state: state.accessibility_on(menu)
+
+
+def _motion(state: OcfTvState) -> bool | None:
+    """Motion the TV reported; clear while its motion detection is on and quiet."""
+    if state.motion is not None:
+        return state.motion
+    return False if state.motion_sensor_enabled else None
 
 
 class DeveloperModeSensor(SamstreamEntity, BinarySensorEntity):
@@ -122,7 +159,7 @@ class LocalControlSensor(SamstreamEntity, BinarySensorEntity):
 class OcfBinarySensor(SamstreamEntity, BinarySensorEntity):
     """An on/off the TV reports over local control."""
 
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_category: EntityCategory | None
 
     def __init__(
         self,
@@ -130,9 +167,12 @@ class OcfBinarySensor(SamstreamEntity, BinarySensorEntity):
         key: str,
         value: Callable[[OcfTvState], bool | None],
         device_class: BinarySensorDeviceClass | None = None,
+        *,
+        category: EntityCategory | None = EntityCategory.DIAGNOSTIC,
     ) -> None:
         """Create the sensor `key` for the coordinator's TV."""
         super().__init__(coordinator, key)
+        self._attr_entity_category = category
         self._attr_translation_key = key
         self._attr_device_class = device_class
         self._value = value

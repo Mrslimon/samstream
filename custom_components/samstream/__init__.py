@@ -38,6 +38,7 @@ from .tv_session import SamstreamTvSessionView
 from .tv_settings import SamstreamTvSettingsView
 from .validation import vol
 from .voice import async_setup_voice
+from .welcome import async_setup_welcome
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -47,6 +48,7 @@ PLATFORMS: list[Platform] = [
     Platform.MEDIA_PLAYER,
     Platform.SELECT,
     Platform.SENSOR,
+    Platform.SWITCH,
     Platform.UPDATE,
 ]
 
@@ -115,7 +117,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             vol.Optional("title", default=""): cv.string,
             vol.Optional("message", default=""): cv.string,
             vol.Optional("severity", default="info"): vol.In(
-                ["info", "warning", "alert"]
+                ["info", "warning", "alert", "success"]
             ),
             vol.Optional("sound"): vol.Any(
                 cv.string,
@@ -230,6 +232,19 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         func="async_install_app",
         supports_response=SupportsResponse.OPTIONAL,
     )
+    service.async_register_platform_entity_service(
+        hass,
+        DOMAIN,
+        "local_control_request",
+        entity_domain=MEDIA_PLAYER_DOMAIN,
+        schema={
+            vol.Required("method"): vol.In(["get", "post"]),
+            vol.Required("resource"): vol.All(cv.string, vol.Match(r"^/")),
+            vol.Optional("body"): dict,
+        },
+        func="async_local_control_request",
+        supports_response=SupportsResponse.ONLY,
+    )
     return True
 
 
@@ -271,6 +286,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SamstreamConfigEntry) ->
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     async_setup_voice(hass, entry)
+    async_setup_welcome(hass, entry)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
     async def _check_certificates(_now: object = None) -> None:

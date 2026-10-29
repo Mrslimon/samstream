@@ -30,6 +30,10 @@ describe("parseNotice", () => {
     });
   });
 
+  it("accepts the success severity", () => {
+    expect(parseNotice({ title: "Done", severity: "success" })?.severity).toBe("success");
+  });
+
   it("needs a title or a message", () => {
     expect(parseNotice({ severity: "info" })).toBeUndefined();
     expect(parseNotice(null)).toBeUndefined();

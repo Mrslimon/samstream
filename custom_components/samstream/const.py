@@ -38,6 +38,8 @@ CONF_OCF_HOST: Final = "ocf_host"
 CONF_OCF_OWNER_PSK: Final = "ocf_owner_psk"
 CONF_OCF_DEVICE_UUID: Final = "ocf_device_uuid"
 CONF_OCF_SECURE_PORT: Final = "ocf_secure_port"
+# Set when local control was just connected: show "set up" on the TV once.
+CONF_OCF_WELCOME: Final = "ocf_welcome"
 DEFAULT_OCF_PORT: Final = 5684
 ISSUE_OCF_PORT: Final = "ocf_port"
 # How long onboarding waits for the TV to dial the cloud after it is pointed at us.

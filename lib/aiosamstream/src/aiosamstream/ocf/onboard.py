@@ -28,7 +28,7 @@ import time
 import uuid
 from dataclasses import asdict, dataclass
 
-from aiosamstream.exceptions import OcfOnboardError
+from aiosamstream.exceptions import OcfOnboardError, OcfTvOwnedError
 
 from . import cbor
 from .coap_tcp import (
@@ -222,7 +222,13 @@ class _SecureCoap:
         last_code: int | None = None
         while True:
             packet = _build_coap(
-                code, token, os.urandom(2), _CON, href, payload, query,
+                code,
+                token,
+                os.urandom(2),
+                _CON,
+                href,
+                payload,
+                query,
                 block2=(num, szx) if num else None,
             )
             reply = self._collect(packet, token)
@@ -347,11 +353,21 @@ def _discover_multicast(ip: str) -> int | None:
 
 
 def trigger_pin(ip: str) -> None:
-    """Ask the TV to show its 8-digit Random-PIN (plain CoAP `oxmsel=1`)."""
+    """Ask the TV to show its 8-digit Random-PIN (plain CoAP `oxmsel=1`).
+
+    Raises `OcfTvOwnedError` when the TV already has an owner: an owned TV
+    (e.g. still added in SmartThings) refuses the request and shows no PIN.
+    """
     reply = _plain_request(ip, DOXM, POST, payload=cbor.dumps({"oxmsel": 1}))
-    if reply is None or not is_success(reply.code):
-        msg = "the TV did not accept the PIN request; wake it and try again"
-        raise OcfOnboardError(msg)
+    if reply is not None and is_success(reply.code):
+        return
+    doxm = _plain_request(ip, DOXM, GET)
+    body = cbor.loads(doxm.payload) if doxm and doxm.payload else None
+    if isinstance(body, dict) and body.get("owned") is True:
+        msg = "the TV already has an owner (SmartThings); remove it there first"
+        raise OcfTvOwnedError(msg)
+    msg = "the TV did not accept the PIN request; wake it and try again"
+    raise OcfOnboardError(msg)
 
 
 # --------------------------------------------------------------------------- #
@@ -367,8 +383,12 @@ def _open(  # noqa: PLR0913
     server: bytes = b"",
 ) -> tuple[DtlsPskClient, _SecureCoap, bytes]:
     session = DtlsPskClient(
-        ip, port, identity, psk,
-        obt_uuid=obt or b"\x00" * 16, server_uuid=server or b"\x00" * 16,
+        ip,
+        port,
+        identity,
+        psk,
+        obt_uuid=obt or b"\x00" * 16,
+        server_uuid=server or b"\x00" * 16,
     )
     session.connect()
     owner_psk = session.handshake()
@@ -400,7 +420,14 @@ def onboard_tv(  # noqa: PLR0913
 
     owner_psk = _take_ownership(ip, secure_port, pin, device_uuid, obt_uuid)
     _provision_cloud(
-        ip, secure_port, device_uuid, obt_uuid, owner_psk, ca_der, cloud_uuid, cis,
+        ip,
+        secure_port,
+        device_uuid,
+        obt_uuid,
+        owner_psk,
+        ca_der,
+        cloud_uuid,
+        cis,
         access_token,
     )
     return OnboardResult(device_uuid, obt_uuid, owner_psk.hex(), secure_port)
@@ -414,8 +441,12 @@ def _take_ownership(
         "sha256", pin.encode("ascii"), _uuid16(device_uuid), _PBKDF2_ITERS, dklen=16
     )
     session, coap, owner_psk = _open(
-        ip, port, _PIN_IDENTITY, pin_psk,
-        obt=_uuid16(obt_uuid), server=_uuid16(device_uuid),
+        ip,
+        port,
+        _PIN_IDENTITY,
+        pin_psk,
+        obt=_uuid16(obt_uuid),
+        server=_uuid16(device_uuid),
     )
     try:
         steps = [
@@ -424,13 +455,22 @@ def _take_ownership(
             (DOXM, {"rowneruuid": obt_uuid}),
             (PSTAT, {"rowneruuid": obt_uuid}),
             # empty privatedata: the TV derives its own copy of the owner PSK
-            (CRED, {
-                "creds": [{
-                    "credtype": 1, "subjectuuid": obt_uuid,
-                    "privatedata": {"encoding": "oic.sec.encoding.raw", "data": b""},
-                }],
-                "rowneruuid": obt_uuid,
-            }),
+            (
+                CRED,
+                {
+                    "creds": [
+                        {
+                            "credtype": 1,
+                            "subjectuuid": obt_uuid,
+                            "privatedata": {
+                                "encoding": "oic.sec.encoding.raw",
+                                "data": b"",
+                            },
+                        }
+                    ],
+                    "rowneruuid": obt_uuid,
+                },
+            ),
             (DOXM, {"owned": True}),
         ]
         for href, body in steps:
@@ -458,26 +498,41 @@ def _provision_cloud(  # noqa: PLR0913, PLR0917
     """Over the owner session: finalize access, install CA/ACE, point `cis` at us."""
     session, coap, _ = _open(ip, port, _uuid16(obt_uuid), owner_psk)
     try:
-        coap.post(ACL, {
-            "aclist": {"aces": [{
-                "subjectuuid": obt_uuid, "resources": [{"href": "*"}],
-                "permission": _PERM_CRUDN,
-            }]},
-            "rowneruuid": obt_uuid,
-        })
+        coap.post(
+            ACL,
+            {
+                "aclist": {
+                    "aces": [
+                        {
+                            "subjectuuid": obt_uuid,
+                            "resources": [{"href": "*"}],
+                            "permission": _PERM_CRUDN,
+                        }
+                    ]
+                },
+                "rowneruuid": obt_uuid,
+            },
+        )
         coap.post(PSTAT, {"tm": 0, "cm": 0})  # clear TAKE_OWNER so ownership holds
 
-        coap.post(CRED, {
-            "creds": [{
-                "credtype": 8, "subjectuuid": device_uuid, "credusage": "trust_ca",
-                "optionaldata": {
-                    "encoding": "oic.sec.encoding.der",
-                    "data": ca_der,
-                    "revstat": False,
-                },
-            }],
-            "rowneruuid": obt_uuid,
-        })
+        coap.post(
+            CRED,
+            {
+                "creds": [
+                    {
+                        "credtype": 8,
+                        "subjectuuid": device_uuid,
+                        "credusage": "trust_ca",
+                        "optionaldata": {
+                            "encoding": "oic.sec.encoding.der",
+                            "data": ca_der,
+                            "revstat": False,
+                        },
+                    }
+                ],
+                "rowneruuid": obt_uuid,
+            },
+        )
         _add_cloud_ace(coap, obt_uuid, cloud_uuid)
         _point_cloud(coap, cis, access_token)
     finally:
@@ -489,21 +544,30 @@ def _add_cloud_ace(coap: _SecureCoap, obt_uuid: str, cloud_uuid: str) -> None:
     acl = coap.get(ACL)
     existing = acl.get("aclist", {}).get("aces", []) if isinstance(acl, dict) else []
     aces = [ace for ace in existing if ace.get("subjectuuid") != cloud_uuid]
-    aces.append({
-        "subjectuuid": cloud_uuid,
-        "resources": [{"href": href} for href in _CLOUD_TARGETS] + [{"href": "*"}],
-        "permission": _PERM_CRUDN,
-    })
-    coap.post(ACL, {"aclist": {"aces": aces}, "rowneruuid": obt_uuid},
-              query="if=oic.if.baseline")
+    aces.append(
+        {
+            "subjectuuid": cloud_uuid,
+            "resources": [{"href": href} for href in _CLOUD_TARGETS] + [{"href": "*"}],
+            "permission": _PERM_CRUDN,
+        }
+    )
+    coap.post(
+        ACL,
+        {"aclist": {"aces": aces}, "rowneruuid": obt_uuid},
+        query="if=oic.if.baseline",
+    )
 
 
 def _point_cloud(coap: _SecureCoap, cis: str, access_token: str) -> None:
     """Write `cis` after opening a provisioning session (section 14.7 kick)."""
     conf = {
-        "apn": "samstream", "cis": cis, "at": access_token,
-        "x.com.samsung.clientid": "samstream", "x.com.samsung.uid": "samstream",
-        "x.com.samsung.refreshtoken": access_token, "x.com.samsung.iatt": 1,
+        "apn": "samstream",
+        "cis": cis,
+        "at": access_token,
+        "x.com.samsung.clientid": "samstream",
+        "x.com.samsung.uid": "samstream",
+        "x.com.samsung.refreshtoken": access_token,
+        "x.com.samsung.iatt": 1,
     }
     for attempt in range(3):
         session_id = f"samstream{int(time.time() * 10) % 1000000:06d}"

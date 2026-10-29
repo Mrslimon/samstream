@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable, Sequence
+from types import SimpleNamespace
 
+import pytest
+from aiosamstream.exceptions import OcfOnboardError, OcfTvOwnedError
 from aiosamstream.ocf import cbor, onboard
 from aiosamstream.ocf.coap_tcp import encode_body
 
@@ -22,8 +25,13 @@ Responder = Callable[[onboard._Reply], list[bytes]]  # noqa: SLF001
 def test_build_and_parse_round_trip() -> None:
     body = cbor.dumps({"om": 4})
     packet = onboard._build_coap(  # noqa: SLF001
-        POST, b"\x01\x02\x03\x04", b"\xab\xcd", onboard._CON, "/oic/sec/pstat",  # noqa: SLF001
-        body, "if=oic.if.a",
+        POST,
+        b"\x01\x02\x03\x04",
+        b"\xab\xcd",
+        onboard._CON,  # noqa: SLF001
+        "/oic/sec/pstat",
+        body,
+        "if=oic.if.a",
     )
     reply = onboard._parse_coap(packet)  # noqa: SLF001
     assert reply.code == POST
@@ -41,6 +49,42 @@ def test_scan_secure_port_finds_the_tls_port() -> None:
     buffer = b"....\x64port\x19\x99\x3f...."
     assert onboard._scan_secure_port(buffer) == 39231  # noqa: SLF001
     assert onboard._scan_secure_port(b"no port here") is None  # noqa: SLF001
+
+
+def _plain(replies: dict[int, tuple[int, bytes] | None]) -> Callable[..., object]:
+    """Fake plain-CoAP exchange: the reply (code, payload) per request method."""
+
+    def request(_ip: str, _href: str, code: int, **_: object) -> object:
+        reply = replies[code]
+        if reply is None:
+            return None
+        return SimpleNamespace(code=reply[0], payload=reply[1])
+
+    return request
+
+
+def test_trigger_pin_names_an_owned_tv(monkeypatch: pytest.MonkeyPatch) -> None:
+    forbidden = 0x83  # 4.03
+    doxm = (0x45, cbor.dumps({"owned": True, "oxmsel": 65282}))  # 2.05
+    fake = _plain({POST: (forbidden, b""), GET: doxm})
+    monkeypatch.setattr(onboard, "_plain_request", fake)
+    with pytest.raises(OcfTvOwnedError):
+        onboard.trigger_pin("192.0.2.1")
+
+
+def test_trigger_pin_unanswered_is_a_plain_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(onboard, "_plain_request", _plain({POST: None, GET: None}))
+    with pytest.raises(OcfOnboardError) as caught:
+        onboard.trigger_pin("192.0.2.1")
+    assert not isinstance(caught.value, OcfTvOwnedError)
+
+
+def test_trigger_pin_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = _plain({POST: (0x44, b""), GET: None})
+    monkeypatch.setattr(onboard, "_plain_request", fake)
+    onboard.trigger_pin("192.0.2.1")  # 2.04 Changed: the TV shows its PIN
 
 
 def _response(

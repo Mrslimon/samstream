@@ -107,6 +107,7 @@ show_message:
             - info
             - warning
             - alert
+            - success
     sound:
       selector:
         media:
@@ -264,3 +265,28 @@ open_url:
       example: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
       selector:
         text:
+
+local_control_request:
+  target:
+    entity:
+      integration: samstream
+      domain: media_player
+  fields:
+    method:
+      required: true
+      default: get
+      selector:
+        select:
+          options:
+            - get
+            - post
+    resource:
+      required: true
+      example: "/sec/tv/display/orientation"
+      selector:
+        text:
+    body:
+      required: false
+      example: '{"x.com.samsung.tv.currentMode": "HDMI1"}'
+      selector:
+        object:

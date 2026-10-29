@@ -61,6 +61,7 @@ from .state import (
     SOUND_MODE,
     STATE_RESOURCES,
     SWITCH,
+    SWITCH_ART,
     VIRTUAL_REMOTE,
     OcfTvState,
     apply,
@@ -82,7 +83,9 @@ READ_INTERVAL = 5.0  # re-read the state at most this often across reconnects
 REQUEST_TIMEOUT = 10.0
 MAX_CONNECTIONS = 8
 MAX_PENDING = 64
-_CSM_SIZE = 1152  # what the verified spike advertised
+# Large enough for the biggest replies (/oic/res); at 1152 the Frame dropped
+# the connection instead of answering it.
+_CSM_SIZE = 1 << 16
 _TOKEN_EXPIRY = 3600
 
 Listener = Callable[["CloudDevice"], None]
@@ -100,6 +103,111 @@ def _decode(payload: bytes) -> Any:
 def _field(body: Any, key: str) -> str:
     value = body.get(key) if isinstance(body, dict) else None
     return value if isinstance(value, str) else ""
+
+
+# Not read by `read_all`: security, account and discovery plumbing.
+_NOT_READ = ("/oic/sec/", "/oic/account", "/oic/rd", "/oic/res")
+# Resources a Samsung TV listed in /oic/res (QN800C), for when the index cannot be
+# read. Without logs, camera frames, provisioning and security resources.
+KNOWN_HREFS: tuple[str, ...] = (
+    "/oic/d",
+    "/oic/p",
+    "/sec/languagelist",
+    "/autoreconnect/ap",
+    "/sec/tv/switch/binary",
+    "/sec/tv/contentinfo",
+    "/sec/tv/remotecontrol",
+    "/sec/tv/virtualremote",
+    "/sec/tv/audio",
+    "/sec/tv/mediaInput",
+    "/sec/tv/mode/picture",
+    "/sec/tv/mode/sound",
+    "/sec/tv/deviceinfo",
+    "/sec/tv/inputsource",
+    "/sec/tv/inputsourcelist",
+    "/sec/tv/channel",
+    "/sec/tv/launchapp",
+    "/sec/tv/launchnativeapp",
+    "/sec/tv/ime",
+    "/sec/tv/searchonweb",
+    "/sec/tv/uicontrol",
+    "/sec/tv/showmenu",
+    "/sec/tv/optioncontrol",
+    "/sec/tv/searchall",
+    "/sec/tv/appdata/ambientapp",
+    "/sec/tv/appdata/oobe",
+    "/sec/tv/appdata/ssoservice",
+    "/sec/tv/appdata/ub",
+    "/sec/tv/appdata/contentsapp",
+    "/sec/tv/appdata/aodBrowser",
+    "/sec/tv/appdata/ambient-ua-agent",
+    "/sec/tv/appdata/mobilebff",
+    "/sec/tv/appdata/remote-server",
+    "/sec/tv/appdata/mledmultiview",
+    "/sec/tv/appdata/lighthomeapp",
+    "/sec/tv/appdata/ezcalapp",
+    "/sec/tv/appdata/stmap",
+    "/sec/tv/appdata/csftservice",
+    "/sec/tv/appdata/tlog-ua-agent",
+    "/sec/tv/onsupport",
+    "/capability/custom.ocfResourceVersion/main/0",
+    "/sec/tv/msoinfo",
+    "/sec/tv/virtualgamepad/info",
+    "/sec/tv/tvonwithmobile/enable",
+    "/sec/tv/iotHub",
+    "/sec/tv/batteryinfo",
+    "/sec/tv/plugin/first_launch",
+    "/devicelog/connectioninfo",
+    "/capability/sec.diagnosticsInformation/main/0",
+    "/sec/tv/thingstatus",
+    "/capability/sec.wifiConfiguration/main/0",
+    "/capability/samsungim.fixedFindNode/main/0",
+    "/capability/samsungim.findNodeGeolocation/main/0",
+    "/sec/tv/tapview",
+    "/sec/tv/switch/ambient",
+    "/content/renderer",
+    "/capability/bixbyCommand/main/0",
+    "/sec/mde",
+    "/sec/tv/category/tv",
+    "/sec/tv/display/orientation",
+    "/sec/tv/support/features",
+    "/irblasterRemoteControl",
+    "/irblasterRemoteDevice",
+    "/energy/consumption/vs/0",
+    "/energy/demandResponseLoadControl/vs/0",
+    "/capability/custom.energyType/main/0",
+    "/sound/detection/vs/0",
+    "/sensor/state/vs/0",
+    "/light/sensor/brightness/vs/0",
+    "/capability/motion/vs/0",
+    "/childdevices/lifecycle",
+    "/sec/tv/connectioncontrol/info",
+    "/sec/tv/camera/status",
+    "/sec/tv/camera/context",
+    "/sec/tv/ambient/info",
+    "/sec/tv/light/control",
+    "/sec/tv/automation/light/control",
+    "/sec/tv/mediaOutput",
+    "/sec/tv/switch/art",
+    "/sec/tv/qsymphony",
+    "/sec/tv/networkinfo",
+    "/edgeclient/operation/vs/0",
+    "/edgeclient/info/vs/0",
+)
+
+
+def _links(index: Any) -> list[dict[str, Any]]:
+    """Flatten an `/oic/res` body (bare links, or baseline entries with `links`)."""
+    out: list[dict[str, Any]] = []
+    for item in index if isinstance(index, list) else [index]:
+        if not isinstance(item, dict):
+            continue
+        nested = item.get("links")
+        if isinstance(nested, list):
+            out.extend(link for link in nested if isinstance(link, dict))
+        elif "href" in item:
+            out.append(item)
+    return out
 
 
 class CloudDevice:
@@ -182,6 +290,100 @@ class CloudDevice:
             raise OcfNotConnectedError(msg) from err
         return reply.code, _decode(reply.payload)
 
+    async def read_all(
+        self,
+        *,
+        timeout: float = 3.0,  # noqa: ASYNC109
+        reconnect_wait: float = 30.0,
+    ) -> dict[str, Any]:
+        """Read every resource the TV offers, for diagnostics and model discovery.
+
+        The resources known from other models come first, then the TV's own
+        index (`/oic/res`) and what only it lists. One at a time; the TV re-dials
+        now and then, so a read cut short is tried once more after it is back,
+        and only a TV that stays away ends the read. Security, account and
+        discovery resources are skipped; one that cannot be read records why.
+        """
+        resources: dict[str, Any] = {}
+        dropped: list[str] = []
+
+        async def read(href: str) -> bool:
+            return await self._read_one(
+                href, resources, dropped, timeout, reconnect_wait
+            )
+
+        def finish(
+            index: str, links: list[dict[str, Any]], more: list[str]
+        ) -> dict[str, Any]:
+            return {
+                "index": index,
+                "links": [
+                    {key: link.get(key) for key in ("href", "rt", "if")}
+                    for link in links
+                ],
+                "only_in_index": more,
+                "dropped_after": dropped,
+                "resources": resources,
+            }
+
+        for href in KNOWN_HREFS:
+            if not await read(href):
+                return finish("not read: the TV went away", [], [])
+        going = await read("/oic/res")
+        index = resources.pop("/oic/res")
+        failed = isinstance(index, dict) and "error" in index
+        links = [] if failed else _links(index)
+        more = sorted(
+            {
+                ref
+                for link in links
+                if isinstance(ref := link.get("href"), str)
+                and not ref.startswith(_NOT_READ)
+            }
+            - set(resources)
+        )
+        for href in more if going else ():
+            if not await read(href):
+                break
+        return finish(index["error"] if failed else "ok", links, more)
+
+    async def _read_one(
+        self,
+        href: str,
+        resources: dict[str, Any],
+        dropped: list[str],
+        timeout: float,  # noqa: ASYNC109
+        reconnect_wait: float,
+    ) -> bool:
+        """Store one resource for `read_all`; False when the TV did not come back."""
+        for _attempt in range(2):
+            try:
+                code, body = await self.request(GET, href, timeout=timeout)
+            except OcfError as err:
+                resources[href] = {"error": str(err)}
+                if self.connected:
+                    return True
+                dropped.append(href)
+                if not await self.wait_connected(reconnect_wait):
+                    return False
+                continue
+            resources[href] = body if is_success(code) else {"error": code_text(code)}
+            return True
+        return True
+
+    async def wait_connected(self, wait: float) -> bool:
+        """Wait for the TV to (re)connect; False if it does not within `wait`.
+
+        A TV re-dials the cloud every so often, so a moment without a connection
+        is normal.
+        """
+        try:
+            async with asyncio.timeout(wait):
+                await self._connected.wait()
+        except TimeoutError:
+            return False
+        return True
+
     async def get(self, href: str) -> Any:
         """Read a resource; raise `OcfError` unless it answers 2.xx."""
         code, body = await self.request(GET, href)
@@ -237,6 +439,10 @@ class CloudDevice:
     async def launch_app(self, app_id: str) -> int:
         """Open an app by its Tizen id."""
         return await self.post(LAUNCH_APP, {"x.com.samsung.launchapp.appId": app_id})
+
+    async def art_mode_on(self) -> int:
+        """Frame: go to Art Mode (leaving it is the power key)."""
+        return await self.post(SWITCH_ART, {"x.com.samsung.tv.requestor": "samstream"})
 
 
 class _Session:

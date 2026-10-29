@@ -28,8 +28,9 @@ from custom_components.samstream.stream_relay import (
 )
 from custom_components.samstream.tv_session import session_answer, signal_playing
 
-# The fake go2rtc is a real local aiohttp server.
-pytestmark = pytest.mark.enable_socket
+# The fake go2rtc is a real local aiohttp server. The `socket_enabled` fixture,
+# not the `enable_socket` marker: HA's plugin re-disables sockets after the marker.
+pytestmark = pytest.mark.usefixtures("socket_enabled")
 
 TV = "media_player.65_neo_qled_8k"
 RTSP = "rtsp://user:pass@192.168.1.6:554/Streaming/channels/101"
@@ -86,7 +87,11 @@ class FakeFfmpeg:
 
 
 @pytest.fixture
-async def go2rtc(hass: HomeAssistant, aiohttp_server: Any) -> AsyncIterator[FakeGo2rtc]:
+async def go2rtc(
+    hass: HomeAssistant,
+    socket_enabled: None,  # before aiohttp_server binds its port
+    aiohttp_server: Any,
+) -> AsyncIterator[FakeGo2rtc]:
     fake = FakeGo2rtc()
     app = web.Application()
     app.router.add_put("/api/streams", fake.put_stream)

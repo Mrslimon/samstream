@@ -5,16 +5,20 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from collections.abc import Awaitable
 from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any
 
 from aiosamstream import (
     SAMSTREAM_APP_ID,
+    OcfError,
     SamstreamConnectionError,
     SamstreamError,
     youtube_id,
 )
+from aiosamstream.ocf import OcfTvState
+from aiosamstream.ocf.coap_tcp import GET, POST, code_text
 from homeassistant.components import media_source
 from homeassistant.components.camera import async_get_stream_source
 from homeassistant.components.media_player import MediaPlayerEntity
@@ -79,6 +83,8 @@ RESUME_DELAY_SECONDS = 3
 # `duration` counts from the first frame; if the app never reports one (a
 # stream error, an old app), the return still comes this much later.
 FIRST_FRAME_WAIT_SECONDS = 30
+# Local control: how long to wait for the TV to re-dial the cloud.
+RECONNECT_WAIT_SECONDS = 30
 # Media browser folder with the TV's apps.
 APPS_FOLDER = "samstream://apps"
 
@@ -187,11 +193,41 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
 
     @property
     def source(self) -> str | None:
-        """The app on screen, as a source; Home when the TV listed all its apps."""
+        """The app on screen, as a source; Home when the TV listed all its apps.
+
+        With local control the TV names its input itself (Live TV, HDMI 2),
+        which the remote-key guess cannot tell apart.
+        """
         data = self.coordinator.data
+        if (input_name := _ocf_input_name(data.ocf)) is not None:
+            return input_name
         if data.app_name is None and data.is_on and self.coordinator.app_source == "tv":
             return SOURCE_HOME
         return data.app_name
+
+    @property
+    def media_content_type(self) -> MediaType | None:
+        """A channel while Live TV is on (local control), an app otherwise."""
+        ocf = self.coordinator.data.ocf
+        if _on_channel(ocf):
+            return MediaType.CHANNEL
+        return MediaType.APP if self.coordinator.data.app_id else None
+
+    @property
+    def media_title(self) -> str | None:
+        """The programme on Live TV, or the app's own title (local control)."""
+        ocf = self.coordinator.data.ocf
+        if ocf is None or ocf.content_input == "webapp":
+            return None
+        return ocf.content_title
+
+    @property
+    def media_channel(self) -> str | None:
+        """Channel name (or number) on Live TV, as the TV reports it."""
+        ocf = self.coordinator.data.ocf
+        if ocf is None or not _on_channel(ocf):
+            return None
+        return ocf.channel_name or ocf.channel_number
 
     @property
     def entity_picture(self) -> str | None:
@@ -201,8 +237,11 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
 
     @property
     def source_list(self) -> list[str]:
-        """Home, Live TV and HDMI inputs, then the installed apps."""
+        """Home, the inputs (the TV's own list with local control), then the apps."""
         apps = sorted(self.coordinator.apps.values(), key=str.casefold)
+        ocf = self.coordinator.data.ocf
+        if ocf is not None and ocf.input_sources:
+            return [SOURCE_HOME, *(name for _id, name in ocf.input_sources), *apps]
         return [*SOURCE_KEYS, *apps]
 
     @property
@@ -295,7 +334,13 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         await self._async_key("KEY_STOP")
 
     async def async_select_source(self, source: str) -> None:
-        """Launch the app with this name; Home / Live TV / HDMI press their key."""
+        """Launch the app with this name; switch input by id (local control) or key."""
+        ocf, device = self.coordinator.data.ocf, self.coordinator.ocf_device
+        if ocf is not None and device is not None and source != SOURCE_HOME:
+            for source_id, name in ocf.input_sources:
+                if name == source:
+                    await self._async_call(_sent(device.select_input(source_id)))
+                    return
         if key := SOURCE_KEYS.get(source):
             await self._async_call(self.coordinator.tv.send_keys([key]))
             return
@@ -805,6 +850,28 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         log: list[JsonValueType] = list(result.lines)
         return {"app_id": result.app_id, "log": log}
 
+    async def async_local_control_request(
+        self, *, method: str, resource: str, body: dict[str, Any] | None = None
+    ) -> ServiceResponse:
+        """Read or write one local-control resource (`local_control_request`)."""
+        device = self.coordinator.ocf_device
+        if device is None or not await device.wait_connected(RECONNECT_WAIT_SECONDS):
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="local_control_unavailable"
+            )
+        try:
+            if method == "get":
+                code, answer = await device.request(GET, resource)
+            else:
+                code, answer = await device.request(POST, resource, body or {})
+        except OcfError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="cannot_connect",
+                translation_placeholders={"error": str(err)},
+            ) from err
+        return {"code": code_text(code), "body": _json_safe(answer)}
+
     async def async_send_text(self, *, text: str, done: bool = True) -> None:
         """Type into the TV's on-screen keyboard (the `send_text` action)."""
         await self._async_call(self.coordinator.tv.send_text(text, done=done))
@@ -882,6 +949,42 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
     async def _async_key(self, key: str) -> None:
         await self._async_call(self.coordinator.tv.send_keys([key]))
         await self.coordinator.async_request_refresh()
+
+
+def _ocf_input_name(ocf: OcfTvState | None) -> str | None:
+    """Display name of the input on screen, None while an app is in front."""
+    if ocf is None or not ocf.input_source or ocf.content_input in (None, "webapp"):
+        return None
+    for source_id, name in ocf.input_sources:
+        if source_id == ocf.input_source:
+            return name
+    return ocf.input_source
+
+
+def _on_channel(ocf: OcfTvState | None) -> bool:
+    return (
+        ocf is not None
+        and ocf.content_input not in (None, "webapp")
+        and bool(ocf.channel_name or ocf.channel_number)
+    )
+
+
+async def _sent(command: Awaitable[int]) -> None:
+    """Send an OCF write; the TV acts even when it answers an error code."""
+    await command
+
+
+def _json_safe(value: Any) -> JsonValueType:
+    """CBOR answers may hold bytes; a service response must be JSON."""
+    if isinstance(value, bytes):
+        return value.hex()
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list | tuple):
+        return [_json_safe(v) for v in value]
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    return str(value)
 
 
 def _is_http(media_id: str) -> bool:

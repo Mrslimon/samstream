@@ -14,6 +14,7 @@ from urllib.parse import unquote, urlencode, urlparse
 from aiosamstream import (
     DeviceInfo,
     OcfError,
+    OcfTvOwnedError,
     SamstreamAuthError,
     SamstreamConnectionError,
     SamstreamTimeoutError,
@@ -82,6 +83,7 @@ from .const import (
     CONF_OCF_PORT,
     CONF_OCF_SECURE_PORT,
     CONF_OCF_TOKEN,
+    CONF_OCF_WELCOME,
     CONF_RESUME,
     CONF_THEME,
     CONF_TOKEN,
@@ -180,6 +182,9 @@ class _LocalControlSteps(ConfigEntryBaseFlow):
                     discover, host
                 )
                 await self.hass.async_add_executor_job(trigger_pin, host)
+            except OcfTvOwnedError as err:
+                _LOGGER.info("Local control: %s is owned (%s)", host, err)
+                return await self.async_step_local_control_owned()
             except OcfError as err:
                 _LOGGER.info("Local control: HA cannot reach %s (%s); LAN", host, err)
                 self._lc_mode = "lan"
@@ -365,6 +370,21 @@ class _LocalControlSteps(ConfigEntryBaseFlow):
             description_placeholders={"name": self._lc_name()},
         )
 
+    async def async_step_local_control_owned(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Explain that SmartThings still owns the TV, so it will not show a PIN."""
+        self._ocf_port = None
+        return self.async_show_menu(
+            step_id="local_control_owned",
+            menu_options=[
+                option
+                for option in self._lc_trouble_menu()
+                if option != "local_control_lan"  # the helper hits the same wall
+            ],
+            description_placeholders={"name": self._lc_name()},
+        )
+
     async def async_step_local_control_trouble(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -400,6 +420,8 @@ class SamstreamConfigFlow(_LocalControlSteps, ConfigFlow, domain=DOMAIN):
         self._lc_init()
         self._lc_data: dict[str, Any] = {}
         self._lc_enabled = False
+        # Show "Samstream is set up" on the TV once the new entry can.
+        self._lc_welcome = False
         self._lc_holding = False
         self._ocf_token = new_token()
 
@@ -548,7 +570,7 @@ class SamstreamConfigFlow(_LocalControlSteps, ConfigFlow, domain=DOMAIN):
         info = self._info
         if info is None:  # finish is only reached after a successful device_info
             return self.async_abort(reason="unknown")
-        data = {
+        data: dict[str, Any] = {
             CONF_HOST: self._host,
             CONF_TOKEN: self._token,
             CONF_MAC: info.mac,
@@ -559,6 +581,8 @@ class SamstreamConfigFlow(_LocalControlSteps, ConfigFlow, domain=DOMAIN):
         if self._lc_enabled:
             data |= {CONF_OCF_TOKEN: self._ocf_token, **self._lc_data}
             options[CONF_OCF] = True
+            if self._lc_welcome:
+                data[CONF_OCF_WELCOME] = True
             self._lc_holding = False  # the new entry adopts the TV's connection
         return self.async_create_entry(title=info.name, data=data, options=options)
 
@@ -596,7 +620,7 @@ class SamstreamConfigFlow(_LocalControlSteps, ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Paired: show the success screen, then add the TV with local control."""
         if user_input is not None and self._lc_done_shown:
-            self._lc_enabled = True
+            self._lc_enabled = self._lc_welcome = True
             return await self.async_step_finish()
         self._lc_done_shown = True
         return self.async_show_form(
@@ -966,7 +990,11 @@ class SamstreamOptionsFlow(_LocalControlSteps, OptionsFlow):
     ) -> ConfigFlowResult:
         """Paired — show the success screen and finish."""
         if user_input is not None and self._lc_done_shown:
-            return self.async_create_entry(data={**self.config_entry.options})
+            entry = self.config_entry
+            self.hass.config_entries.async_update_entry(
+                entry, data={**entry.data, CONF_OCF_WELCOME: True}
+            )
+            return self.async_create_entry(data={**entry.options})
         self._lc_done_shown = True
         return self.async_show_form(
             step_id="local_control_done",

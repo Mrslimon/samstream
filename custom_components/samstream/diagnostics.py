@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import asdict
 from typing import Any
 
-from aiosamstream import SAMSTREAM_APP_ID
+from aiosamstream import SAMSTREAM_APP_ID, OcfError
+from aiosamstream.ocf import CloudDevice
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.const import CONF_MAC
 from homeassistant.core import HomeAssistant
@@ -36,7 +38,51 @@ TO_REDACT = {
     "email",
     "url",
     "sound",
+    # Raw OCF resources (read_all): network and device identifiers.
+    "ssid",
+    "bssid",
+    "ap_ssid",
+    "ap_bssid",
+    "ip",
+    "ipaddress",
+    "serialNumber",
+    "x.com.samsung.devicelog.connectioninfo",
+    # The cloud token the TV holds (/CoapCloudConfResURI) and its MAC addresses.
+    "at",
+    "accesstoken",
+    "refreshtoken",
+    "x.com.samsung.refreshtoken",
+    "x.com.samsung.tv.btmac",
+    "x.com.samsung.tv.blemac",
+    "x.com.samsung.tv.wifimac",
+    "x.com.samsung.tv.ethmac",
+    "x.com.samsung.tv.p2pmac",
+    "x.com.samsung.mde.addressinfo",
+    "x.com.samsung.rsd",
 }
+_READ_ALL_TIMEOUT = 240
+
+
+def _jsonable(value: Any) -> Any:
+    """CBOR bodies may hold byte strings; show those as a short hex preview."""
+    if isinstance(value, bytes):
+        return f"<{len(value)} bytes: {value[:16].hex()}…>"
+    if isinstance(value, dict):
+        return {str(k): _jsonable(v) for k, v in value.items()}
+    if isinstance(value, list | tuple):
+        return [_jsonable(v) for v in value]
+    return value
+
+
+async def _ocf_resources(device: CloudDevice | None) -> Any:
+    """Every resource the connected TV lists, as it answers right now."""
+    if device is None or not device.connected:
+        return None
+    try:
+        async with asyncio.timeout(_READ_ALL_TIMEOUT):
+            return _jsonable(await device.read_all())
+    except (OcfError, TimeoutError) as err:
+        return {"error": str(err) or "timed out"}
 
 
 async def async_get_config_entry_diagnostics(
@@ -86,6 +132,7 @@ async def async_get_config_entry_diagnostics(
                 "address": service.cis(),
                 "tv_connected": device.connected if device else None,
                 "state": asdict(state.ocf) if state.ocf else None,
+                "resources": await _ocf_resources(device),
             },
             "signing": (
                 {

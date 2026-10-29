@@ -7,6 +7,7 @@ from .const import SAMSTREAM_APP_ID
 from .exceptions import (
     OcfError,
     OcfNotConnectedError,
+    OcfTvOwnedError,
     SamstreamAuthError,
     SamstreamConnectionError,
     SamstreamError,
@@ -30,6 +31,7 @@ __all__ = [
     "ListedApp",
     "OcfError",
     "OcfNotConnectedError",
+    "OcfTvOwnedError",
     "SamstreamAuthError",
     "SamstreamConnectionError",
     "SamstreamError",

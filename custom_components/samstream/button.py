@@ -1,4 +1,4 @@
-"""Buttons: install the TV app, download app logos, return to the previous app."""
+"""Buttons: install the TV app, logos, return, and the TV's own screens (keys)."""
 
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ async def async_setup_entry(
             InstallAppButton(coordinator),
             DownloadLogosButton(coordinator),
             ReturnButton(coordinator),
+            *(KeyButton(coordinator, key, code) for key, code in SCREEN_KEYS),
         ]
     )
 
@@ -96,3 +97,28 @@ class ReturnButton(SamstreamEntity, ButtonEntity):
         await self.hass.services.async_call(
             DOMAIN, "stop_stream", {"entity_id": media_player}, blocking=True
         )
+
+
+# The TV's own screens. Remote keys, not local control: the TV refuses to open
+# its native apps over local control ("unavailable"), and keys work on any TV.
+SCREEN_KEYS = (
+    ("open_guide", "KEY_GUIDE"),
+    ("open_channel_list", "KEY_CH_LIST"),
+    ("open_sources", "KEY_SOURCE"),
+    ("open_menu", "KEY_MENU"),
+    ("open_home", "KEY_HOME"),
+)
+
+
+class KeyButton(SamstreamEntity, ButtonEntity):
+    """Open one of the TV's screens (guide, channel list, ...) with its key."""
+
+    def __init__(self, coordinator: SamstreamCoordinator, key: str, code: str) -> None:
+        """Create the button for the coordinator's TV."""
+        super().__init__(coordinator, key)
+        self._attr_translation_key = key
+        self._code = code
+
+    async def async_press(self) -> None:
+        """Press the key."""
+        await self._async_call(self.coordinator.tv.send_keys([self._code]))

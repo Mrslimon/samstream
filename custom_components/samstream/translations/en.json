@@ -78,6 +78,14 @@
           "local_control_skip": "Finish now (set up local control later in Configure)"
         }
       },
+      "local_control_owned": {
+        "title": "The TV is still linked to SmartThings",
+        "description": "{name} already has an owner, so it will not show a PIN. This happens while the TV is added in the SmartThings app (on any phone or account).\n\n1. In the SmartThings app, open the TV, select ⋮ → **Edit** → **Delete**.\n2. Keep the TV on, then select **Try again**.\n\nIf it still shows no PIN, on the TV open Settings → Support → Device Care → Self Diagnosis → **Reset Smart Hub**, then try again.",
+        "menu_options": {
+          "local_control_connect": "Try again",
+          "local_control_skip": "Finish now (set up local control later in Configure)"
+        }
+      },
       "local_control_trouble": {
         "title": "The TV did not connect",
         "description": "{name} has not connected to Home Assistant yet. The usual reasons:\n\n- **The TV cannot reach Home Assistant on the cloud port (TCP 5684).** Home Assistant must be on the TV's network — in Docker use host networking — and a firewall must let the port in. **Settings → Repairs** shows it when Home Assistant detects the problem.\n- **Home Assistant does not know its own address on your network.** Set it in **Settings → System → Network**.\n- **It is still set up in SmartThings** on another phone or account. Remove it there first.\n- **The TV was unplugged**, so it lost the setup. Turn it on, then try again for a fresh PIN.",
@@ -259,6 +267,14 @@
         "title": "Paired",
         "description": "![Paired](/samstream_files/animations/paired.svg)\n\n{name} is now connected to Home Assistant over your network. Select Submit to finish."
       },
+      "local_control_owned": {
+        "title": "The TV is still linked to SmartThings",
+        "description": "{name} already has an owner, so it will not show a PIN. This happens while the TV is added in the SmartThings app (on any phone or account).\n\n1. In the SmartThings app, open the TV, select ⋮ → **Edit** → **Delete**.\n2. Keep the TV on, then select **Try again**.\n\nIf it still shows no PIN, on the TV open Settings → Support → Device Care → Self Diagnosis → **Reset Smart Hub**, then try again.",
+        "menu_options": {
+          "local_control_connect": "Try again",
+          "local_control_settings": "Change the cloud settings"
+        }
+      },
       "local_control_trouble": {
         "title": "The TV did not connect",
         "description": "{name} has not connected to Home Assistant yet. The usual reasons:\n\n- **The TV cannot reach Home Assistant on the cloud port (TCP 5684).** Home Assistant must be on the TV's network — in Docker use host networking — and a firewall must let the port in. **Settings → Repairs** shows it when Home Assistant detects the problem.\n- **Home Assistant does not know its own address on your network.** Set it in **Settings → System → Network**.\n- **It is still set up in SmartThings** on another phone or account. Remove it there first.\n- **The TV was unplugged**, so it lost the setup. Turn it on, then try again for a fresh PIN.",
@@ -325,6 +341,21 @@
       },
       "energy_saving": {
         "name": "Energy saving"
+      },
+      "motion": {
+        "name": "Motion"
+      },
+      "voice_guide": {
+        "name": "Voice guide"
+      },
+      "high_contrast": {
+        "name": "High contrast"
+      },
+      "color_inversion": {
+        "name": "Colour inversion"
+      },
+      "grayscale": {
+        "name": "Greyscale"
       }
     },
     "sensor": {
@@ -352,6 +383,13 @@
       },
       "wifi_signal": {
         "name": "Wi-Fi signal"
+      },
+      "screen_orientation": {
+        "name": "Screen orientation",
+        "state": {
+          "landscape": "Landscape",
+          "portrait": "Portrait"
+        }
       }
     },
     "button": {
@@ -363,6 +401,21 @@
       },
       "return_to_previous": {
         "name": "Return to previous"
+      },
+      "open_guide": {
+        "name": "Guide"
+      },
+      "open_channel_list": {
+        "name": "Channel list"
+      },
+      "open_sources": {
+        "name": "Sources"
+      },
+      "open_menu": {
+        "name": "Menu"
+      },
+      "open_home": {
+        "name": "Home screen"
       }
     },
     "update": {
@@ -382,6 +435,11 @@
       },
       "sound_output": {
         "name": "Sound output"
+      }
+    },
+    "switch": {
+      "art_mode": {
+        "name": "Art Mode"
       }
     }
   },
@@ -544,7 +602,7 @@
         },
         "severity": {
           "name": "Severity",
-          "description": "Colour and icon: info, warning or alert."
+          "description": "Colour and icon: info, warning, alert, or success (an animated check)."
         },
         "sound": {
           "name": "Sound",
@@ -655,6 +713,24 @@
           "description": "A YouTube link (watch, youtu.be or Shorts) or any http(s) web address."
         }
       }
+    },
+    "local_control_request": {
+      "name": "Local control request",
+      "description": "Advanced: reads (get) or writes (post) one of the TV's local-control resources and returns its answer. Needs local control on.",
+      "fields": {
+        "method": {
+          "name": "Method",
+          "description": "get reads the resource, post sends the body to it."
+        },
+        "resource": {
+          "name": "Resource",
+          "description": "The resource path, e.g. /sec/tv/display/orientation (see the diagnostics download for the TV's list)."
+        },
+        "body": {
+          "name": "Body",
+          "description": "For post: the fields to send."
+        }
+      }
     }
   },
   "issues": {
@@ -721,7 +797,8 @@
       "options": {
         "info": "Info",
         "warning": "Warning",
-        "alert": "Alert"
+        "alert": "Alert",
+        "success": "Success"
       }
     },
     "click": {

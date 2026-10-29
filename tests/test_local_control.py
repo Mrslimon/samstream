@@ -5,12 +5,13 @@ import subprocess
 import sys
 import zipfile
 from collections.abc import AsyncIterator, Iterator
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
-from aiosamstream import OcfError
+from aiosamstream import OcfError, OcfTvOwnedError
 from aiosamstream.ocf import (
     CloudDevice,
     OnboardResult,
@@ -22,6 +23,7 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -36,6 +38,7 @@ from custom_components.samstream.const import (
     CONF_OCF_OWNER_PSK,
     CONF_OCF_PORT,
     CONF_OCF_TOKEN,
+    CONF_OCF_WELCOME,
     DOMAIN,
     ISSUE_OCF_PORT,
 )
@@ -52,7 +55,9 @@ from custom_components.samstream.onboard_tool import (
 
 from .conftest import HOST, TV_INFO, UUID
 
-pytestmark = pytest.mark.enable_socket
+# The `socket_enabled` fixture, not the `enable_socket` marker: HA's plugin
+# re-disables sockets after the marker. The cloud listens on a real local port.
+pytestmark = pytest.mark.usefixtures("socket_enabled")
 
 TV = "x.com.samsung.tv."
 TOKEN = "a-long-secret-access-token"
@@ -95,7 +100,10 @@ def _free_port() -> int:
 
 
 @pytest.fixture
-async def cloud_port(hass: HomeAssistant) -> AsyncIterator[int]:
+async def cloud_port(
+    hass: HomeAssistant,
+    socket_enabled: None,  # before the port probe opens a socket
+) -> AsyncIterator[int]:
     """Store a cloud on a free local port, as if set up before."""
     port = _free_port()
     service = async_get_service(hass)
@@ -224,6 +232,8 @@ async def test_options_guided_onboarding(
     assert setup_entry.data[CONF_OCF_OWNER_PSK] == "ab" * 16
     assert setup_entry.options[CONF_OCF] is True
     assert async_get_service(hass).cloud is not None  # the reload started the cloud
+    # The TV shows "Samstream is set up" once the app is there.
+    assert setup_entry.data[CONF_OCF_WELCOME] is True
 
 
 async def test_options_onboarding_falls_back_to_lan(
@@ -328,6 +338,41 @@ async def test_entities_follow_the_tv(
     assert hass.states.get(_entity(hass, "binary_sensor", "energy_saving")).state == (
         "on"
     )
+    _report(
+        ocf_entry,
+        {
+            ocf_state.ORIENTATION: {"orientation": 1},
+            ocf_state.SHOW_MENU: {
+                f"{TV}accessibility": [{"menuid": "grayscale", "value": "1"}]
+            },
+        },
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get(_entity(hass, "sensor", "screen_orientation")).state == (
+        "landscape"
+    )
+    assert hass.states.get(_entity(hass, "binary_sensor", "grayscale")).state == "on"
+    assert hass.states.get(_entity(hass, "binary_sensor", "voice_guide")).state == (
+        "unavailable"
+    )
+    # Motion detection off and nothing reported: no motion sensor value yet.
+    motion = _entity(hass, "binary_sensor", "motion")
+    assert hass.states.get(motion).state == "unavailable"
+    _report(
+        ocf_entry,
+        {
+            ocf_state.SENSOR_STATES: {
+                "x.com.samsung.vd.sensorType": [
+                    {"name": "CameraMotion", "enabled": True}
+                ]
+            }
+        },
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get(motion).state == "off"
+    _report(ocf_entry, {ocf_state.MOTION: {"motion": "active"}})
+    await hass.async_block_till_done()
+    assert hass.states.get(motion).state == "on"
     # No battery reported: the sensor stays unavailable rather than wrong.
     assert hass.states.get(_entity(hass, "sensor", "remote_battery")).state == (
         "unavailable"
@@ -342,6 +387,21 @@ async def test_entities_follow_the_tv(
     assert channel.state == "Al-Majd3"
     assert channel.attributes["number"] == "154"
     assert hass.states.get(_entity(hass, "sensor", "current_app")).state != "YouTube"
+
+    # An app that is not in the installed list (the Frame's home: "Smart Hub")
+    # is still a valid state, not an ENUM error.
+    _report(
+        ocf_entry,
+        {
+            ocf_state.CONTENT_INFO: {
+                f"{TV}input": "webapp",
+                f"{TV}title": "Smart Hub",
+                f"{TV}subtitle": "com.samsung.tv.smarthub",
+            }
+        },
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get(_entity(hass, "sensor", "current_app")).state == "Smart Hub"
 
 
 async def test_select_sends_the_id(
@@ -361,6 +421,153 @@ async def test_select_sends_the_id(
         ocf_state.INPUT_SOURCE,
         {f"{TV}currentMode": "HDMI1"},
     )
+
+
+async def test_media_player_uses_what_the_tv_reports(
+    hass: HomeAssistant, ocf_entry: MockConfigEntry
+) -> None:
+    player = _entity(hass, "media_player", "media_player")
+    _report(ocf_entry, REPORT)
+    await hass.async_block_till_done()
+    state = hass.states.get(player)
+    # An app in front: the app is the source, no channel.
+    assert state.attributes["source"] == "YouTube"
+    assert state.attributes["source_list"][:3] == ["Home", "TV", "HDMI 1"]
+    assert "media_channel" not in state.attributes
+
+    _report(
+        ocf_entry,
+        {ocf_state.CONTENT_INFO: {f"{TV}input": "dtv", f"{TV}title": "News at 9"}},
+    )
+    await hass.async_block_till_done()
+    state = hass.states.get(player)
+    assert state.attributes["source"] == "TV"
+    assert state.attributes["media_channel"] == "Al-Majd3"
+    assert state.attributes["media_title"] == "News at 9"
+    assert state.attributes["media_content_type"] == "channel"
+
+    # Picking an input the TV listed switches it by id, not by a remote key.
+    tv = ocf_entry.runtime_data.coordinator.tv
+    with patch.object(CloudDevice, "post", AsyncMock(return_value=0x80)) as sent:
+        await hass.services.async_call(
+            "media_player",
+            "select_source",
+            {"entity_id": player, "source": "HDMI 1"},
+            blocking=True,
+        )
+    assert sent.await_args.args == (
+        ocf_state.INPUT_SOURCE,
+        {f"{TV}currentMode": "HDMI1"},
+    )
+    tv.send_keys.assert_not_called()
+
+
+async def test_local_control_request_reads_and_writes(
+    hass: HomeAssistant, ocf_entry: MockConfigEntry
+) -> None:
+    player = _entity(hass, "media_player", "media_player")
+    answer = AsyncMock(return_value=(0x45, {"orientation": 1, "raw": b""}))
+    with (
+        patch.object(CloudDevice, "wait_connected", AsyncMock(return_value=True)),
+        patch.object(CloudDevice, "request", answer),
+    ):
+        got = await hass.services.async_call(
+            DOMAIN,
+            "local_control_request",
+            {"entity_id": player, "method": "get", "resource": "/sec/tv/x"},
+            blocking=True,
+            return_response=True,
+        )
+        assert got[player] == {"code": "2.05", "body": {"orientation": 1, "raw": "01"}}
+        await hass.services.async_call(
+            DOMAIN,
+            "local_control_request",
+            {
+                "entity_id": player,
+                "method": "post",
+                "resource": "/sec/tv/x",
+                "body": {"a": 1},
+            },
+            blocking=True,
+            return_response=True,
+        )
+    assert answer.await_args.args == (0x02, "/sec/tv/x", {"a": 1})
+
+    # Not connected: a clear error, not a hang.
+    with (
+        patch("custom_components.samstream.media_player.RECONNECT_WAIT_SECONDS", 0.01),
+        pytest.raises(HomeAssistantError),
+    ):
+        await hass.services.async_call(
+            DOMAIN,
+            "local_control_request",
+            {"entity_id": player, "method": "get", "resource": "/sec/tv/x"},
+            blocking=True,
+            return_response=True,
+        )
+
+
+async def test_frame_art_mode_switch(
+    hass: HomeAssistant,
+    mock_entry: MockConfigEntry,
+    mock_tv: MagicMock,
+    cloud_port: int,
+) -> None:
+    mock_tv.device_info = AsyncMock(return_value=replace(TV_INFO, frame_tv=True))
+    mock_tv.toggle_art_mode = AsyncMock()
+    hass.config_entries.async_update_entry(
+        mock_entry,
+        data={**mock_entry.data, CONF_OCF_TOKEN: TOKEN},
+        options={CONF_OCF: True},
+    )
+    assert await hass.config_entries.async_setup(mock_entry.entry_id)
+    await hass.async_block_till_done()
+    art = _entity(hass, "switch", "art_mode")
+    hub = {f"{TV}input": "webapp", f"{TV}subtitle": "com.samsung.tv.csfs"}
+    _report(mock_entry, {ocf_state.CONTENT_INFO: hub})
+    await hass.async_block_till_done()
+    assert hass.states.get(art).state == "off"
+
+    with patch.object(CloudDevice, "post", AsyncMock(return_value=0x44)) as sent:
+        await hass.services.async_call(
+            "switch", "turn_on", {"entity_id": art}, blocking=True
+        )
+    assert sent.await_args.args[0] == ocf_state.SWITCH_ART
+    # Off when not in Art Mode does nothing (the power key would enter it).
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": art}, blocking=True
+    )
+    mock_tv.toggle_art_mode.assert_not_called()
+
+    _report(
+        mock_entry,
+        {ocf_state.CONTENT_INFO: {**hub, f"{TV}subtitle": "art"}},
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get(art).state == "on"
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": art}, blocking=True
+    )
+    mock_tv.toggle_art_mode.assert_awaited_once()
+
+
+async def test_no_art_mode_switch_on_other_tvs(
+    hass: HomeAssistant, ocf_entry: MockConfigEntry
+) -> None:
+    registry = er.async_get(hass)
+    assert registry.async_get_entity_id("switch", DOMAIN, f"{UUID}_art_mode") is None
+
+
+async def test_screen_buttons_press_keys(
+    hass: HomeAssistant, setup_entry: MockConfigEntry, mock_tv: MagicMock
+) -> None:
+    await hass.services.async_call(
+        "button",
+        "press",
+        {"entity_id": _entity(hass, "button", "open_guide")},
+        blocking=True,
+    )
+    mock_tv.send_keys.assert_awaited_with(["KEY_GUIDE"])
 
 
 async def test_port_in_use_raises_an_issue(
@@ -425,6 +632,22 @@ async def test_diagnostics_hide_the_token(
     local = diagnostics["local_control"]
     assert local["listening"] is True
     assert local["state"]["input_source"] == "dtv"
+
+    # The raw dump holds the token the TV keeps for the cloud: never shown.
+    dump = {
+        "resources": {
+            "/CoapCloudConfResURI": {"at": TOKEN, "x.com.samsung.refreshtoken": TOKEN},
+            "/sec/tv/deviceinfo": {"x.com.samsung.tv.wifimac": "2c:99:75:be:33:bc"},
+        }
+    }
+    with (
+        patch.object(CloudDevice, "connected", PropertyMock(return_value=True)),
+        patch.object(CloudDevice, "read_all", AsyncMock(return_value=dump)),
+    ):
+        diagnostics = await async_get_config_entry_diagnostics(hass, ocf_entry)
+    raw = str(diagnostics["local_control"]["resources"])
+    assert TOKEN not in raw
+    assert "2c:99:75" not in raw
 
 
 async def test_unload_stops_the_cloud(
@@ -507,6 +730,7 @@ async def test_first_setup_includes_local_control(hass: HomeAssistant) -> None:
     assert entry.options == {CONF_OCF: True}
     assert entry.data[CONF_OCF_OWNER_PSK] == "ab" * 16
     assert len(entry.data[CONF_OCF_TOKEN]) >= 16
+    assert entry.data[CONF_OCF_WELCOME] is True
     # The entry took over the device the flow held (and its connection).
     assert service.held == {}
     assert flow not in service.cloud.devices
@@ -570,6 +794,32 @@ async def test_first_setup_unreachable_tv_uses_the_lan_helper(
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["result"].options == {CONF_OCF: True}
     await hass.async_block_till_done()
+
+
+@pytest.mark.usefixtures("mock_tv", "pairing_tv", "cloud_port")
+async def test_first_setup_owned_tv_says_remove_it_from_smartthings(
+    hass: HomeAssistant,
+) -> None:
+    """A TV still owned by SmartThings gets its own screen, not the LAN helper."""
+    flows = hass.config_entries.flow
+    flow = await _to_local_offer(hass)
+    with (
+        patch(f"{FLOW}.discover", return_value=(40000, UUID)),
+        patch(f"{FLOW}.trigger_pin", side_effect=OcfTvOwnedError("owned")),
+    ):
+        result = await flows.async_configure(flow, {"set_up": True})
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "local_control_owned"
+    assert result["menu_options"] == ["local_control_connect", "local_control_skip"]
+    with (
+        patch(f"{FLOW}.discover", return_value=(40000, UUID)),
+        patch(f"{FLOW}.trigger_pin") as trigger,
+    ):
+        result = await flows.async_configure(
+            flow, {"next_step_id": "local_control_connect"}
+        )
+    trigger.assert_called_once_with(HOST)  # retrying asks for the PIN again
+    assert result["step_id"] == "local_control_pin"
 
 
 def test_helper_runs_without_the_library(tmp_path: Path) -> None:

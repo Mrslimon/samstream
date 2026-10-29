@@ -64,8 +64,16 @@ class CurrentAppSensor(SamstreamEntity, SensorEntity):
 
     @property
     def options(self) -> list[str]:
-        """Installed app names plus the two translated states."""
-        return [*sorted(set(self.coordinator.apps.values())), SCREEN_HOME, SCREEN_OTHER]
+        """Installed app names, the app on screen, and the two translated states.
+
+        The app on screen may not be an installed app (e.g. the Frame's "Smart
+        Hub" from local control); HA rejects an ENUM value outside the options.
+        """
+        names = set(self.coordinator.apps.values())
+        if current := self.coordinator.data.app_name:
+            names.add(current)
+        names -= {SCREEN_HOME, SCREEN_OTHER}
+        return [*sorted(names), SCREEN_HOME, SCREEN_OTHER]
 
     @property
     def native_value(self) -> str | None:
@@ -113,6 +121,10 @@ def _channel(ocf: OcfTvState) -> str | None:
     return ocf.channel_name or ocf.channel_number
 
 
+# 1 is what a wall-hung (landscape) Frame reports; 2 for portrait is a guess.
+_ORIENTATIONS = {1: "landscape", 2: "portrait"}
+
+
 @dataclass(frozen=True, kw_only=True)
 class OcfSensorDescription(SensorEntityDescription):
     """A sensor fed by what the TV reports over local control."""
@@ -151,6 +163,17 @@ OCF_SENSORS: tuple[OcfSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: s.remote_battery,
+    ),
+    OcfSensorDescription(
+        key="screen_orientation",
+        translation_key="screen_orientation",
+        device_class=SensorDeviceClass.ENUM,
+        options=["landscape", "portrait"],
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda s: (
+            _ORIENTATIONS.get(s.orientation) if s.orientation is not None else None
+        ),
+        attrs_fn=lambda s: {"raw": s.orientation},
     ),
     OcfSensorDescription(
         key="wifi_signal",

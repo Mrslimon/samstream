@@ -11,6 +11,8 @@ const ICONS: Record<Severity, string[]> = {
     "M27 53a5 5 0 0 0 10 0",
     "M32 10v6",
   ],
+  // Drawn stroke by stroke in CSS (pathLength 1): the ring, then the tick.
+  success: ["M32 6a26 26 0 1 1 0 52a26 26 0 1 1 0-52z", "M20 33l8 8l16-17"],
 };
 
 function icon(severity: Severity): SVGSVGElement {
@@ -19,6 +21,8 @@ function icon(severity: Severity): SVGSVGElement {
   for (const d of ICONS[severity]) {
     const path = document.createElementNS(SVG_NS, "path");
     path.setAttribute("d", d);
+    // Lets CSS draw any path with stroke-dash offsets from 1 to 0.
+    path.setAttribute("pathLength", "1");
     svg.appendChild(path);
   }
   return svg;

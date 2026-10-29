@@ -43,3 +43,10 @@ class OcfHandshakeError(OcfError):
 
 class OcfOnboardError(OcfError):
     """Onboarding (ownership transfer or cloud provisioning) did not complete."""
+
+
+class OcfTvOwnedError(OcfOnboardError):
+    """The TV already has an owner (usually SmartThings), so it shows no PIN.
+
+    It must be removed from SmartThings (or released) before it can be onboarded.
+    """

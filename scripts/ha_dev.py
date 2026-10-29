@@ -125,12 +125,18 @@ def install_lib() -> None:
 
 
 def ensure_lib() -> None:
-    """Reinstall the library if the container was recreated (an update wipes it)."""
+    """Make HA import the synced library source, reinstalling when it does not.
+
+    A recreated container has no library, or (after HA's own requirement install
+    from REMOTE_WHEELS) a regular copy in site-packages that `sync` never updates.
+    """
     check = (
-        "python3 -c 'import aiosamstream' 2>/dev/null && echo present || echo missing"
+        "python3 -c 'import aiosamstream; print(aiosamstream.__file__)' 2>/dev/null"
+        " || echo missing"
     )
-    if "missing" in in_container(check):
-        print("aiosamstream is not installed in the container (recreated?), installing")
+    location = in_container(check)
+    if REMOTE_LIB not in location:
+        print(f"aiosamstream is not the synced editable install ({location.strip()})")
         install_lib()
 
 

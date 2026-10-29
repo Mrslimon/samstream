@@ -33,6 +33,18 @@ ENERGY = "/capability/custom.energyType/main/0"
 BATTERY = "/sec/tv/batteryinfo"
 VIRTUAL_REMOTE = "/sec/tv/virtualremote"
 LAUNCH_APP = "/sec/tv/launchapp"
+# The Frame lists a motion capability; its body is empty until something moves
+# (field name unconfirmed). The sensor switches say which sensors are on.
+MOTION = "/capability/motion/vs/0"
+SENSOR_STATES = "/sensor/state/vs/0"
+ORIENTATION = "/sec/tv/display/orientation"
+# Accessibility settings (read); a POST opens a menu rather than setting them.
+SHOW_MENU = "/sec/tv/showmenu"
+# Frame: POST enters Art Mode; Art Mode then shows as the "art" app.
+SWITCH_ART = "/sec/tv/switch/art"
+# Not used: /devicelog/command restartThing makes the TV ask on screen to
+# allow the reconnect, every time.
+ART_APP = "art"
 
 # Read once per session and observed: the state that changes as the TV is used.
 STATE_RESOURCES = (
@@ -51,6 +63,10 @@ STATE_RESOURCES = (
     CAMERA,
     ENERGY,
     BATTERY,
+    MOTION,
+    SENSOR_STATES,
+    ORIENTATION,
+    SHOW_MENU,
 )
 
 Choices = tuple[tuple[str, str], ...]  # (id, display name)
@@ -89,6 +105,21 @@ class OcfTvState:
     camera_connected: bool | None = None
     energy_saving: bool | None = None
     remote_battery: int | None = None  # percent
+    motion: bool | None = None
+    motion_sensor_enabled: bool | None = None  # the TV's motion detection switch
+    orientation: int | None = None  # 1 seen on a wall-hung Frame (landscape)
+    accessibility: tuple[tuple[str, bool], ...] = ()  # (menu id, on), e.g. grayscale
+
+    @property
+    def art_mode(self) -> bool | None:
+        """Frame in Art Mode (it reports Art Mode as the app in front)."""
+        if self.content_input is None:
+            return None
+        return self.content_input == "webapp" and self.app_id == ART_APP
+
+    def accessibility_on(self, menu_id: str) -> bool | None:
+        """One accessibility setting (`voiceguide_on`, `grayscale`, ...)."""
+        return dict(self.accessibility).get(menu_id)
 
 
 def _text(body: dict[str, Any], key: str) -> str | None:
@@ -210,6 +241,45 @@ def _battery(body: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
+_MOTION_ON = {"active", "detected", "motion", "true", "on"}
+_MOTION_OFF = {"inactive", "notdetected", "nomotion", "false", "off", "nomovement"}
+
+
+def _motion(body: dict[str, Any]) -> dict[str, Any]:
+    """Read a motion value from any motion-like key (the name is unconfirmed)."""
+    for key, value in body.items():
+        if "motion" not in str(key).lower():
+            continue
+        if isinstance(value, bool):
+            return {"motion": value}
+        if isinstance(value, str):
+            word = value.replace(" ", "").replace("_", "").lower()
+            if word in _MOTION_ON:
+                return {"motion": True}
+            if word in _MOTION_OFF:
+                return {"motion": False}
+    return {}
+
+
+def _sensor_states(body: dict[str, Any]) -> dict[str, Any]:
+    sensors = body.get("x.com.samsung.vd.sensorType")
+    for sensor in sensors if isinstance(sensors, list) else ():
+        if isinstance(sensor, dict) and "motion" in str(sensor.get("name")).lower():
+            return {"motion_sensor_enabled": _bool(sensor, "enabled")}
+    return {}
+
+
+def _accessibility(body: dict[str, Any]) -> dict[str, Any]:
+    items = body.get(f"{_TV}accessibility")
+    return {
+        "accessibility": tuple(
+            (menu, item.get("value") in ("1", 1, True))
+            for item in (items if isinstance(items, list) else ())
+            if isinstance(item, dict) and isinstance(menu := item.get("menuid"), str)
+        )
+    }
+
+
 _PARSERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
     CONTENT_INFO: _content,
     INPUT_SOURCE: _input_source,
@@ -232,6 +302,10 @@ _PARSERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
     CAMERA: _camera,
     ENERGY: lambda b: {"energy_saving": _bool(b, "energySavingOperation")},
     BATTERY: _battery,
+    MOTION: _motion,
+    SENSOR_STATES: _sensor_states,
+    ORIENTATION: lambda b: {"orientation": _int(b, "orientation")},
+    SHOW_MENU: _accessibility,
 }
 
 

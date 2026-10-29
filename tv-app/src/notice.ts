@@ -1,13 +1,14 @@
 /**
  * Commands from Home Assistant besides cameras:
  *   {"action":"notice","title":"…","message":"…","severity":"alert","sound":"http://…"}
+ *     (severity info, warning, alert or success: a check that draws itself)
  *     (`samstream.show_message`): a full-screen message, optionally with a sound;
  *   {"action":"media","title":"…","url":"http://…","kind":"video"}
  *     (`media_player.play_media` with an item from HA's media library).
  * URLs are signed by HA; only http(s) is accepted.
  */
 
-export type Severity = "info" | "warning" | "alert";
+export type Severity = "info" | "warning" | "alert" | "success";
 
 export interface Notice {
   title: string;
@@ -22,7 +23,7 @@ export interface MediaItem {
   kind: "video" | "audio";
 }
 
-const SEVERITIES: readonly Severity[] = ["info", "warning", "alert"];
+const SEVERITIES: readonly Severity[] = ["info", "warning", "alert", "success"];
 
 function text(value: unknown): string {
   return typeof value === "string" ? value : "";

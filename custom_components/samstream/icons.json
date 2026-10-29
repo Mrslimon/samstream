@@ -12,6 +12,24 @@
         "state": {
           "off": "mdi:television-off"
         }
+      },
+      "voice_guide": {
+        "default": "mdi:account-voice"
+      },
+      "high_contrast": {
+        "default": "mdi:contrast-box"
+      },
+      "color_inversion": {
+        "default": "mdi:invert-colors"
+      },
+      "grayscale": {
+        "default": "mdi:palette-outline"
+      },
+      "motion": {
+        "default": "mdi:motion-sensor",
+        "state": {
+          "off": "mdi:motion-sensor-off"
+        }
       }
     },
     "sensor": {
@@ -20,6 +38,12 @@
       },
       "current_app": {
         "default": "mdi:application"
+      },
+      "screen_orientation": {
+        "default": "mdi:phone-rotate-landscape",
+        "state": {
+          "portrait": "mdi:phone-rotate-portrait"
+        }
       }
     },
     "button": {
@@ -31,6 +55,29 @@
       },
       "return_to_previous": {
         "default": "mdi:keyboard-return"
+      },
+      "open_guide": {
+        "default": "mdi:television-guide"
+      },
+      "open_channel_list": {
+        "default": "mdi:format-list-numbered"
+      },
+      "open_sources": {
+        "default": "mdi:video-input-hdmi"
+      },
+      "open_menu": {
+        "default": "mdi:menu"
+      },
+      "open_home": {
+        "default": "mdi:home"
+      }
+    },
+    "switch": {
+      "art_mode": {
+        "default": "mdi:image-frame",
+        "state": {
+          "off": "mdi:television"
+        }
       }
     }
   },
@@ -67,6 +114,9 @@
     },
     "send_keys": {
       "service": "mdi:remote"
+    },
+    "local_control_request": {
+      "service": "mdi:api"
     }
   }
 }

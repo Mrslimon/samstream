@@ -519,3 +519,125 @@ def test_sensor_resources() -> None:
     )
     assert apply(state, s.BATTERY, {"level": 300}) == state
     assert apply(state, s.CAMERA, {}).camera_connected is None
+
+
+def test_links_flattens_both_res_shapes() -> None:
+    from aiosamstream.ocf.cloud import _links  # noqa: PLC0415
+
+    bare = [{"href": "/sec/tv/audio", "rt": ["x.com.samsung.tv.audio"]}, "junk"]
+    baseline = [{"di": "x", "links": [{"href": "/a"}, {"href": "/b"}, 3]}]
+    assert [link["href"] for link in _links(bare)] == ["/sec/tv/audio"]
+    assert [link["href"] for link in _links(baseline)] == ["/a", "/b"]
+    assert _links(None) == []
+
+
+def _reading_device(
+    answers: dict[str, Any], *, drops_at: str | None = None
+) -> tuple[CloudDevice, list[str]]:
+    """A device whose requests answer from `answers`; `drops_at` ends the session."""
+    device = CloudDevice("token", lambda _d: None)
+    device._session = object()  # type: ignore[assignment]  # noqa: SLF001
+    asked: list[str] = []
+
+    async def request(_code: int, href: str, **_kw: Any) -> tuple[int, Any]:
+        asked.append(href)
+        if href == drops_at:
+            device._session = None  # noqa: SLF001
+            msg = "192.168.1.22"
+            raise OcfNotConnectedError(msg)
+        if href in answers:
+            return CONTENT, answers[href]
+        return 0x80, None  # 4.00
+
+    device.request = request  # type: ignore[method-assign]
+    return device, asked
+
+
+async def test_read_all_known_resources_then_the_index() -> None:
+    from aiosamstream.ocf.cloud import KNOWN_HREFS  # noqa: PLC0415
+
+    device, asked = _reading_device(
+        {
+            "/capability/motion/vs/0": {"motion": "inactive"},
+            "/oic/res": [{"href": "/extra"}, {"href": "/oic/sec/cred"}],
+            "/extra": {"x": 1},
+        }
+    )
+    result = await device.read_all()
+    assert asked[: len(KNOWN_HREFS)] == list(KNOWN_HREFS)
+    assert asked[len(KNOWN_HREFS) :] == ["/oic/res", "/extra"]  # never /oic/sec/
+    assert result["index"] == "ok"
+    assert result["only_in_index"] == ["/extra"]
+    assert result["resources"]["/capability/motion/vs/0"] == {"motion": "inactive"}
+    assert result["resources"]["/oic/d"] == {"error": "4.00"}
+
+
+async def test_read_all_waits_for_the_tv_to_dial_back() -> None:
+    device, asked = _reading_device(
+        {"/capability/motion/vs/0": {"motion": "active"}, "/oic/d": {"n": "TV"}},
+        drops_at="/oic/d",
+    )
+    session = device._session  # noqa: SLF001
+
+    async def back_after_a_moment(_wait: float) -> bool:
+        device._session = session  # noqa: SLF001
+        return True
+
+    device.wait_connected = back_after_a_moment  # type: ignore[method-assign]
+    result = await device.read_all()
+    # Cut short once, read again after the TV came back, then the rest.
+    assert asked[:2] == ["/oic/d", "/oic/d"]
+    assert result["dropped_after"] == ["/oic/d", "/oic/d"]
+    assert result["resources"]["/capability/motion/vs/0"] == {"motion": "active"}
+
+
+async def test_read_all_stops_when_the_tv_stays_away() -> None:
+    device, asked = _reading_device({}, drops_at="/oic/d")
+    result = await device.read_all(reconnect_wait=0.01)
+    assert asked == ["/oic/d"]
+    assert result["index"] == "not read: the TV went away"
+    assert result["resources"]["/oic/d"] == {"error": "192.168.1.22"}
+
+
+def test_motion_from_any_motion_key() -> None:
+    from aiosamstream.ocf import state as s  # noqa: PLC0415
+
+    state = OcfTvState()
+    assert apply(state, s.MOTION, {"rt": ["x"], "if": ["y"]}) == state  # Frame, idle
+    assert apply(state, s.MOTION, {"motion": "active"}).motion is True
+    assert (
+        apply(state, s.MOTION, {"x.com.samsung.vd.motion": "inactive"}).motion is False
+    )
+    assert apply(state, s.MOTION, {"motionDetected": True}).motion is True
+    sensors = {
+        "x.com.samsung.vd.sensorType": [
+            {"name": "Light", "enabled": False},
+            {"name": "CameraMotion", "enabled": True},
+        ]
+    }
+    assert apply(state, s.SENSOR_STATES, sensors).motion_sensor_enabled is True
+
+
+def test_art_mode_orientation_and_accessibility() -> None:
+    from aiosamstream.ocf import state as s  # noqa: PLC0415
+
+    state = OcfTvState()
+    assert state.art_mode is None
+    art = {"x.com.samsung.tv.input": "webapp", "x.com.samsung.tv.subtitle": "art"}
+    assert apply(state, CONTENT_INFO, art).art_mode is True
+    hub = {**art, "x.com.samsung.tv.subtitle": "com.samsung.tv.csfs"}
+    assert apply(state, CONTENT_INFO, hub).art_mode is False
+    assert (
+        apply(state, s.ORIENTATION, {"orientation": 1, "status": -1}).orientation == 1
+    )
+    menu = {
+        "x.com.samsung.tv.accessibility": [
+            {"menuid": "grayscale", "value": "1"},
+            {"menuid": "highcontrast", "value": "0"},
+            "junk",
+        ]
+    }
+    read = apply(state, s.SHOW_MENU, menu)
+    assert read.accessibility_on("grayscale") is True
+    assert read.accessibility_on("highcontrast") is False
+    assert read.accessibility_on("voiceguide_on") is None
