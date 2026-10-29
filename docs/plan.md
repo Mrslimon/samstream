@@ -337,8 +337,11 @@ Prepared while `oicseek/` is still a spike (not finished). This supersedes the "
     **Onboarding is in-HA-first with a LAN fallback.** The connect step probes whether HA can reach the TV over
     UDP: if it can, it shows **"enter the 8-digit PIN"** and HA does ownership + cloud-pointing itself (seamless);
     if it can't (HA in a bridge-networked Docker container — multicast/CoAP are NAT'd, proven: no UDP path at all,
-    not even known-port DTLS), it falls back to a one-line **`scripts/onboard_tv.py`** command run on a computer on
-    the TV's LAN, which prints a credential the user pastes back so HA can later release the TV (`pstat cm:1`). The
+    not even known-port DTLS), it falls back to the **LAN helper** — `samstream-onboard.pyz` (+ Windows `.cmd`), built by HA with the
+    settings baked in and offered as signed download links — run on a computer on the TV's LAN, which prints a
+    credential the user pastes back so HA can later release the TV (`pstat cm:1`). Local control can be set up
+    **during first-time setup**: ticking it on `local_offer` runs the same connect/PIN/wait screens before the
+    entry exists (the cloud holds the TV under the flow id; the new entry adopts the connection). The
     options flow: intro → settings (turns local control on, cloud starts) → connect (PIN or LAN) → wait for dial-in
     → paired → troubleshooting → release. The initial config flow also **offers local control right after pairing**
     (`local_offer` step). Animations: new `connect` (Wake-on-LAN toggle) on the "Connect your Samsung TV" step and

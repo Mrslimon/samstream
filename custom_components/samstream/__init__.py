@@ -31,6 +31,7 @@ from .coordinator import SamstreamCoordinator
 from .frontend import async_setup_frontend
 from .installer import async_bundled_version
 from .ocf import async_get_service as async_get_ocf_service
+from .onboard_tool import SamstreamOnboardToolView
 from .signin import SamstreamSignInView
 from .stream_relay import SamstreamMjpegView, SamstreamStreamView
 from .tv_session import SamstreamTvSessionView
@@ -73,6 +74,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.http.register_view(SamstreamStreamView())
     hass.http.register_view(SamstreamMjpegView())
     hass.http.register_view(SamstreamTvSessionView())
+    hass.http.register_view(SamstreamOnboardToolView())
     app_schema: VolDictType = {vol.Required(ATTR_APP_ID): cv.string}
     for name, method in (
         ("launch_app", "async_launch_app"),

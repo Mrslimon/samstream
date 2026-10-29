@@ -36,28 +36,69 @@
       },
       "local_offer": {
         "title": "Local SmartThings (optional)",
-        "description": "![Local SmartThings](/samstream_files/animations/connect.svg)\n\nHome Assistant can also control {name} over your own network — its real inputs, picture and sound modes, channel, ambient light and more, with no Samsung account and no internet. The SmartThings app can't control the TV while this is on, and you can switch back any time.\n\nTick the box to set it up now; Home Assistant guides you (you enter the PIN the TV shows, or run a one-line helper if it can't reach the TV directly).",
+        "description": "![Local SmartThings](/samstream_files/animations/connect.svg)\n\nHome Assistant can also control {name} over your own network — its real inputs, picture and sound modes, channel, ambient light and more, with no Samsung account and no internet. The SmartThings app can't control the TV while this is on, and you can switch back any time.\n\nTick the box to set it up now: the TV shows a PIN and you type it in on the next screen. If Home Assistant can't reach the TV directly, you get a small helper to run once on a computer on the same network.",
         "data": {
           "set_up": "Set up local SmartThings"
         }
       },
-      "local_offer_guide": {
-        "title": "Set up local control",
-        "description": "![Local SmartThings](/samstream_files/animations/connect.svg)\n\nAfter you select Submit, open **Settings → Devices & services → Samstream → {name} → Configure → Local control** to connect the TV.\n\nIf Home Assistant can reach the TV over your network you just enter the 8-digit PIN it shows. If it runs in Docker it usually can't reach the TV directly — on Windows even host mode is on the Docker VM's network, not your LAN — so it will give you a short command to run once on a computer on the TV's network."
-      },
       "developer_mode": {
         "title": "Enable Developer Mode (to install the Samstream app)",
         "description": "![Enabling Developer Mode](/samstream_files/animations/developer-mode.en.svg)\n\nTo let Home Assistant install its companion app on {name}, turn on Developer Mode on the TV:\n\n1. Open **Apps** from the Home screen.\n2. On the remote number pad, enter **1 2 3 4 5** (press the **123** button first if your remote has one).\n3. In the dialog, switch **Developer mode** to **On**, type **Home Assistant's IP address** (one part per box), then select **OK**.\n4. Hold **Power** for about 5 seconds until the TV restarts.\n\nThis is only needed to install the app — you can also do it later. Select Submit to continue."
+      },
+      "local_control_pin": {
+        "title": "Enter the PIN from the TV",
+        "description": "![Connecting the TV](/samstream_files/animations/pairing.svg)\n\nLook at {name}: it is showing an 8-digit PIN.\n\nType it below. If no PIN appeared, make sure the TV is on, then try again.",
+        "data": {
+          "pin": "PIN"
+        },
+        "data_description": {
+          "pin": "The 8 digits shown on the TV screen."
+        }
+      },
+      "local_control_connect_lan": {
+        "title": "Use the LAN helper",
+        "description": "![Local SmartThings](/samstream_files/animations/connect.svg)\n\nHome Assistant couldn't find {name}'s local SmartThings service at {tv_ip}, so it can't set the TV up by itself. Use the LAN helper instead: a small tool you run once on a computer on the same network as the TV. Your settings are already built into it.\n\n1. Download **[{tool}]({tool_url})**. On Windows also download **[{launcher}]({launcher_url})** into the same folder.\n2. Run it: on Windows double-click `{launcher}`; on macOS or Linux run `{command}` in a terminal. It needs Python 3.11 or newer and the `cryptography` package (the Windows launcher installs it).\n3. When the TV shows an 8-digit PIN, type it into the tool.\n4. The tool prints a credential. Paste it below so Home Assistant can hand the TV back to SmartThings later (optional), then select Submit.\n\nThe download links work for one hour. The next screen waits for the TV to connect.",
+        "data": {
+          "credential": "Credential from the helper (optional)"
+        },
+        "data_description": {
+          "credential": "Paste what the helper printed, so Home Assistant can release the TV later. You can leave this empty."
+        }
+      },
+      "local_control_done": {
+        "title": "Paired",
+        "description": "![Paired](/samstream_files/animations/paired.svg)\n\n{name} is now connected to Home Assistant over your network. Select Submit to finish."
+      },
+      "local_control_failed": {
+        "title": "Home Assistant could not set up the TV",
+        "description": "{name} did not accept Home Assistant as its owner. The usual reasons:\n\n- **Its local SmartThings service is stuck** after an earlier attempt. Unplug the TV from the wall for 30 seconds, turn it on, then try again.\n- **It is still set up in SmartThings** on a phone or account. Remove it in the SmartThings app first — a TV answers only one owner.\n- **The PIN was mistyped or expired.** Try again for a fresh PIN.\n\nYou can also set it up with the LAN helper from a computer on the TV's network.",
+        "menu_options": {
+          "local_control_connect": "Try again",
+          "local_control_lan": "Use the LAN helper on a computer",
+          "local_control_skip": "Finish now (set up local control later in Configure)"
+        }
+      },
+      "local_control_trouble": {
+        "title": "The TV did not connect",
+        "description": "{name} has not connected to Home Assistant yet. The usual reasons:\n\n- **The TV cannot reach Home Assistant on the cloud port (TCP 5684).** Home Assistant must be on the TV's network — in Docker use host networking — and a firewall must let the port in. **Settings → Repairs** shows it when Home Assistant detects the problem.\n- **Home Assistant does not know its own address on your network.** Set it in **Settings → System → Network**.\n- **It is still set up in SmartThings** on another phone or account. Remove it there first.\n- **The TV was unplugged**, so it lost the setup. Turn it on, then try again for a fresh PIN.",
+        "menu_options": {
+          "local_control_connect": "Try again",
+          "local_control_lan": "Use the LAN helper on a computer",
+          "local_control_skip": "Finish now (set up local control later in Configure)"
+        }
       }
     },
     "progress": {
-      "wait_for_allow": "![Pairing the TV with Home Assistant](/samstream_files/animations/connecting.svg)\n\nLook at {name}: a message asks whether to allow \"Home Assistant Samstream\". Choose **Allow** with the remote. Waiting up to 60 seconds."
+      "wait_for_allow": "![Pairing the TV with Home Assistant](/samstream_files/animations/connecting.svg)\n\nLook at {name}: a message asks whether to allow \"Home Assistant Samstream\". Choose **Allow** with the remote. Waiting up to 60 seconds.",
+      "onboarding": "![Connecting](/samstream_files/animations/loading.svg)\n\nSetting up {name} and waiting for it to connect to Home Assistant. This can take up to a minute."
     },
     "error": {
       "cannot_connect": "Cannot reach the TV. Check that it is on and that the IP address is correct.",
       "pairing_denied": "The TV refused the connection. If you chose Deny by mistake, try again and choose Allow.",
       "pairing_timeout": "Nobody accepted the request on the TV in time.",
-      "unknown": "Unexpected error, see the Home Assistant log."
+      "unknown": "Unexpected error, see the Home Assistant log.",
+      "invalid_pin": "Enter the 8 digits shown on the TV.",
+      "invalid_credential": "That does not look like the credential the helper printed. Copy the whole line."
     },
     "abort": {
       "already_configured": "This TV is already set up. Its address has been updated if it changed.",
@@ -163,7 +204,7 @@
       },
       "local_control": {
         "title": "Local control (local SmartThings)",
-        "description": "Home Assistant becomes the cloud your TV reports to, over your own network — its real inputs, picture and sound mode, channel, ambient light and more, with no Samsung account and no internet.\n\nA TV works with **either** local control **or** the SmartThings app, never both at once, and you can switch back any time.\n\nBefore you start: the TV must be on, Home Assistant must be able to reach it on your network, and the TV must be able to reach Home Assistant on the cloud port (on Docker, publish it: `ports: - \"5684:5684\"`).",
+        "description": "Home Assistant becomes the cloud your TV reports to, over your own network — its real inputs, picture and sound mode, channel, ambient light and more, with no Samsung account and no internet.\n\nA TV works with **either** local control **or** the SmartThings app, never both at once, and you can switch back any time.\n\nBefore you start: the TV must be on, and Home Assistant must be on the TV's network (in Docker, use host networking) so the TV can reach it on the cloud port.",
         "menu_options": {
           "local_control_settings": "Set up local control",
           "local_control_release": "Turn off and hand the TV back to SmartThings"
@@ -171,7 +212,7 @@
       },
       "local_control_settings": {
         "title": "Connect the TV",
-        "description": "Home Assistant will run a local cloud on your network for the TV to report to.\n\nThe TV will report to `{address}`.\nCloud ID: `{cloud_uuid}`\n\nKeep the access token unless the TV already uses another. The TV must be able to reach this port (on Docker, publish it: `ports: - \"5684:5684\"`). Next, you'll onboard the TV from a computer on its network.",
+        "description": "Home Assistant will run a local cloud on your network for the TV to report to.\n\nThe TV will report to `{address}`.\nCloud ID: `{cloud_uuid}`\n\nKeep the access token unless the TV already uses another. The TV must be able to reach this port. Next, the TV shows a PIN to enter here.",
         "data": {
           "ocf_token": "Access token",
           "ocf_port": "Port",
@@ -195,13 +236,13 @@
         }
       },
       "local_control_connect_lan": {
-        "title": "Connect the TV from a computer on its network",
-        "description": "Home Assistant can't reach this TV directly over your network — it runs in Docker, and on Windows even host mode is on the Docker VM's network, not your LAN. So set the TV up from a computer on its own network:\n\n1. On that computer, in a checkout of this project, run:\n\n`{command}`\n\n2. When the TV shows an 8-digit PIN, type it into the tool.\n3. The tool prints a credential — paste it below (optional) so Home Assistant can hand the TV back later, then select Submit.\n\nThe TV ({tv_ip}) connects on its own; the next screen waits for it.",
+        "title": "Use the LAN helper",
+        "description": "![Local SmartThings](/samstream_files/animations/connect.svg)\n\nHome Assistant couldn't find {name}'s local SmartThings service at {tv_ip}, so it can't set the TV up by itself. Use the LAN helper instead: a small tool you run once on a computer on the same network as the TV. Your settings are already built into it.\n\n1. Download **[{tool}]({tool_url})**. On Windows also download **[{launcher}]({launcher_url})** into the same folder.\n2. Run it: on Windows double-click `{launcher}`; on macOS or Linux run `{command}` in a terminal. It needs Python 3.11 or newer and the `cryptography` package (the Windows launcher installs it).\n3. When the TV shows an 8-digit PIN, type it into the tool.\n4. The tool prints a credential. Paste it below so Home Assistant can hand the TV back to SmartThings later (optional), then select Submit.\n\nThe download links work for one hour. The next screen waits for the TV to connect.",
         "data": {
-          "credential": "Credential from the tool (optional)"
+          "credential": "Credential from the helper (optional)"
         },
         "data_description": {
-          "credential": "Paste what the onboarding tool printed, so Home Assistant can release the TV later. You can leave this empty."
+          "credential": "Paste what the helper printed, so Home Assistant can release the TV later. You can leave this empty."
         }
       },
       "local_control_pin": {
@@ -220,15 +261,25 @@
       },
       "local_control_trouble": {
         "title": "The TV did not connect",
-        "description": "The TV has not reported to Home Assistant yet. The usual reasons:\n\n- **It is still set up in SmartThings** on another phone or account. Remove it there first — a TV answers only one owner.\n- **The cloud port is not reachable from Home Assistant.** In Docker, publish it: `ports: - \"5684:5684\"`.\n- **The TV was off overnight**, so it lost the pairing. Turn it on, then try again for a fresh PIN.\n- Home Assistant must be on the TV's own network to set it up: on a bridge-networked Docker install it cannot reach the TV over Wi-Fi for onboarding — use host networking.",
+        "description": "{name} has not connected to Home Assistant yet. The usual reasons:\n\n- **The TV cannot reach Home Assistant on the cloud port (TCP 5684).** Home Assistant must be on the TV's network — in Docker use host networking — and a firewall must let the port in. **Settings → Repairs** shows it when Home Assistant detects the problem.\n- **Home Assistant does not know its own address on your network.** Set it in **Settings → System → Network**.\n- **It is still set up in SmartThings** on another phone or account. Remove it there first.\n- **The TV was unplugged**, so it lost the setup. Turn it on, then try again for a fresh PIN.",
         "menu_options": {
           "local_control_connect": "Try again",
+          "local_control_lan": "Use the LAN helper on a computer",
           "local_control_settings": "Change the cloud settings"
         }
       },
       "local_control_release": {
         "title": "Hand the TV back to SmartThings",
-        "description": "Home Assistant will hand the TV back to SmartThings — it keeps its apps and settings and becomes available in the SmartThings app again.\n\nIf you pasted the credential during setup, select Submit and Home Assistant releases it. Otherwise run this on the LAN computer, then select Submit:\n\n`uv run python scripts/onboard_tv.py release --tv {tv_ip} --credential <the credential>`"
+        "description": "Home Assistant will hand the TV back to SmartThings — it keeps its apps and settings and becomes available in the SmartThings app again.\n\nIf you set it up here, or pasted the helper's credential, just select Submit. Otherwise run the LAN helper again on that computer, then select Submit:\n\n`python3 samstream-onboard.pyz release --credential <the credential>`"
+      },
+      "local_control_failed": {
+        "title": "Home Assistant could not set up the TV",
+        "description": "{name} did not accept Home Assistant as its owner. The usual reasons:\n\n- **Its local SmartThings service is stuck** after an earlier attempt. Unplug the TV from the wall for 30 seconds, turn it on, then try again.\n- **It is still set up in SmartThings** on a phone or account. Remove it in the SmartThings app first — a TV answers only one owner.\n- **The PIN was mistyped or expired.** Try again for a fresh PIN.\n\nYou can also set it up with the LAN helper from a computer on the TV's network.",
+        "menu_options": {
+          "local_control_connect": "Try again",
+          "local_control_lan": "Use the LAN helper on a computer",
+          "local_control_settings": "Change the cloud settings"
+        }
       }
     },
     "error": {
@@ -246,12 +297,12 @@
       "invalid_cloud_identity": "The CA certificate, key and cloud ID do not belong together, or one is not valid.",
       "token_too_short": "Use at least 16 characters.",
       "invalid_pin": "Enter the 8 digits shown on the TV.",
-      "invalid_credential": "That does not look like the credential the tool printed. Copy the whole line.",
+      "invalid_credential": "That does not look like the credential the helper printed. Copy the whole line.",
       "no_address": "Home Assistant does not know its own address on your network yet. Set it in Settings → System → Network, then try again."
     },
     "progress": {
       "samsung_sign_in": "On a computer on your network that has a browser and Node.js, run:\n\n`{command}`\n\nIt opens the Samsung sign-in page. Sign in with your Samsung account; this screen continues by itself. The code works once and expires in 10 minutes.",
-      "onboarding": "![Connecting](/samstream_files/animations/loading.svg)\n\nWaiting for the TV to connect to Home Assistant. This can take up to a minute after onboarding."
+      "onboarding": "![Connecting](/samstream_files/animations/loading.svg)\n\nSetting up {name} and waiting for it to connect to Home Assistant. This can take up to a minute."
     },
     "abort": {
       "signing_ready": "App signing is ready: {status}. Use the Install Samstream app button on the TV device.",

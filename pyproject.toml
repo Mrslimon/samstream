@@ -31,6 +31,12 @@ ha = [
 target-version = "py314"
 line-length = 88
 
+# Shipped to users' computers in the LAN onboarding helper (onboard_tool.py):
+# keep them runnable on Python 3.11+ (e.g. no unparenthesized `except A, B:`).
+[tool.ruff.per-file-target-version]
+"lib/aiosamstream/src/aiosamstream/exceptions.py" = "py311"
+"lib/aiosamstream/src/aiosamstream/ocf/{cbor,coap_tcp,dtls,onboard,onboard_cli}.py" = "py311"
+
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
@@ -49,6 +55,7 @@ ignore = [
 "tests/**" = ["S101", "D", "PLR2004", "ANN401", "S106", "FBT003", "RUF012", "ARG001"]
 "lib/aiosamstream/tests/**" = ["S101", "D", "PLR2004", "ANN401", "S106", "FBT001", "FBT003", "RUF012", "ARG002", "INP001"]  # plain dir: only tests/ is a package
 "lib/aiosamstream/src/aiosamstream/__main__.py" = ["T201"]  # CLI output
+"lib/aiosamstream/src/aiosamstream/ocf/onboard_cli.py" = ["T201"]  # CLI output
 "lib/aiosamstream/src/aiosamstream/ocf/**" = ["ANN401"]  # CBOR bodies are dynamic data
 "custom_components/**" = ["ARG001", "ARG002", "ARG004", "ANN401"]  # HA-defined signatures
 "scripts/**" = ["T201", "D101", "D102", "D103", "D107", "D401", "ANN401", "PLR0913", "PLR0917", "INP001", "S603", "S607", "S310", "PLR2004", "PTH111", "E501"]  # dev tooling

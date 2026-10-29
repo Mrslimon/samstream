@@ -112,6 +112,8 @@ class OcfService:
     # Why the cloud is not listening (port taken / not reachable), for the UI.
     problem: str | None = None
     listeners: dict[str, Any] = field(default_factory=dict)
+    # TVs set up before their config entry exists: token -> the setup flow's key.
+    held: dict[str, str] = field(default_factory=dict)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     def cloud_address(self) -> str | None:
@@ -165,13 +167,41 @@ class OcfService:
         await self.async_refresh()
         if self.cloud is None:
             return None
+        # Set up during the first-time flow: keep the TV's live connection.
+        if (key := self.held.pop(token, None)) is not None:
+            self.listeners.pop(key, None)
+            if (device := self.cloud.devices.pop(key, None)) is not None:
+                self.cloud.devices[entry.entry_id] = device
+                return device
         return self.cloud.allow(entry.entry_id, token)
 
     async def async_unregister(self, entry: SamstreamConfigEntry) -> None:
         """Stop serving this TV; stop the server after the last one."""
-        self.listeners.pop(entry.entry_id, None)
+        await self._async_drop(entry.entry_id)
+
+    async def async_hold(self, key: str, token: str) -> CloudDevice | None:
+        """Serve a TV whose config entry does not exist yet (first-time setup).
+
+        The entry adopts it (and its connection) when it registers the token.
+        """
+        self.held[token] = key
+        self.listeners[key] = lambda _device: None
+        await self.async_refresh()
+        if self.cloud is None:
+            return None
+        return self.cloud.allow(key, token)
+
+    @callback
+    def async_release_hold(self, key: str) -> None:
+        """Forget a held TV whose setup was abandoned."""
+        for token in [t for t, held in self.held.items() if held == key]:
+            del self.held[token]
+        self.hass.async_create_task(self._async_drop(key))
+
+    async def _async_drop(self, key: str) -> None:
+        self.listeners.pop(key, None)
         if self.cloud is not None:
-            self.cloud.forget(entry.entry_id)
+            self.cloud.forget(key)
         if not self.listeners:
             async with self._lock:
                 await self._async_stop()
@@ -236,7 +266,7 @@ class OcfService:
         try:
             async with asyncio.timeout(REACH_TIMEOUT):
                 _, writer = await asyncio.open_connection(host, port, ssl=probe)
-        except (OSError, TimeoutError):
+        except OSError, TimeoutError:
             return False
         writer.close()
         with contextlib.suppress(OSError):

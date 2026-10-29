@@ -234,14 +234,17 @@ CoAP/CBOR (Block2 token reuse, separate-CON-response ACK, `application/cbor`) on
 sequence (discover → trigger PIN → ownership → install CA/ACE/cis → release). `oicseek/dtls_tunnel.c` and the
 `oicseek/*.py` scripts remain as the reference the port was validated against.
 
-**Onboarding is run from the LAN, not from inside HA.** In a bridge-networked Docker install the HA container
-cannot reach the TV over UDP (multicast doesn't cross the bridge; unicast to 5683 is dropped because the TV
-replies from a high port — NAT-return mismatch). So onboarding runs from a computer on the TV's own network with
-`scripts/onboard_tv.py onboard --tv <ip> --bundle <bundle>`, where the bundle (address, token, cloud UUID, CA)
-is shown by HA's "Connect the TV" screen. The tool owns the TV and points its `cis` at HA; the TV then dials the
-cloud (TCP 5684, which the TV reaches because it dials *out* to HA's published port — the whole reason the design
-has the TV connect to HA). The tool prints a credential to paste back into HA so HA can later release the TV.
-`scripts/onboard_tv.py release` (or the HA "hand back" screen, when the credential was pasted) does `pstat cm:1`.
+**Onboarding runs inside HA when HA is on the TV's network, else from the LAN.** HA in a bridge-networked
+Docker container cannot reach the TV over UDP (multicast doesn't cross the bridge; unicast to 5683 is dropped
+because the TV replies from a high port), and Docker Desktop on Windows delivers no UDP replies to containers at
+all; with host networking on a Linux host (e.g. a VM bridged onto the LAN) HA does the whole PIN onboarding
+itself. When it cannot find the TV, the setup screen offers the **LAN helper**: HA builds `samstream-onboard.pyz`
+on the fly (only `exceptions`, `cbor`, `coap_tcp`, `dtls`, `onboard`, `onboard_cli` - stdlib + `cryptography`,
+kept to Python 3.11 syntax) with the TV address and the bundle (address, token, cloud UUID, CA) baked in, served
+through signed, expiring links (plus a Windows `.cmd` launcher). The tool owns the TV and points its `cis` at HA;
+the TV then dials the cloud (TCP 5684). It prints a credential to paste back into HA so HA can later release the
+TV. From a checkout the same tool is `scripts/onboard_tv.py`. `release` (or the HA "hand back" screen, when the
+credential is known) does `pstat cm:1`.
 
 ---
 

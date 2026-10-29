@@ -1,7 +1,11 @@
 """Local control (OCF): options, the shared cloud, entities fed by the TV, issues."""
 
 import socket
-from collections.abc import AsyncIterator
+import subprocess
+import sys
+import zipfile
+from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -14,13 +18,18 @@ from aiosamstream.ocf import (
     generate_identity,
 )
 from aiosamstream.ocf import state as ocf_state
+from homeassistant import config_entries
+from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.samstream.config_flow import SamstreamOptionsFlow
+from custom_components.samstream.config_flow import (
+    SamstreamConfigFlow,
+    SamstreamOptionsFlow,
+)
 from custom_components.samstream.const import (
     CONF_OCF,
     CONF_OCF_HOST,
@@ -34,8 +43,14 @@ from custom_components.samstream.diagnostics import (
     async_get_config_entry_diagnostics,
 )
 from custom_components.samstream.ocf import CloudSettings, async_get_service
+from custom_components.samstream.onboard_tool import (
+    LAUNCHER_FILE,
+    TOOL_FILE,
+    async_offer,
+    build_tool,
+)
 
-from .conftest import UUID
+from .conftest import HOST, TV_INFO, UUID
 
 pytestmark = pytest.mark.enable_socket
 
@@ -233,7 +248,9 @@ async def test_options_onboarding_falls_back_to_lan(
     await hass.async_block_till_done()
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "local_control_connect_lan"
-    assert result["description_placeholders"]["command"].startswith("uv run")
+    placeholders = result["description_placeholders"]
+    assert placeholders["tool_url"].startswith("/api/samstream/onboard/")
+    assert placeholders["command"] == f"python3 {TOOL_FILE}"
 
     # Pasting the credential the LAN tool printed lets HA release later.
     credential = encode_credential(
@@ -279,9 +296,7 @@ async def test_options_release_hands_the_tv_back(
         flow, {"next_step_id": "local_control_release"}
     )
     assert result["type"] is FlowResultType.FORM
-    with patch(
-        "custom_components.samstream.config_flow.release_tv"
-    ) as release:
+    with patch("custom_components.samstream.config_flow.release_tv") as release:
         result = await options.async_configure(flow, {})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     release.assert_called_once()
@@ -419,3 +434,174 @@ async def test_unload_stops_the_cloud(
     assert service.cloud is not None
     assert await hass.config_entries.async_unload(ocf_entry.entry_id)
     assert service.cloud is None
+
+
+ONBOARDED = OnboardResult(
+    device_uuid=UUID,
+    obt_uuid="5f3d8a21-1c7b-4e62-9a40-7e2b1d6c8f33",
+    owner_psk_hex="ab" * 16,
+    secure_port=40000,
+)
+PROGRESS = (FlowResultType.SHOW_PROGRESS, FlowResultType.SHOW_PROGRESS_DONE)
+FLOW = "custom_components.samstream.config_flow"
+
+
+async def _to_local_offer(hass: HomeAssistant) -> str:
+    """Add a TV up to the local-control offer; return the flow id."""
+    flows = hass.config_entries.flow
+    result = await flows.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    flow = result["flow_id"]
+    result = await flows.async_configure(flow, {CONF_HOST: HOST})
+    while result["type"] in PROGRESS:
+        await hass.async_block_till_done()
+        result = await flows.async_configure(flow)
+    if result["step_id"] == "developer_mode":  # skipped when already enabled
+        result = await flows.async_configure(flow, {})
+    assert result["step_id"] == "local_offer"
+    return flow
+
+
+@pytest.fixture
+def pairing_tv() -> Iterator[MagicMock]:
+    """The client the config flow pairs with."""
+    client = MagicMock()
+    client.device_info = AsyncMock(return_value=TV_INFO)
+    client.pair = AsyncMock(return_value="token-1")
+    with patch(f"{FLOW}.SamsungTV", return_value=client):
+        yield client
+
+
+@pytest.mark.usefixtures("mock_tv", "pairing_tv", "cloud_port")
+async def test_first_setup_includes_local_control(hass: HomeAssistant) -> None:
+    """Ticking local control on a new TV: PIN -> paired -> entry adopts the TV."""
+    flows = hass.config_entries.flow
+    flow = await _to_local_offer(hass)
+    with (
+        patch(f"{FLOW}.discover", return_value=(40000, UUID)),
+        patch(f"{FLOW}.trigger_pin") as trigger,
+    ):
+        result = await flows.async_configure(flow, {"set_up": True})
+    trigger.assert_called_once_with(HOST)
+    assert result["step_id"] == "local_control_pin"
+    service = async_get_service(hass)
+    assert service.cloud is not None  # listening for the TV before the entry exists
+    assert flow in service.cloud.devices
+
+    with (
+        patch(f"{FLOW}.onboard_tv", return_value=ONBOARDED),
+        patch.object(
+            SamstreamConfigFlow, "_await_dial_in", new=AsyncMock(return_value=True)
+        ),
+    ):
+        result = await flows.async_configure(flow, {"pin": "12345678"})
+        while result["type"] in PROGRESS:
+            await hass.async_block_till_done()
+            result = await flows.async_configure(flow)
+        assert result["step_id"] == "local_control_done"
+        result = await flows.async_configure(flow, {})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+    entry = result["result"]
+    assert entry.options == {CONF_OCF: True}
+    assert entry.data[CONF_OCF_OWNER_PSK] == "ab" * 16
+    assert len(entry.data[CONF_OCF_TOKEN]) >= 16
+    # The entry took over the device the flow held (and its connection).
+    assert service.held == {}
+    assert flow not in service.cloud.devices
+    assert entry.runtime_data.coordinator.ocf_device is not None
+
+
+@pytest.mark.usefixtures("mock_tv", "pairing_tv", "cloud_port")
+async def test_first_setup_failure_offers_the_lan_helper(hass: HomeAssistant) -> None:
+    """A refused onboarding offers retry / LAN helper / finish; abandoning frees."""
+    flows = hass.config_entries.flow
+    flow = await _to_local_offer(hass)
+    with (
+        patch(f"{FLOW}.discover", return_value=(40000, UUID)),
+        patch(f"{FLOW}.trigger_pin"),
+    ):
+        await flows.async_configure(flow, {"set_up": True})
+    with patch(f"{FLOW}.onboard_tv", side_effect=OcfError("no answer")):
+        result = await flows.async_configure(flow, {"pin": "12345678"})
+        while result["type"] in PROGRESS:
+            await hass.async_block_till_done()
+            result = await flows.async_configure(flow)
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "local_control_failed"
+    assert result["menu_options"] == [
+        "local_control_connect",
+        "local_control_lan",
+        "local_control_skip",
+    ]
+    result = await flows.async_configure(flow, {"next_step_id": "local_control_lan"})
+    assert result["step_id"] == "local_control_connect_lan"
+    assert result["description_placeholders"]["launcher_url"].startswith(
+        "/api/samstream/onboard/"
+    )
+
+    service = async_get_service(hass)
+    flows.async_abort(flow)
+    await hass.async_block_till_done()
+    assert service.held == {}
+    assert service.cloud is None  # nothing else wanted it
+
+
+@pytest.mark.usefixtures("mock_tv", "pairing_tv", "cloud_port")
+async def test_first_setup_unreachable_tv_uses_the_lan_helper(
+    hass: HomeAssistant,
+) -> None:
+    """HA cannot find the TV: LAN helper; finishing anyway keeps local control."""
+    flows = hass.config_entries.flow
+    flow = await _to_local_offer(hass)
+    with patch(f"{FLOW}.discover", side_effect=OcfError("no answer")):
+        result = await flows.async_configure(flow, {"set_up": True})
+    assert result["step_id"] == "local_control_connect_lan"
+    with patch.object(
+        SamstreamConfigFlow, "_await_dial_in", new=AsyncMock(return_value=False)
+    ):
+        result = await flows.async_configure(flow, {})
+        while result["type"] in PROGRESS:
+            await hass.async_block_till_done()
+            result = await flows.async_configure(flow)
+    assert result["step_id"] == "local_control_trouble"
+    result = await flows.async_configure(flow, {"next_step_id": "local_control_skip"})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["result"].options == {CONF_OCF: True}
+    await hass.async_block_till_done()
+
+
+def test_helper_runs_without_the_library(tmp_path: Path) -> None:
+    """The downloaded zip app imports only its own modules (no aiohttp etc.)."""
+    tool = tmp_path / TOOL_FILE
+    tool.write_bytes(build_tool(HOST, "YnVuZGxl"))
+    with zipfile.ZipFile(tool) as archive:
+        names = archive.namelist()
+    assert "aiosamstream/ocf/onboard_cli.py" in names
+    assert "aiosamstream/tv.py" not in names
+    run = subprocess.run(  # noqa: S603 - our own interpreter and file
+        [sys.executable, "-I", str(tool), "release", "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=tmp_path,
+    )
+    assert run.returncode == 0, run.stderr
+    assert "--credential" in run.stdout
+
+
+async def test_helper_download(
+    hass: HomeAssistant, setup_entry: MockConfigEntry, hass_client: Any
+) -> None:
+    """The signed links serve the zip app and the Windows launcher."""
+    links = async_offer(hass, HOST, "YnVuZGxl")
+    client = await hass_client()
+    tool = await client.get(links["tool_url"])
+    assert tool.status == 200
+    assert (await tool.read()).startswith(b"#!/usr/bin/env python3")
+    launcher = await client.get(links["launcher_url"])
+    assert TOOL_FILE in await launcher.text()
+    assert LAUNCHER_FILE in launcher.headers["Content-Disposition"]
+    missing = await client.get(f"/api/samstream/onboard/nope/{TOOL_FILE}")
+    assert missing.status == 404

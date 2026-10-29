@@ -37,6 +37,7 @@ def _fail(message: str) -> NoReturn:
     """Raise a handshake error (keeps call sites terse)."""
     raise OcfHandshakeError(message)
 
+
 # Record content types and handshake message types (RFC 6347 / 5246).
 _CHANGE_CIPHER_SPEC, _ALERT, _HANDSHAKE, _APPLICATION_DATA = 20, 21, 22, 23
 _HELLO_VERIFY_REQUEST, _SERVER_HELLO = 3, 2
@@ -174,10 +175,13 @@ class DtlsPskClient:
 
     # -- lifecycle --------------------------------------------------------- #
     def connect(self) -> None:
-        """Open the UDP socket to the TV's secure port."""
+        """Open the UDP socket for the TV's secure port.
+
+        Left unconnected on purpose: the TV may answer from a different source
+        port than the one we sent to, and a connected socket drops those replies.
+        """
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.settimeout(_READ_TIMEOUT)
-        sock.connect((self._ip, self._port))
         self._sock = sock
 
     def close(self) -> None:
@@ -447,7 +451,7 @@ class DtlsPskClient:
     def _send(self, data: bytes) -> None:
         if self._sock is None:
             _fail("socket is not open")
-        self._sock.sendall(data)
+        self._sock.sendto(data, (self._ip, self._port))
 
     def _next_record(self) -> tuple[int, bytes]:
         """Return the next (content_type, plaintext fragment), decrypting epoch 1+."""
@@ -458,7 +462,15 @@ class DtlsPskClient:
     def _read_datagram(self) -> None:
         if self._sock is None:
             _fail("socket is not open")
-        datagram = self._sock.recv(_RECV_BUFFER)
+        datagram, (source_ip, source_port) = self._sock.recvfrom(_RECV_BUFFER)
+        if source_ip != self._ip:
+            return  # not the TV; the caller reads again
+        if source_port != self._port:
+            # The TV answered from another port; keep talking to that one.
+            _LOGGER.debug(
+                "DTLS peer %s moved %d -> %d", self._ip, self._port, source_port
+            )
+            self._port = source_port
         pos = 0
         while pos + _RECORD_HEADER <= len(datagram):
             content_type = datagram[pos]
