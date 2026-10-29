@@ -102,9 +102,13 @@ def upload(source: Path, remote_parent: str, name: str) -> None:
 
 def build_wheel() -> None:
     """Build the synced library into REMOTE_WHEELS, inside the container."""
+    # Build beside it and swap, without UV_FIND_LINKS: the container may point
+    # that at REMOTE_WHEELS, and uv fails if it is missing mid-rebuild.
+    staging = f"{REMOTE_WHEELS}.new"
     in_container(
-        f"rm -rf {REMOTE_WHEELS} && "
-        f"uv build --wheel --quiet --out-dir {REMOTE_WHEELS} {REMOTE_LIB}"
+        f"rm -rf {staging} && "
+        f"env -u UV_FIND_LINKS uv build --wheel --quiet --out-dir {staging} "
+        f"{REMOTE_LIB} && rm -rf {REMOTE_WHEELS} && mv {staging} {REMOTE_WHEELS}"
     )
     print(f"built aiosamstream wheel -> {REMOTE_WHEELS}")
 
