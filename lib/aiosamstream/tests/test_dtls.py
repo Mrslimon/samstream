@@ -44,9 +44,7 @@ def test_owner_psk_derivation_is_the_two_pass_prf() -> None:
     server = bytes.fromhex("a63c3d4d5237a42671309d7e14d09624")
 
     key_block = _ref_prf(master, b"key expansion", server_random + client_random, 96)
-    expected = _ref_prf(
-        key_block, b"oic.sec.doxm.rdp", obt + server, 16
-    )
+    expected = _ref_prf(key_block, b"oic.sec.doxm.rdp", obt + server, 16)
     owner = dtls.derive_owner_psk(master, client_random, server_random, obt, server)
 
     assert len(owner) == 16
@@ -57,7 +55,10 @@ def test_cbc_record_round_trips() -> None:
     client = dtls.DtlsPskClient("192.0.2.1", 1, b"id", b"\x00" * 16)
     key, mac = b"\x11" * 16, b"\x22" * 32
     client._keys = {  # noqa: SLF001
-        "client_key": key, "server_key": key, "client_mac": mac, "server_mac": mac,
+        "client_key": key,
+        "server_key": key,
+        "client_mac": mac,
+        "server_mac": mac,
     }
     content = b"\x40\x01ping /oic/res over dtls" * 3
     fragment = client._encrypt(23, 1, 7, content)  # noqa: SLF001
@@ -71,7 +72,10 @@ def test_bad_mac_is_rejected() -> None:
     client = dtls.DtlsPskClient("192.0.2.1", 1, b"id", b"\x00" * 16)
     key, mac = b"\x11" * 16, b"\x22" * 32
     client._keys = {  # noqa: SLF001
-        "client_key": key, "server_key": key, "client_mac": mac, "server_mac": mac,
+        "client_key": key,
+        "server_key": key,
+        "client_mac": mac,
+        "server_mac": mac,
     }
     fragment = bytearray(client._encrypt(23, 1, 0, b"tamper me"))  # noqa: SLF001
     fragment[-1] ^= 0x01

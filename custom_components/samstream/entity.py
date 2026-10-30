@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable
+from typing import TypeVar
 
 from aiosamstream import SamstreamAuthError, SamstreamError
 from homeassistant.exceptions import HomeAssistantError
@@ -11,6 +12,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import SamstreamCoordinator
+
+_T = TypeVar("_T")
 
 
 class SamstreamEntity(CoordinatorEntity[SamstreamCoordinator]):
@@ -26,10 +29,10 @@ class SamstreamEntity(CoordinatorEntity[SamstreamCoordinator]):
         self._attr_unique_id = f"{device_id}_{key}"
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, device_id)})
 
-    async def _async_call(self, action: Awaitable[None]) -> None:
-        """Run a TV action; a revoked token starts reauth."""
+    async def _async_call(self, action: Awaitable[_T]) -> _T:
+        """Run a TV action (returning its result); a revoked token starts reauth."""
         try:
-            await action
+            return await action
         except SamstreamAuthError as err:
             self.coordinator.config_entry.async_start_reauth(self.hass)
             raise HomeAssistantError(

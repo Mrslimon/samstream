@@ -59,6 +59,11 @@ TO_REDACT = {
     "x.com.samsung.tv.p2pmac",
     "x.com.samsung.mde.addressinfo",
     "x.com.samsung.rsd",
+    # Setup details (/DevConfResURI): the Samsung account, serial, setup phone.
+    "x.com.samsung.account",
+    "x.com.samsung.ssolist",
+    "x.com.samsung.plainserial",
+    "x.com.samsung.rmd",
 }
 _READ_ALL_TIMEOUT = 240
 

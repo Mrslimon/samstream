@@ -29,6 +29,7 @@ from aiosamstream.ocf.coap_tcp import (
     PONG,
     POST,
     UNAUTHORIZED,
+    VALID,
     CoapError,
     FrameReader,
     Message,
@@ -380,7 +381,8 @@ async def test_session_extras(
     reply = await tv.call("/oic/rd", {"links": [{"href": "/oic/d"}]})
     assert cbor.loads(reply.payload) == {"links": [{"href": "/oic/d"}]}
     reply = await tv.call("/oic/ping", {"in": 8})
-    assert reply.code == CHANGED
+    # 2.03 with no body, as IoTivity: 2.04 made the TV hang up.
+    assert (reply.code, reply.payload) == (VALID, b"")
     # The TV's own sync GET (with Observe) is answered 2.05 with a sequence number.
     tv.send(Message(GET, b"\x08", ((OBSERVE, b""), *path_options("/service/observe"))))
     reply = await asyncio.wait_for(tv.inbox.get(), 5)

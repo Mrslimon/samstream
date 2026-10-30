@@ -19,6 +19,13 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.typing import ConfigType, VolDictType
 
 from .app_signing import async_check_certificate_expiry
+from .art_gallery import (
+    CONTENT_ID,
+    MATTE,
+    SamstreamArtThumbnailView,
+    SamstreamArtUploadView,
+)
+from .art_gallery import forget as forget_art_gallery
 from .const import (
     ATTR_APP_ID,
     ATTR_PATH,
@@ -46,6 +53,7 @@ PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
     Platform.BUTTON,
     Platform.MEDIA_PLAYER,
+    Platform.NOTIFY,
     Platform.SELECT,
     Platform.SENSOR,
     Platform.SWITCH,
@@ -77,6 +85,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.http.register_view(SamstreamMjpegView())
     hass.http.register_view(SamstreamTvSessionView())
     hass.http.register_view(SamstreamOnboardToolView())
+    hass.http.register_view(SamstreamArtThumbnailView())
+    hass.http.register_view(SamstreamArtUploadView())
     app_schema: VolDictType = {vol.Required(ATTR_APP_ID): cv.string}
     for name, method in (
         ("launch_app", "async_launch_app"),
@@ -235,10 +245,42 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     service.async_register_platform_entity_service(
         hass,
         DOMAIN,
+        "upload_art",
+        entity_domain=MEDIA_PLAYER_DOMAIN,
+        schema={
+            vol.Required(ATTR_PATH): cv.string,
+            vol.Optional("show", default=False): cv.boolean,
+        },
+        func="async_upload_art",
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    service.async_register_platform_entity_service(
+        hass,
+        DOMAIN,
+        "select_art",
+        entity_domain=MEDIA_PLAYER_DOMAIN,
+        schema={
+            vol.Required("content_id"): vol.All(cv.string, vol.Match(CONTENT_ID)),
+            vol.Optional("matte"): vol.All(cv.string, vol.Match(MATTE)),
+        },
+        func="async_select_art",
+    )
+    service.async_register_platform_entity_service(
+        hass,
+        DOMAIN,
+        "list_art",
+        entity_domain=MEDIA_PLAYER_DOMAIN,
+        schema={vol.Optional("category"): vol.All(cv.string, vol.Match(CONTENT_ID))},
+        func="async_list_art",
+        supports_response=SupportsResponse.ONLY,
+    )
+    service.async_register_platform_entity_service(
+        hass,
+        DOMAIN,
         "local_control_request",
         entity_domain=MEDIA_PLAYER_DOMAIN,
         schema={
-            vol.Required("method"): vol.In(["get", "post"]),
+            vol.Required("method"): vol.In(["get", "post", "push", "reply"]),
             vol.Required("resource"): vol.All(cv.string, vol.Match(r"^/")),
             vol.Optional("body"): dict,
         },
@@ -312,6 +354,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: SamstreamConfigEntry) -
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         await async_get_ocf_service(hass).async_unregister(entry)
+        forget_art_gallery(hass, entry.entry_id)
         await entry.runtime_data.tv.close()
     return unloaded
 

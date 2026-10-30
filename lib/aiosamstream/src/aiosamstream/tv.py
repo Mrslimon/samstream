@@ -346,6 +346,41 @@ class SamsungTV:
         async with self.art() as art:
             return await art.available()
 
+    async def art_select(self, content_id: str, *, matte: str | None = None) -> None:
+        """Show stored artwork `content_id` on a Frame (Art Mode comes on).
+
+        `matte` first changes its border (`none` or `<style>_<colour>`).
+        """
+        async with self.art() as art:
+            if matte is not None:
+                await art.change_matte(content_id, matte)
+            await art.select(content_id, show=True)
+
+    async def art_thumbnails(
+        self, content_ids: list[str]
+    ) -> dict[str, tuple[bytes, str]]:
+        """Thumbnails of stored artwork, by content id (see `ArtConnection`)."""
+        async with self.art() as art:
+            return await art.thumbnails(content_ids)
+
+    async def art_upload(
+        self,
+        image: bytes,
+        *,
+        file_type: str = "png",
+        show: bool = False,
+        matte: str = "none",
+    ) -> str | None:
+        """Upload an image to the Frame's "My Photos"; optionally show it.
+
+        Returns the new artwork's `content_id` (reusable with `set_art_mode`).
+        """
+        async with self.art() as art:
+            content_id = await art.upload(image, file_type=file_type, matte=matte)
+            if show and content_id:
+                await art.select(content_id, show=True)
+            return content_id
+
     async def toggle_art_mode(self) -> None:
         """Flip a Frame TV between normal TV and Art Mode (the power key).
 

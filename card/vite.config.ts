@@ -6,7 +6,8 @@ export default defineConfig({
   build: {
     lib: { entry: "src/samstream-card.ts", formats: ["es"], fileName: () => "samstream-card.js" },
     outDir: "../custom_components/samstream/frontend",
-    emptyOutDir: true,
+    // The folder also holds the animations: only overwrite our one file.
+    emptyOutDir: false,
     target: "es2021",
   },
   test: {

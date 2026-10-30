@@ -15,6 +15,7 @@ import {
   touchGesture,
 } from "./helpers";
 import { languageOf, strings, type Strings } from "./strings";
+import "./art";
 
 export interface CardConfig {
   type: string;
@@ -163,7 +164,10 @@ export class SamstreamCard extends LitElement {
     const on = state.state !== "off" && state.state !== "unavailable";
     const sections = sectionsOf(this.config);
     // Off: only the power control works; keep one even without the TV section.
-    const shown = on ? sections : sections.includes("tv") ? ["tv" as Section] : [];
+    const frame = state.attributes.frame_tv === true;
+    const shown = (on ? sections : sections.includes("tv") ? ["tv" as Section] : []).filter(
+      (section) => section !== "art" || frame,
+    );
     return html`
       <ha-card dir=${this.rtl ? "rtl" : "ltr"}>
         ${on || shown.length > 0 ? nothing : this.renderPowerOnly()}
@@ -183,6 +187,8 @@ export class SamstreamCard extends LitElement {
       media: () => this.renderMedia(),
       keyboard: () => this.renderKeyboard(),
       touchpad: () => this.renderTouchpad(),
+      art: () =>
+        html`<samstream-art .hass=${this.hass} .entity=${this.config.entity} .text=${this.text}></samstream-art>`,
     }[section]();
     return html`<div class="section ${first ? "first" : ""}">${body}</div>`;
   }
@@ -990,7 +996,7 @@ function sourceIcon(source: string): string {
 /** Label key of a section in the editor. */
 function sectionKey(
   section: Section,
-): "tv" | "cameras" | "message" | "apps" | "remote" | "media" | "keyboard" | "touchpad" {
+): "tv" | "cameras" | "message" | "apps" | "remote" | "media" | "keyboard" | "touchpad" | "art" {
   return section;
 }
 

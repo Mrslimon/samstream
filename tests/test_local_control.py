@@ -314,6 +314,44 @@ async def test_options_release_hands_the_tv_back(
     assert ocf_entry.options[CONF_OCF] is False
 
 
+@pytest.mark.parametrize(
+    ("back", "step"),
+    [(True, "local_control_reconnected"), (False, "local_control_trouble")],
+)
+async def test_options_reconnect_restarts_the_tv_service(
+    hass: HomeAssistant,
+    ocf_entry: MockConfigEntry,
+    back: bool,  # noqa: FBT001
+    step: str,
+) -> None:
+    options = hass.config_entries.options
+    result = await options.async_init(ocf_entry.entry_id)
+    flow = result["flow_id"]
+    result = await options.async_configure(flow, {"next_step_id": "local_control"})
+    assert "local_control_reconnect" in result["menu_options"]
+    result = await options.async_configure(
+        flow, {"next_step_id": "local_control_reconnect"}
+    )
+    assert result["type"] is FlowResultType.FORM  # "watch the TV, press Allow"
+    restart = AsyncMock()
+    with (
+        patch("custom_components.samstream.config_flow.RESTART_SETTLE", 0),
+        patch.object(CloudDevice, "restart_agent", restart),
+        patch.object(
+            CloudDevice, "wait_connected", AsyncMock(side_effect=[True, back])
+        ),
+    ):
+        result = await options.async_configure(flow, {})
+        assert result["type"] is FlowResultType.SHOW_PROGRESS
+        await hass.async_block_till_done()
+        result = await options.async_configure(flow)
+    restart.assert_awaited_once()
+    assert result["step_id"] == step
+    if back:
+        result = await options.async_configure(flow, {})
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
 async def test_entities_follow_the_tv(
     hass: HomeAssistant, ocf_entry: MockConfigEntry
 ) -> None:
@@ -638,6 +676,10 @@ async def test_diagnostics_hide_the_token(
         "resources": {
             "/CoapCloudConfResURI": {"at": TOKEN, "x.com.samsung.refreshtoken": TOKEN},
             "/sec/tv/deviceinfo": {"x.com.samsung.tv.wifimac": "2c:99:75:be:33:bc"},
+            "/DevConfResURI": {
+                "x.com.samsung.account": "someone@example.com",
+                "x.com.samsung.plainserial": "09HG3K4X700025",
+            },
         }
     }
     with (
@@ -648,6 +690,8 @@ async def test_diagnostics_hide_the_token(
     raw = str(diagnostics["local_control"]["resources"])
     assert TOKEN not in raw
     assert "2c:99:75" not in raw
+    assert "someone@example.com" not in raw
+    assert "09HG3K4X700025" not in raw
 
 
 async def test_unload_stops_the_cloud(

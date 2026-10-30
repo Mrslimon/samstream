@@ -11,7 +11,7 @@ import struct
 from dataclasses import dataclass, field
 
 GET, POST, PUT, DELETE = 0x01, 0x02, 0x03, 0x04
-CREATED, CHANGED, CONTENT = 0x41, 0x44, 0x45
+CREATED, VALID, CHANGED, CONTENT = 0x41, 0x43, 0x44, 0x45
 BAD_REQUEST, UNAUTHORIZED, NOT_FOUND = 0x80, 0x81, 0x84
 CSM, PING, PONG, RELEASE, ABORT = 0xE1, 0xE2, 0xE3, 0xE4, 0xE5
 
@@ -33,6 +33,12 @@ class CoapError(ValueError):
 def code_text(code: int) -> str:
     """`0x45` as `2.05`."""
     return f"{code >> 5}.{code & 0x1F:02d}"
+
+
+def code_value(text: str) -> int:
+    """`2.05` as `0x45`."""
+    major, _, minor = text.partition(".")
+    return (int(major) << 5) | int(minor or 0)
 
 
 def is_request(code: int) -> bool:
@@ -136,6 +142,7 @@ def _option_field(body: bytes, pos: int, nibble: int) -> tuple[int, int]:
 
 
 def parse_body(body: bytes) -> tuple[tuple[tuple[int, bytes], ...], bytes]:
+    """Split options and payload (the inverse of `encode_body`)."""
     options: list[tuple[int, bytes]] = []
     pos = number = 0
     try:

@@ -18,6 +18,8 @@ export interface Hass {
   locale?: { language: string };
   callService(domain: string, service: string, data: Record<string, unknown>): Promise<unknown>;
   callWS<T>(message: Record<string, unknown>): Promise<T>;
+  /** Home Assistant's fetch with the user's token (uploads). */
+  fetchWithAuth?(path: string, init?: RequestInit): Promise<Response>;
 }
 
 export interface TvApp {
@@ -84,6 +86,7 @@ export const SECTIONS = [
   "media",
   "keyboard",
   "touchpad",
+  "art",
 ] as const;
 export type Section = (typeof SECTIONS)[number];
 
@@ -106,6 +109,7 @@ export function sectionsOf(config: SectionConfig): Section[] {
   if (config.show_message !== false) shown.push("message");
   if (config.show_apps !== false) shown.push("apps");
   if (config.show_remote !== false) shown.push("remote", "media");
+  shown.push("art"); // drawn only for a Frame
   return shown;
 }
 

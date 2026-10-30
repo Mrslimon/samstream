@@ -215,7 +215,8 @@
         "description": "Home Assistant becomes the cloud your TV reports to, over your own network — its real inputs, picture and sound mode, channel, ambient light and more, with no Samsung account and no internet.\n\nA TV works with **either** local control **or** the SmartThings app, never both at once, and you can switch back any time.\n\nBefore you start: the TV must be on, and Home Assistant must be on the TV's network (in Docker, use host networking) so the TV can reach it on the cloud port.",
         "menu_options": {
           "local_control_settings": "Set up local control",
-          "local_control_release": "Turn off and hand the TV back to SmartThings"
+          "local_control_release": "Turn off and hand the TV back to SmartThings",
+          "local_control_reconnect": "Reconnect the TV"
         }
       },
       "local_control_settings": {
@@ -296,6 +297,14 @@
           "local_control_lan": "Use the LAN helper on a computer",
           "local_control_settings": "Change the cloud settings"
         }
+      },
+      "local_control_reconnect": {
+        "title": "Reconnect the TV",
+        "description": "![Reconnect](/samstream_files/animations/connect.svg)\n\nIf {name} stopped reporting to Home Assistant, this restarts its SmartThings service so it connects again.\n\n**Watch the TV:** it asks whether to allow {name} to reconnect. Choose **Allow** with the remote.\n\nSelect Submit to start."
+      },
+      "local_control_reconnected": {
+        "title": "Reconnected",
+        "description": "![Reconnected](/samstream_files/animations/paired.svg)\n\n{name} is connected to Home Assistant again."
       }
     },
     "error": {
@@ -318,7 +327,8 @@
     },
     "progress": {
       "samsung_sign_in": "On a computer on your network that has a browser and Node.js, run:\n\n`{command}`\n\nIt opens the Samsung sign-in page. Sign in with your Samsung account; this screen continues by itself. The code works once and expires in 10 minutes.",
-      "onboarding": "![Connecting](/samstream_files/animations/loading.svg)\n\nSetting up {name} and waiting for it to connect to Home Assistant. This can take up to a minute."
+      "onboarding": "![Connecting](/samstream_files/animations/loading.svg)\n\nSetting up {name} and waiting for it to connect to Home Assistant. This can take up to a minute.",
+      "reconnecting": "![Reconnecting](/samstream_files/animations/connecting.svg)\n\nRestarting the SmartThings service on {name}. When the TV asks whether to allow the reconnect, choose **Allow**. Waiting up to two minutes."
     },
     "abort": {
       "signing_ready": "App signing is ready: {status}. Use the Install Samstream app button on the TV device.",
@@ -441,6 +451,11 @@
       "art_mode": {
         "name": "Art Mode"
       }
+    },
+    "notify": {
+      "notifications": {
+        "name": "Notifications"
+      }
     }
   },
   "exceptions": {
@@ -521,6 +536,12 @@
     },
     "local_control_unavailable": {
       "message": "Local control is not connected to this TV right now."
+    },
+    "not_a_frame": {
+      "message": "This TV is not a Frame, so it has no art gallery."
+    },
+    "art_file_unreadable": {
+      "message": "Could not read the image at {path}: {error}"
     }
   },
   "services": {
@@ -702,7 +723,7 @@
     },
     "art_mode": {
       "name": "Toggle Art Mode",
-      "description": "On a Samsung Frame TV, switches between normal TV and Art Mode (the on-screen artwork). It flips between the two each time and never powers the TV fully off. Choosing which artwork to show is not possible over the local connection on newer Frames; it needs SmartThings."
+      "description": "On a Samsung Frame TV, switches between normal TV and Art Mode (the on-screen artwork). It flips between the two each time and never powers the TV fully off. To show a particular artwork, use Show artwork."
     },
     "open_url": {
       "name": "Open a link",
@@ -729,6 +750,44 @@
         "body": {
           "name": "Body",
           "description": "For post: the fields to send."
+        }
+      }
+    },
+    "upload_art": {
+      "name": "Upload art",
+      "description": "Upload an image to a Frame TV's My Photos, to show as artwork.",
+      "fields": {
+        "path": {
+          "name": "Image path",
+          "description": "Path to the image file within the Home Assistant config directory."
+        },
+        "show": {
+          "name": "Show now",
+          "description": "Switch the Frame to the uploaded image immediately."
+        }
+      }
+    },
+    "select_art": {
+      "name": "Show artwork",
+      "description": "On a Samsung Frame TV, shows one stored artwork in Art Mode. Get the content IDs from the List artwork action.",
+      "fields": {
+        "content_id": {
+          "name": "Content ID",
+          "description": "The artwork to show, for example MY_F0003."
+        },
+        "matte": {
+          "name": "Frame border",
+          "description": "Change its border first: none, or style_colour such as shadowbox_sand (List artwork shows what the TV offers)."
+        }
+      }
+    },
+    "list_art": {
+      "name": "List artwork",
+      "description": "Returns the artwork stored on a Samsung Frame TV: each item's content ID and a thumbnail link (valid for a day), plus the one showing now. Use it to build a picker on a dashboard.",
+      "fields": {
+        "category": {
+          "name": "Category",
+          "description": "Only this gallery, for example MY-C0002 for My Photos. Leave empty for all."
         }
       }
     }

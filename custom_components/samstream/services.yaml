@@ -34,6 +34,52 @@ install_app:
       selector:
         text:
 
+select_art:
+  target:
+    entity:
+      integration: samstream
+      domain: media_player
+  fields:
+    content_id:
+      required: true
+      example: "MY_F0003"
+      selector:
+        text:
+    matte:
+      required: false
+      example: "shadowbox_sand"
+      selector:
+        text:
+
+list_art:
+  target:
+    entity:
+      integration: samstream
+      domain: media_player
+  fields:
+    category:
+      required: false
+      example: "MY-C0002"
+      selector:
+        text:
+
+upload_art:
+  target:
+    entity:
+      integration: samstream
+      domain: media_player
+  fields:
+    path:
+      required: true
+      example: "art/sunset.jpg"
+      selector:
+        text:
+    show:
+      required: false
+      default: false
+      selector:
+        boolean:
+
 play_stream:
   target:
     entity:
@@ -280,6 +326,8 @@ local_control_request:
           options:
             - get
             - post
+            - push
+            - reply
     resource:
       required: true
       example: "/sec/tv/display/orientation"

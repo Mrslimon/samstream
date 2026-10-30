@@ -125,3 +125,186 @@ async def test_toggle_art_mode_presses_power() -> None:
     tv.send_keys = AsyncMock()  # type: ignore[method-assign]
     await tv.toggle_art_mode()
     tv.send_keys.assert_awaited_once_with(["KEY_POWER"])
+
+
+class _UploadWS(FakeWS):
+    """Answers `send_image` with a `ready_to_use` socket, then `image_added`."""
+
+    def __init__(self, conn_info: dict[str, Any], content_id: str) -> None:
+        super().__init__({})
+        self._conn_info = conn_info
+        self._content_id = content_id
+
+    async def send_json(self, obj: dict[str, Any]) -> None:
+        self.sent.append(obj)
+        data = json.loads(obj["params"]["data"])
+        if data["request"] != "send_image":
+            return
+        ready = {
+            "event": "ready_to_use",
+            "request_id": data["request_id"],
+            "conn_info": json.dumps(self._conn_info),
+        }
+        added = {"event": "image_added", "content_id": self._content_id}
+        for payload in (ready, added):
+            frame = {"event": "d2d_service_message", "data": json.dumps(payload)}
+            self._q.append(_Msg(aiohttp.WSMsgType.TEXT, json.dumps(frame)))
+
+
+async def test_upload_pushes_bytes_and_returns_content_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    chunks: list[bytes] = []
+
+    class FakeSock:
+        def settimeout(self, timeout: float) -> None:
+            pass
+
+        def connect(self, address: tuple[str, int]) -> None:
+            assert address == ("10.0.0.9", 12345)
+
+        def sendall(self, data: bytes) -> None:
+            chunks.append(data)
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr("aiosamstream.art.socket.socket", lambda *_: FakeSock())
+    ws = _UploadWS({"ip": "10.0.0.9", "port": 12345, "secured": False}, "MY_F0099")
+    image = b"\x89PNG\r\n\x1a\npixels"
+    content_id = await _tv_with(ws).art_upload(image, file_type="png")
+
+    assert content_id == "MY_F0099"
+    # The 4-byte length prefix, the JSON header, then the image bytes.
+    assert len(chunks) == 3
+    assert chunks[2] == image
+    sent = json.loads(ws.sent[0]["params"]["data"])
+    assert sent["request"] == "send_image"
+    assert sent["file_size"] == len(image)
+
+
+class _ThumbWS(FakeWS):
+    """Answers `get_thumbnail_list` with a socket address (a d2d reply)."""
+
+    def __init__(self, conn_info: dict[str, Any]) -> None:
+        super().__init__({"get_thumbnail_list": {"conn_info": json.dumps(conn_info)}})
+
+
+def _record(file_id: str, body: bytes, num: int, total: int) -> bytes:
+    header = json.dumps(
+        {
+            "fileID": file_id,
+            "fileType": "jpg",
+            "fileLength": len(body),
+            "num": num,
+            "total": total,
+        }
+    ).encode()
+    return len(header).to_bytes(4, "big") + header + body
+
+
+class _ReadSock:
+    def __init__(self, data: bytes) -> None:
+        self._data = data
+
+    def settimeout(self, timeout: float) -> None:
+        pass
+
+    def connect(self, address: tuple[str, int]) -> None:
+        assert address == ("10.0.0.9", 2345)
+
+    def recv(self, size: int) -> bytes:
+        chunk, self._data = self._data[:size], self._data[size:]
+        return chunk
+
+    def close(self) -> None:
+        pass
+
+
+async def test_thumbnails_read_every_record(monkeypatch: pytest.MonkeyPatch) -> None:
+    stream = _record("MY_F0001", b"one", 0, 2) + _record("MY_F0002", b"two", 1, 2)
+    monkeypatch.setattr("aiosamstream.art.socket.socket", lambda *_: _ReadSock(stream))
+    ws = _ThumbWS({"ip": "10.0.0.9", "port": 2345})
+    thumbs = await _tv_with(ws).art_thumbnails(["MY_F0001", "MY_F0002", "MY_F0001"])
+    assert thumbs == {"MY_F0001": (b"one", "jpg"), "MY_F0002": (b"two", "jpg")}
+    sent = json.loads(ws.sent[0]["params"]["data"])
+    assert sent["content_id_list"] == [
+        {"content_id": "MY_F0001"},
+        {"content_id": "MY_F0002"},
+    ]
+
+
+async def test_thumbnails_tolerate_skipped_files(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The TV skips store art it has no thumbnail for: num 1 never comes.
+    for stream in (
+        _record("MY_F0001", b"one", 0, 3) + _record("MY_F0003", b"three", 2, 3),
+        _record("MY_F0001", b"one", 0, 3),  # then a clean close
+    ):
+        monkeypatch.setattr(
+            "aiosamstream.art.socket.socket", lambda *_, s=stream: _ReadSock(s)
+        )
+        ws = _ThumbWS({"ip": "10.0.0.9", "port": 2345})
+        thumbs = await _tv_with(ws).art_thumbnails(["MY_F0001", "SAM-S1", "MY_F0003"])
+        assert "MY_F0001" in thumbs
+        assert "SAM-S1" not in thumbs
+
+
+async def test_thumbnails_refuse_a_short_or_huge_stream(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ws = _ThumbWS({"ip": "10.0.0.9", "port": 2345})
+    huge = json.dumps({"fileID": "x", "fileLength": 1 << 30, "total": 1}).encode()
+    for stream in (b"\x00\x00", len(huge).to_bytes(4, "big") + huge):
+        monkeypatch.setattr(
+            "aiosamstream.art.socket.socket", lambda *_, s=stream: _ReadSock(s)
+        )
+        with pytest.raises(SamstreamConnectionError):
+            await _tv_with(_ThumbWS({"ip": "10.0.0.9", "port": 2345})).art_thumbnails(
+                ["x"]
+            )
+    assert await _tv_with(ws).art_thumbnails([]) == {}
+
+
+async def test_thumbnails_need_a_socket() -> None:
+    ws = FakeWS({"get_thumbnail_list": {"conn_info": "{}"}})
+    with pytest.raises(SamstreamError):
+        await _tv_with(ws).art_thumbnails(["MY_F0001"])
+
+
+async def test_art_select_shows_it() -> None:
+    ws = FakeWS({"select_image": {}})
+    await _tv_with(ws).art_select("MY_F0001")
+    sent = json.loads(ws.sent[0]["params"]["data"])
+    assert (sent["request"], sent["content_id"], sent["show"]) == (
+        "select_image",
+        "MY_F0001",
+        True,
+    )
+
+
+async def test_mattes_parse_styles_and_colours() -> None:
+    styles = json.dumps([{"matte_type": "none"}, {"matte_type": "shadowbox"}, {}])
+    colours = json.dumps(
+        [{"color": "sand", "R": 164, "G": 145, "B": 113}, {"color": "broken"}]
+    )
+    ws = FakeWS(
+        {"get_matte_list": {"matte_type_list": styles, "matte_color_list": colours}}
+    )
+    async with _tv_with(ws).art() as art:
+        assert await art.mattes() == (["none", "shadowbox"], {"sand": (164, 145, 113)})
+
+
+async def test_mattes_tolerate_garbage() -> None:
+    ws = FakeWS({"get_matte_list": {"matte_type_list": "{not json"}})
+    async with _tv_with(ws).art() as art:
+        assert await art.mattes() == ([], {})
+
+
+async def test_select_with_matte_changes_the_border_first() -> None:
+    ws = FakeWS({"change_matte": {}, "select_image": {}})
+    await _tv_with(ws).art_select("MY_F0001", matte="shadowbox_sand")
+    sent = [json.loads(m["params"]["data"]) for m in ws.sent]
+    assert [s["request"] for s in sent] == ["change_matte", "select_image"]
+    assert sent[0]["matte_id"] == "shadowbox_sand"

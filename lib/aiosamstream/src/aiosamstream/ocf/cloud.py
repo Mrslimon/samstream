@@ -42,6 +42,8 @@ from .coap_tcp import (
     POST,
     RELEASE,
     UNAUTHORIZED,
+    URI_QUERY,
+    VALID,
     CoapError,
     FrameReader,
     Message,
@@ -54,6 +56,7 @@ from .coap_tcp import (
 )
 from .state import (
     AUDIO,
+    DEVICE_COMMAND,
     INPUT_SOURCE,
     LAUNCH_APP,
     MEDIA_OUTPUT,
@@ -76,6 +79,7 @@ SIGN_UP = "/oic/account"
 SIGN_IN = "/oic/account/session"
 TOKEN_REFRESH = "/oic/account/tokenrefresh"
 PUBLISH = "/oic/rd"
+KEEP_ALIVE = "/oic/ping"
 
 AUTH_DEADLINE = 15.0  # a connection must sign in within this, or it is closed
 IDLE_PING = 20.0  # send a ping after this much silence; the TV never closes for it
@@ -86,7 +90,9 @@ MAX_PENDING = 64
 # Large enough for the biggest replies (/oic/res); at 1152 the Frame dropped
 # the connection instead of answering it.
 _CSM_SIZE = 1 << 16
-_TOKEN_EXPIRY = 3600
+# Long-lived: with 3600 or -1 the TV refreshed its token at every sign-in, and a
+# refresh makes it sign out and dial again (a reconnect every second).
+_TOKEN_EXPIRY = 365 * 24 * 3600
 
 Listener = Callable[["CloudDevice"], None]
 
@@ -226,11 +232,21 @@ class CloudDevice:
         self._session: _Session | None = None
         self._connected = asyncio.Event()
         self._last_read = 0.0
+        # Answers to the TV's own requests, by path: (CoAP code, body). For
+        # finding what the TV expects of its cloud; unset paths get the defaults.
+        self.replies: dict[str, tuple[int, Any]] = {}
+        # Whether sign-in starts our OBSERVE reads of the state resources.
+        self.observe_state = True
 
     @property
     def connected(self) -> bool:
         """Whether the TV holds a signed-in connection right now."""
         return self._session is not None
+
+    def drop(self) -> None:
+        """Close the TV's connection; it dials again and re-syncs."""
+        if self._session is not None:
+            self._session.close()
 
     def token_matches(self, token: str) -> bool:
         """Constant-time check of the token the TV presented."""
@@ -289,6 +305,29 @@ class CloudDevice:
             msg = f"no answer from {self.device_id} for {href}"
             raise OcfNotConnectedError(msg) from err
         return reply.code, _decode(reply.payload)
+
+    async def push(
+        self,
+        path: str,
+        body: Any,
+        *,
+        timeout: float = REQUEST_TIMEOUT,  # noqa: ASYNC109
+    ) -> list[str]:
+        """Notify the TV on its own subscription to `path`; return what it holds.
+
+        Waits for a connection that has subscribed (the TV re-dials often).
+        """
+        try:
+            async with asyncio.timeout(timeout):
+                while True:
+                    await self._connected.wait()
+                    session = self._session
+                    if session is not None and session.push(path, body):
+                        return sorted(session.subscriptions)
+                    await asyncio.sleep(0.2)
+        except TimeoutError as err:
+            msg = f"{self.device_id} has no subscription to {path}"
+            raise OcfNotConnectedError(msg) from err
 
     async def read_all(
         self,
@@ -444,6 +483,18 @@ class CloudDevice:
         """Frame: go to Art Mode (leaving it is the power key)."""
         return await self.post(SWITCH_ART, {"x.com.samsung.tv.requestor": "samstream"})
 
+    async def restart_agent(self) -> None:
+        """Restart the TV's SmartThings service, which re-dials the cloud.
+
+        The TV then asks on screen whether to allow the reconnect, so only on
+        request (Configure). It restarts before answering: a lost connection
+        is success.
+        """
+        with contextlib.suppress(OcfNotConnectedError):
+            await self.post(
+                DEVICE_COMMAND, {"x.com.samsung.devicelog.command": "restartThing"}
+            )
+
 
 class _Session:
     """One TLS connection from a TV."""
@@ -462,13 +513,23 @@ class _Session:
         self._frames = FrameReader()
         self._pending: dict[bytes, asyncio.Future[Message]] = {}
         self._observed: dict[bytes, str] = {}
+        # The TV's own OBSERVE requests to us, by path (e.g. /service/observe).
+        self.subscriptions: dict[str, bytes] = {}
         self._observe_seq = 1
         self.device: CloudDevice | None = None
+        self._opened = time.monotonic()
 
     def close(self) -> None:
         self._writer.close()
 
     def _send(self, message: Message) -> None:
+        _LOGGER.debug(
+            "OCF cloud: -> %s %s %s %s",
+            self.peer,
+            code_text(message.code),
+            message.path or message.token.hex(),
+            len(message.payload),
+        )
         if not self._writer.is_closing():
             self._writer.write(encode(message))
 
@@ -484,6 +545,14 @@ class _Session:
             options.append((CONTENT_FORMAT, bytes([CBOR_FORMAT])))
             payload = cbor.dumps(body)
         self._send(Message(code, request.token, tuple(options), payload))
+
+    def push(self, path: str, body: Any) -> bool:
+        """Send a notification on one of the TV's own subscriptions."""
+        token = self.subscriptions.get(path)
+        if token is None:
+            return False
+        self._reply(Message(CONTENT, token), CONTENT, body, observe=True)
+        return True
 
     async def request(self, code: int, href: str, body: Any = None) -> Message:
         if len(self._pending) >= MAX_PENDING:
@@ -526,11 +595,33 @@ class _Session:
         body = _decode(request.payload)
         if path in (SIGN_UP, SIGN_IN, TOKEN_REFRESH):
             self._on_account(request, path, body)
-        elif self.device is None:
+            return
+        if self.device is None:
             self._reply(request, UNAUTHORIZED)
+            return
+        # What the TV asks of its cloud (never the account paths: tokens).
+        _LOGGER.debug(
+            "OCF cloud: %s asks %s %s?%s%s %s",
+            self.peer,
+            request.code,
+            path,
+            "&".join(q.decode(errors="replace") for q in request.values(URI_QUERY)),
+            " (observe)" if request.has(OBSERVE) else "",
+            str(body)[:600],
+        )
+        if request.code == GET and request.has(OBSERVE):
+            self.subscriptions[path] = request.token
+        if path in self.device.replies:
+            code, answer = self.device.replies[path]
+            observe = request.code == GET and request.has(OBSERVE)
+            self._reply(request, code, answer, observe=observe)
         elif request.code == GET:
             # The TV's own sync GETs must be answered 2.05 (2.04 makes it drop us).
             self._reply(request, CONTENT, {}, observe=request.has(OBSERVE))
+        elif path == KEEP_ALIVE:
+            # 2.03 with no body, as IoTivity answers; 2.04 {} made the TV hang up
+            # right after it set its keep-alive interval.
+            self._reply(request, VALID)
         elif path == PUBLISH:
             self._reply(request, CHANGED, body if isinstance(body, dict) else {})
         else:
@@ -538,6 +629,12 @@ class _Session:
 
     def _on_account(self, request: Message, path: str, body: Any) -> None:
         """Sign-up, sign-in and token refresh: the only paths served before sign-in."""
+        _LOGGER.debug(
+            "OCF cloud: %s account %s keys=%s",
+            self.peer,
+            path,
+            sorted(body) if isinstance(body, dict) else type(body).__name__,
+        )
         if path == SIGN_UP:
             if self._authorise(request, body, "accesstoken"):
                 self._reply(request, CHANGED, self._cloud.sign_up_reply(body))
@@ -545,7 +642,7 @@ class _Session:
             if self._authorise(request, body, "accesstoken") and self.device:
                 self._reply(request, CHANGED, {"expiresin": _TOKEN_EXPIRY})
                 self.device._attach(self)  # noqa: SLF001
-                if self.device._should_read():  # noqa: SLF001
+                if self.device.observe_state and self.device._should_read():  # noqa: SLF001
                     self._observe_state()
         elif self._authorise(request, body, "refreshtoken"):  # token refresh
             token = _field(body, "refreshtoken")
@@ -555,6 +652,7 @@ class _Session:
                 {
                     "accesstoken": token,
                     "refreshtoken": token,
+                    "tokentype": "bearer",
                     "expiresin": _TOKEN_EXPIRY,
                 },
             )
@@ -570,6 +668,15 @@ class _Session:
             self.device._update(href, _decode(message.payload))  # noqa: SLF001
 
     def _dispatch(self, message: Message) -> None:
+        if not is_request(message.code):
+            _LOGGER.debug(
+                "OCF cloud: <- %s %s %s options=%s %s",
+                self.peer,
+                code_text(message.code),
+                message.token.hex(),
+                [(n, v[:40]) for n, v in message.options],
+                _decode(message.payload) if message.payload else "",
+            )
         if message.code == PING:
             self._send(Message(PONG, message.token))
         elif message.code in (CSM, PONG):
@@ -608,6 +715,11 @@ class _Session:
         except (ConnectionError, OSError) as err:
             _LOGGER.debug("OCF cloud: %s went away: %s", self.peer, err)
         finally:
+            _LOGGER.debug(
+                "OCF cloud: %s connection ended after %.1f s",
+                self.peer,
+                time.monotonic() - self._opened,
+            )
             for future in self._pending.values():
                 if not future.done():
                     future.set_exception(OcfNotConnectedError(self.peer))

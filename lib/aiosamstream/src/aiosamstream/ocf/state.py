@@ -42,8 +42,9 @@ ORIENTATION = "/sec/tv/display/orientation"
 SHOW_MENU = "/sec/tv/showmenu"
 # Frame: POST enters Art Mode; Art Mode then shows as the "art" app.
 SWITCH_ART = "/sec/tv/switch/art"
-# Not used: /devicelog/command restartThing makes the TV ask on screen to
-# allow the reconnect, every time.
+# restartThing restarts the TV's SmartThings service; the TV then asks on
+# screen to allow the reconnect, so it is only sent on request.
+DEVICE_COMMAND = "/devicelog/command"
 ART_APP = "art"
 
 # Read once per session and observed: the state that changes as the TV is used.

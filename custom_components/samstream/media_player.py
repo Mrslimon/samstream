@@ -18,7 +18,7 @@ from aiosamstream import (
     youtube_id,
 )
 from aiosamstream.ocf import OcfTvState
-from aiosamstream.ocf.coap_tcp import GET, POST, code_text
+from aiosamstream.ocf.coap_tcp import GET, POST, code_text, code_value
 from homeassistant.components import media_source
 from homeassistant.components.camera import async_get_stream_source
 from homeassistant.components.media_player import MediaPlayerEntity
@@ -42,6 +42,8 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.util.json import JsonValueType
 
 from . import SamstreamConfigEntry
+from .art_gallery import CONTENT_ID, upload_url
+from .art_gallery import describe as describe_art
 from .const import (
     CONF_FRAME_POWER,
     CONF_RESUME,
@@ -87,6 +89,8 @@ FIRST_FRAME_WAIT_SECONDS = 30
 RECONNECT_WAIT_SECONDS = 30
 # Media browser folder with the TV's apps.
 APPS_FOLDER = "samstream://apps"
+ART_FOLDER = "samstream://art"
+ART_TYPE = "samstream_art"  # play_media type: show a Frame artwork by content id
 
 
 @dataclass
@@ -124,6 +128,18 @@ async def async_setup_entry(
 ) -> None:
     """Add the TV media player."""
     async_add_entities([SamstreamMediaPlayer(entry.runtime_data.coordinator)])
+
+
+def _art_folder() -> BrowseMedia:
+    return BrowseMedia(
+        media_class=MediaClass.DIRECTORY,
+        media_content_id=ART_FOLDER,
+        media_content_type=ART_TYPE,
+        title="Art",
+        can_play=False,
+        can_expand=True,
+        children_media_class=MediaClass.IMAGE,
+    )
 
 
 class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
@@ -266,6 +282,11 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         await coordinator.async_request_refresh()
 
     @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Mark Frames, so the card offers its Art section."""
+        return {"frame_tv": True} if self._frame else None
+
+    @property
     def _frame(self) -> bool:
         info = self.coordinator.data.info
         return bool(info and info.frame_tv)
@@ -357,7 +378,10 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
     async def async_play_media(
         self, media_type: MediaType | str, media_id: str, **kwargs: Any
     ) -> None:
-        """Launch an app (`app` + Tizen app ID), or play a file on the TV.
+        """Launch an app, show Frame artwork, or play a file on the TV.
+
+        `app` + Tizen app ID launches it; `samstream_art` + content ID shows that
+        artwork on a Frame (the media browser's Art folder).
 
         Files are HA media library items (`media-source://…`, including TTS) or
         http(s) URLs. Samstream plays them full screen and, when the file ends,
@@ -365,6 +389,9 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         """
         if media_type == MediaType.APP:
             await self.async_launch_app(media_id)
+            return
+        if media_type == ART_TYPE and CONTENT_ID.match(media_id):
+            await self.async_select_art(media_id)
             return
         if not (media_source.is_media_source_id(media_id) or _is_http(media_id)):
             raise ServiceValidationError(
@@ -393,9 +420,11 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         media_content_type: MediaType | str | None = None,
         media_content_id: str | None = None,
     ) -> BrowseMedia:
-        """TV apps (launch) and HA's media library (video and audio to play)."""
+        """TV apps (launch), Frame artwork (show) and HA's media library."""
         if media_content_id == APPS_FOLDER:
             return self._browse_apps()
+        if media_content_id == ART_FOLDER:
+            return await self._async_browse_art()
         library = await media_source.async_browse_media(
             self.hass,
             media_content_id,
@@ -413,8 +442,31 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
             title=self.coordinator.config_entry.title,
             can_play=False,
             can_expand=True,
-            children=[self._browse_apps(children=False), library],
+            children=[
+                self._browse_apps(children=False),
+                *([_art_folder()] if self._frame else []),
+                library,
+            ],
         )
+
+    async def _async_browse_art(self) -> BrowseMedia:
+        """Browse the Frame's stored artwork as a thumbnail grid; play shows one."""
+        listing = await self.async_list_art()
+        items: list[dict[str, Any]] = listing["art"]  # type: ignore[assignment,index]
+        folder = _art_folder()
+        folder.children = [
+            BrowseMedia(
+                media_class=MediaClass.IMAGE,
+                media_content_id=item["content_id"],
+                media_content_type=ART_TYPE,
+                title=item["content_id"],
+                can_play=True,
+                can_expand=False,
+                thumbnail=item["thumbnail"],
+            )
+            for item in items
+        ]
+        return folder
 
     def _browse_apps(self, *, children: bool = True) -> BrowseMedia:
         apps = sorted(self.coordinator.apps.items(), key=lambda a: a[1].casefold())
@@ -837,6 +889,77 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
                     return
         _LOGGER.warning("%s did not go back to standby", self.entity_id)
 
+    def _require_frame(self) -> None:
+        if not self._frame:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="not_a_frame"
+            )
+
+    async def async_select_art(self, content_id: str, matte: str | None = None) -> None:
+        """Show one stored artwork on a Frame (the `select_art` action).
+
+        `matte` (`none` or `<style>_<colour>`) changes its border first.
+        """
+        self._require_frame()
+        await self._async_call(self.coordinator.tv.art_select(content_id, matte=matte))
+        await self.coordinator.async_request_refresh()
+
+    async def async_list_art(self, category: str | None = None) -> ServiceResponse:
+        """Return a Frame's stored artwork with thumbnail links (`list_art`).
+
+        Each item has its `content_id` (for `select_art`) and a signed
+        `thumbnail` link valid for a day, so a dashboard can show a picker.
+        `mattes` lists the borders the TV offers (styles, colours as RGB) and
+        `upload_url` is where the card POSTs a cropped picture.
+        """
+        self._require_frame()
+        tv = self.coordinator.tv
+
+        async def _listing() -> tuple[list[dict[str, Any]], str | None, Any]:
+            async with tv.art() as art:
+                items = await art.available(category)
+                return items, await art.current(), await art.mattes()
+
+        items, current, (styles, colours) = await self._async_call(_listing())
+        entry_id = self.coordinator.config_entry.entry_id
+        return {
+            "current": current,
+            "art": describe_art(self.hass, entry_id, items),  # type: ignore[dict-item]
+            "mattes": {
+                "styles": styles,
+                "colours": {name: list(rgb) for name, rgb in colours.items()},
+            },
+            "upload_url": upload_url(entry_id),
+        }
+
+    async def async_upload_art(
+        self, path: str, *, show: bool = False
+    ) -> ServiceResponse:
+        """Upload an image to a Frame's "My Photos" (the `upload_art` action).
+
+        `path` is an image file in the HA config dir. The new artwork's id is
+        returned so it can be shown later; `show: true` switches to it at once.
+        The user can also pick it from Art Mode on the TV.
+        """
+        self._require_frame()
+        resolved = resolve_package_path(self.hass, path)
+        suffix = resolved.suffix.lower().lstrip(".")
+        file_type = "jpg" if suffix in ("jpg", "jpeg") else "png"
+        try:
+            image = await self.hass.async_add_executor_job(resolved.read_bytes)
+        except OSError as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="art_file_unreadable",
+                translation_placeholders={"path": path, "error": str(err)},
+            ) from err
+        content_id = await self._async_call(
+            self.coordinator.tv.art_upload(image, file_type=file_type, show=show)
+        )
+        if show:
+            await self.coordinator.async_request_refresh()
+        return {"content_id": content_id}
+
     async def async_install_app(self, path: str | None = None) -> ServiceResponse:
         """Install Samstream over sdb (the `install_app` action).
 
@@ -862,6 +985,27 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         try:
             if method == "get":
                 code, answer = await device.request(GET, resource)
+            elif method == "reply":
+                # Set (or with no body, clear) our answer to the TV's own
+                # request for `resource`: body = {"code": "2.05", "body": ...}.
+                if resource == "/samstream/drop":  # make the TV sign in again
+                    device.drop()
+                elif resource == "/samstream/observe_state":  # experiment switch
+                    device.observe_state = bool((body or {}).get("body", True))
+                elif body is None:
+                    device.replies.pop(resource, None)
+                else:
+                    device.replies[resource] = (
+                        code_value(str(body.get("code", "2.05"))),
+                        body.get("body"),
+                    )
+                replies: list[JsonValueType] = [*sorted(device.replies)]
+                return {"code": "set", "body": {"replies": replies}}
+            elif method == "push":
+                # Notify the TV on its own subscription (e.g. /service/observe).
+                held = await device.push(resource, body or {})
+                subscriptions: list[JsonValueType] = list(held)
+                return {"code": "pushed", "body": {"subscriptions": subscriptions}}
             else:
                 code, answer = await device.request(POST, resource, body or {})
         except OcfError as err:

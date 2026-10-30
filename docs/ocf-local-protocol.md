@@ -344,6 +344,18 @@ The fixes from the original recipe, all implemented and verified to behave as in
 Success signal (for reference): a `/sec/tv/contentinfo` answered `2.05` with a CBOR body. We never saw it; we
 saw `4.01` every time.
 
+### 14.3b Reconnect storm SOLVED (2026-10-30)
+Two causes, found by logging every message both ways (`aiosamstream.ocf` at debug):
+1. **Token refresh loop.** After each sign-in the TV sent `POST /oic/account/tokenrefresh`; a successful
+   refresh makes its cloud client sign out and dial again (same as TizenRT `st_things`
+   `handle_refresh_token_cb` -> `force_session_stop` + `log_in_out_to_cloud`). `expiresin` 3600 and -1 both
+   triggered it; **`expiresin` = 1 year** stops it.
+2. **Keep-alive reply.** The TV then hung up right after `POST /oic/ping {in: 8}`: answer ping **`2.03 Valid`
+   with no body** (IoTivity's KeepAliveResource), not `2.04 {}`.
+With both, one connection holds for minutes. Answering `/x.com.samsung/device/slaves` or
+`/oic/account/profile/device` with guessed content brings the storm back (the TV parses them); keep `{}`.
+Pushes on the TV's own `/service/observe` subscription (6 payload shapes) drew no reaction.
+
 ### 14.4 Preconditions each run
 - **If the TV is already dialing the cloud** (cis + our trust_ca persist from a prior run — they survived a full
   day and a network change in the 2026-10-23 pm session), just launch the server: `py -3.11 oicseek/cloud_server.py`

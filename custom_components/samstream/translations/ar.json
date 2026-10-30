@@ -215,7 +215,8 @@
         "description": "يصبح Home Assistant السحابة التي يُبلِغ إليها تلفزيونك عبر شبكتك — مدخلاته الحقيقية ووضع الصورة والصوت والقناة والإضاءة المحيطة والمزيد، دون حساب Samsung ودون إنترنت.\n\nيعمل التلفزيون **إمّا** بالتحكم المحلي **أو** بتطبيق SmartThings، وليس الاثنين معًا، ويمكنك العودة في أي وقت.\n\nقبل البدء: يجب أن يكون التلفزيون قيد التشغيل، وأن يكون Home Assistant على شبكة التلفزيون (في Docker استخدم وضع الشبكة host) ليصل إليه التلفزيون على منفذ السحابة.",
         "menu_options": {
           "local_control_settings": "إعداد التحكم المحلي",
-          "local_control_release": "إيقافه وإعادة التلفزيون إلى SmartThings"
+          "local_control_release": "إيقافه وإعادة التلفزيون إلى SmartThings",
+          "local_control_reconnect": "إعادة توصيل التلفاز"
         }
       },
       "local_control_settings": {
@@ -296,6 +297,14 @@
           "local_control_lan": "استخدم أداة الشبكة المحلية على جهاز كمبيوتر",
           "local_control_settings": "تغيير إعدادات السحابة"
         }
+      },
+      "local_control_reconnect": {
+        "title": "إعادة توصيل التلفاز",
+        "description": "![إعادة التوصيل](/samstream_files/animations/connect.svg)\n\nإذا توقف {name} عن إرسال حالته إلى Home Assistant، فهذا يعيد تشغيل خدمة SmartThings فيه ليتصل من جديد.\n\n**انظر إلى التلفاز:** سيسألك هل تسمح لـ {name} بإعادة الاتصال. اختر **سماح** بجهاز التحكم.\n\nاختر إرسال للبدء."
+      },
+      "local_control_reconnected": {
+        "title": "تمت إعادة التوصيل",
+        "description": "![تم التوصيل](/samstream_files/animations/paired.svg)\n\n{name} متصل بـ Home Assistant مرة أخرى."
       }
     },
     "error": {
@@ -318,7 +327,8 @@
     },
     "progress": {
       "samsung_sign_in": "على أي حاسوب في شبكتك يحتوي على متصفح وNode.js، شغّل:\n\n`{command}`\n\nسيفتح صفحة تسجيل الدخول في سامسونج. سجّل الدخول بحسابك وستكمل هذه الشاشة تلقائيًا. الرمز صالح لمرة واحدة وينتهي خلال 10 دقائق.",
-      "onboarding": "![جارٍ الاتصال](/samstream_files/animations/loading.svg)\n\nجارٍ إعداد {name} وانتظار اتصاله بـ Home Assistant. قد يستغرق هذا حتى دقيقة."
+      "onboarding": "![جارٍ الاتصال](/samstream_files/animations/loading.svg)\n\nجارٍ إعداد {name} وانتظار اتصاله بـ Home Assistant. قد يستغرق هذا حتى دقيقة.",
+      "reconnecting": "![جارٍ إعادة التوصيل](/samstream_files/animations/connecting.svg)\n\nجارٍ إعادة تشغيل خدمة SmartThings في {name}. عندما يسألك التلفاز هل تسمح بإعادة الاتصال، اختر **سماح**. ننتظر حتى دقيقتين."
     },
     "abort": {
       "signing_ready": "توقيع التطبيق جاهز: {status}. استخدم زر «تثبيت تطبيق Samstream» في جهاز التلفاز.",
@@ -441,6 +451,11 @@
       "art_mode": {
         "name": "وضع الفن"
       }
+    },
+    "notify": {
+      "notifications": {
+        "name": "الإشعارات"
+      }
     }
   },
   "exceptions": {
@@ -521,6 +536,12 @@
     },
     "local_control_unavailable": {
       "message": "التحكم المحلي غير متصل بهذا التلفاز الآن."
+    },
+    "not_a_frame": {
+      "message": "هذا التلفاز ليس من نوع Frame، لذا لا يملك معرض أعمال فنية."
+    },
+    "art_file_unreadable": {
+      "message": "تعذّرت قراءة الصورة في {path}: {error}"
     }
   },
   "services": {
@@ -702,7 +723,7 @@
     },
     "art_mode": {
       "name": "تبديل وضع اللوحة الفنية",
-      "description": "على تلفاز Samsung The Frame، يبدّل بين التلفاز العادي ووضع اللوحة الفنية (الصورة المعروضة على الشاشة). يبدّل بينهما في كل مرة ولا يطفئ التلفاز تمامًا. اختيار اللوحة المعروضة غير ممكن عبر الاتصال المحلي في طُرز Frame الأحدث؛ يحتاج إلى SmartThings."
+      "description": "على تلفاز Samsung The Frame، يبدّل بين التلفاز العادي ووضع الفن (العمل الفني على الشاشة). يتبدّل بين الوضعين في كل مرة ولا يطفئ التلفاز تمامًا. لعرض عمل فني معيّن استخدم إجراء عرض عمل فني."
     },
     "open_url": {
       "name": "فتح رابط",
@@ -729,6 +750,44 @@
         "body": {
           "name": "المحتوى",
           "description": "مع post: الحقول المراد إرسالها."
+        }
+      }
+    },
+    "upload_art": {
+      "name": "رفع عمل فني",
+      "description": "ارفع صورة إلى \"صوري\" في تلفاز Frame لعرضها كعمل فني.",
+      "fields": {
+        "path": {
+          "name": "مسار الصورة",
+          "description": "مسار ملف الصورة داخل مجلد إعدادات Home Assistant."
+        },
+        "show": {
+          "name": "العرض الآن",
+          "description": "التبديل إلى الصورة المرفوعة على تلفاز Frame فوراً."
+        }
+      }
+    },
+    "select_art": {
+      "name": "عرض عمل فني",
+      "description": "يعرض عملًا فنيًا محفوظًا في وضع الفن على تلفاز Samsung Frame. احصل على المعرّفات من إجراء عرض قائمة الأعمال الفنية.",
+      "fields": {
+        "content_id": {
+          "name": "معرّف المحتوى",
+          "description": "العمل الفني المراد عرضه، مثل MY_F0003."
+        },
+        "matte": {
+          "name": "إطار الصورة",
+          "description": "غيّر إطارها أولًا: none أو نمط_لون مثل shadowbox_sand (يعرض إجراء قائمة الأعمال الفنية ما يدعمه التلفاز)."
+        }
+      }
+    },
+    "list_art": {
+      "name": "قائمة الأعمال الفنية",
+      "description": "يعيد الأعمال الفنية المحفوظة على تلفاز Samsung Frame: معرّف كل عمل ورابط صورته المصغّرة (صالح ليوم واحد)، والعمل المعروض الآن. استخدمه لبناء أداة اختيار في لوحة التحكم.",
+      "fields": {
+        "category": {
+          "name": "الفئة",
+          "description": "هذا المعرض فقط، مثل MY-C0002 لصوري. اتركه فارغًا لعرض الكل."
         }
       }
     }

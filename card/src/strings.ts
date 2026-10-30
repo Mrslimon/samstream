@@ -46,6 +46,22 @@ export interface Strings {
   noCameras: string;
   sent: string;
   failed: string;
+  art: string;
+  artUpload: string;
+  artBorder: string;
+  artNoBorder: string;
+  artApply: string;
+  artCropHint: string;
+  artSharp: string;
+  artFine: string;
+  artSoft: string;
+  artOnTv: string;
+  artCancel: string;
+  artUploadShow: string;
+  artUploading: string;
+  artUploaded: string;
+  artFailed: string;
+  artNotPicture: string;
 }
 
 const STRINGS: Record<Language, Strings> = {
@@ -95,6 +111,22 @@ const STRINGS: Record<Language, Strings> = {
     noCameras: "No cameras in Home Assistant yet.",
     sent: "Sent to the TV",
     failed: "Failed",
+    art: "Art",
+    artUpload: "Add picture",
+    artBorder: "Frame border",
+    artNoBorder: "None",
+    artApply: "Apply border",
+    artCropHint: "Drag to choose the part to show; zoom in for less. The dimmed part will not be on the TV.",
+    artSharp: "Sharp on the 4K screen",
+    artFine: "Fine, slightly enlarged",
+    artSoft: "Low resolution: it will look soft",
+    artOnTv: "On the TV",
+    artCancel: "Cancel",
+    artUploadShow: "Upload and show",
+    artUploading: "Uploading…",
+    artUploaded: "Added to My Photos and shown on the TV",
+    artFailed: "Could not reach the Frame's art gallery",
+    artNotPicture: "That file is not a picture this browser can open",
   },
   ar: {
     off: "مطفأ",
@@ -142,6 +174,22 @@ const STRINGS: Record<Language, Strings> = {
     noCameras: "لا توجد كاميرات في Home Assistant بعد.",
     sent: "أُرسل إلى التلفاز",
     failed: "فشل",
+    art: "الفن",
+    artUpload: "إضافة صورة",
+    artBorder: "إطار الصورة",
+    artNoBorder: "بلا إطار",
+    artApply: "تطبيق الإطار",
+    artCropHint: "اسحب لاختيار الجزء الذي يظهر، وكبّر لإظهار جزء أصغر. الجزء المعتم لن يظهر على التلفاز.",
+    artSharp: "واضحة على شاشة 4K",
+    artFine: "جيدة، مكبّرة قليلًا",
+    artSoft: "دقة منخفضة: ستبدو غير حادة",
+    artOnTv: "على التلفاز",
+    artCancel: "إلغاء",
+    artUploadShow: "رفع وعرض",
+    artUploading: "جارٍ الرفع…",
+    artUploaded: "أُضيفت إلى صوري وعُرضت على التلفاز",
+    artFailed: "تعذّر الوصول إلى معرض الفن في Frame",
+    artNotPicture: "هذا الملف ليس صورة يستطيع المتصفح فتحها",
   },
 };
 

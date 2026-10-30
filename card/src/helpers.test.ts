@@ -76,8 +76,9 @@ describe("sectionsOf", () => {
   });
 
   it("reads the switches of cards made before sections existed", () => {
-    expect(sectionsOf({})).toEqual(["tv", "cameras", "message", "apps", "remote", "media"]);
-    expect(sectionsOf({ show_cameras: false, show_remote: false })).toEqual(["tv", "message", "apps"]);
+    // Art is listed always and drawn only for a Frame.
+    expect(sectionsOf({})).toEqual(["tv", "cameras", "message", "apps", "remote", "media", "art"]);
+    expect(sectionsOf({ show_cameras: false, show_remote: false })).toEqual(["tv", "message", "apps", "art"]);
   });
 });
 

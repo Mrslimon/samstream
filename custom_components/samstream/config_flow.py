@@ -21,6 +21,7 @@ from aiosamstream import (
     SamsungTV,
 )
 from aiosamstream.ocf import (
+    CloudDevice,
     OnboardBundle,
     decode_credential,
     discover,
@@ -124,6 +125,11 @@ _LOGGER = logging.getLogger(__name__)
 
 # The access token identifies the TV to the local cloud: keep it unguessable.
 MIN_OCF_TOKEN = 16
+# Reconnect (Configure): wait for the TV before the restart, then for it to
+# come back once the viewer allowed it on screen.
+RECONNECT_WAIT = 30
+RESTART_SETTLE = 3
+RECONNECT_ALLOW_WAIT = 120
 
 STEP_USER_DATA_SCHEMA = vol.Schema({vol.Required(CONF_HOST): str})
 
@@ -726,6 +732,7 @@ class SamstreamOptionsFlow(_LocalControlSteps, OptionsFlow):
         self._retry_form_shown = False
         self._voice_webhook = ""
         self._ocf_token = ""
+        self._reconnect_task: asyncio.Task[bool] | None = None
         self._lc_init()
 
     @callback
@@ -888,7 +895,7 @@ class SamstreamOptionsFlow(_LocalControlSteps, OptionsFlow):
         """Intro: local control vs SmartThings, and the way back."""
         menu = ["local_control_settings"]
         if self.config_entry.options.get(CONF_OCF):
-            menu.append("local_control_release")
+            menu += ["local_control_reconnect", "local_control_release"]
         return self.async_show_menu(step_id="local_control", menu_options=menu)
 
     async def async_step_local_control_settings(
@@ -998,6 +1005,72 @@ class SamstreamOptionsFlow(_LocalControlSteps, OptionsFlow):
         self._lc_done_shown = True
         return self.async_show_form(
             step_id="local_control_done",
+            data_schema=vol.Schema({}),
+            description_placeholders={"name": self.config_entry.title},
+        )
+
+    async def async_step_local_control_reconnect(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Restart the TV's SmartThings service: it re-dials Home Assistant.
+
+        For a TV that stopped reporting. The TV asks on screen to allow it.
+        """
+        if user_input is None:
+            return self.async_show_form(
+                step_id="local_control_reconnect",
+                data_schema=vol.Schema({}),
+                description_placeholders={"name": self.config_entry.title},
+            )
+        self._reconnect_task = None
+        return await self.async_step_local_control_reconnect_wait()
+
+    async def async_step_local_control_reconnect_wait(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Wait for the TV to come back after the restart."""
+        if self._reconnect_task is None:
+            self._reconnect_task = self.hass.async_create_task(self._run_reconnect())
+        if not self._reconnect_task.done():
+            return self.async_show_progress(
+                step_id="local_control_reconnect_wait",
+                progress_action="reconnecting",
+                progress_task=self._reconnect_task,
+                description_placeholders={"name": self.config_entry.title},
+            )
+        back = self._reconnect_task.result()
+        self._reconnect_task = None
+        return self.async_show_progress_done(
+            next_step_id="local_control_reconnected"
+            if back
+            else "local_control_trouble"
+        )
+
+    async def _run_reconnect(self) -> bool:
+        """Send the restart; True once the TV has dialed back in."""
+        device: CloudDevice | None = (
+            self.config_entry.runtime_data.coordinator.ocf_device
+        )
+        if device is None:
+            return False
+        try:
+            if not await device.wait_connected(RECONNECT_WAIT):
+                return False
+            await device.restart_agent()
+        except OcfError:
+            return False
+        # It goes away while restarting, then dials in again once allowed.
+        await asyncio.sleep(RESTART_SETTLE)
+        return await device.wait_connected(RECONNECT_ALLOW_WAIT)
+
+    async def async_step_local_control_reconnected(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Back: the paired screen, then close."""
+        if user_input is not None:
+            return self.async_create_entry(data={**self.config_entry.options})
+        return self.async_show_form(
+            step_id="local_control_reconnected",
             data_schema=vol.Schema({}),
             description_placeholders={"name": self.config_entry.title},
         )
