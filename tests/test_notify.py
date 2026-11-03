@@ -36,6 +36,31 @@ async def test_falls_back_to_the_tv_notice(hass: HomeAssistant) -> None:
 
 
 @pytest.mark.usefixtures("setup_entry")
+async def test_identical_message_is_not_repeated(hass: HomeAssistant) -> None:
+    """A flood of the same message posts once; a different one still gets through."""
+    with patch(
+        "custom_components.samstream.notify.async_post_native",
+        AsyncMock(return_value=True),
+    ) as native:
+        for _ in range(3):
+            await hass.services.async_call(
+                "notify",
+                "send_message",
+                {"entity_id": NOTIFY, "title": "Motion", "message": "Driveway"},
+                blocking=True,
+            )
+        assert native.await_count == 1
+
+        await hass.services.async_call(
+            "notify",
+            "send_message",
+            {"entity_id": NOTIFY, "title": "Motion", "message": "Back gate"},
+            blocking=True,
+        )
+        assert native.await_count == 2
+
+
+@pytest.mark.usefixtures("setup_entry")
 async def test_native_notifier_skips_the_notice(hass: HomeAssistant) -> None:
     """A successful native post must not also take over the screen."""
     with (

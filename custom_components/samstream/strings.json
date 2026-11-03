@@ -43,7 +43,7 @@
       },
       "developer_mode": {
         "title": "Enable Developer Mode (to install the Samstream app)",
-        "description": "![Enabling Developer Mode](/samstream_files/animations/developer-mode.en.svg)\n\nTo let Home Assistant install its companion app on {name}, turn on Developer Mode on the TV:\n\n1. Open **Apps** from the Home screen.\n2. On the remote number pad, enter **1 2 3 4 5** (press the **123** button first if your remote has one).\n3. In the dialog, switch **Developer mode** to **On**, type **Home Assistant's IP address** (one part per box), then select **OK**.\n4. Hold **Power** for about 5 seconds until the TV restarts.\n\nThis is only needed to install the app — you can also do it later. Select Submit to continue."
+        "description": "![Enabling Developer Mode](/samstream_files/animations/developer-mode.en.svg)\n\nTo let Home Assistant install its companion app on {name}, turn on Developer Mode on the TV:\n\n1. Open **Apps** from the Home screen.\n2. On the remote number pad, enter **1 2 3 4 5** (press the **123** button first if your remote has one).\n3. In the dialog, switch **Developer mode** to **On**, type **Home Assistant's IP address**, {ha_host_boxes} (one part per box), then select **OK**.\n4. Hold **Power** for about 5 seconds until the TV restarts.\n\nThis is only needed to install the app — you can also do it later. Select Submit to continue."
       },
       "local_control_pin": {
         "title": "Enter the PIN from the TV",

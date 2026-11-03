@@ -107,6 +107,8 @@ from .coordinator import default_wol_target
 from .installer import (
     async_import_certificates,
     async_obtain_samsung_certificates,
+    ha_lan_host,
+    ip_boxes,
     resolve_package_path,
 )
 from .ocf import CloudSettings, async_get_service, new_token
@@ -531,10 +533,18 @@ class SamstreamConfigFlow(_LocalControlSteps, ConfigFlow, domain=DOMAIN):
         """Guidance: enable Developer Mode so HA can install the Samstream app."""
         if user_input is not None:
             return await self.async_step_local_offer()
+        host = ha_lan_host(self.hass) or "?"
         return self.async_show_form(
             step_id="developer_mode",
             data_schema=vol.Schema({}),
-            description_placeholders={"name": self._tv_name},
+            description_placeholders={
+                "name": self._tv_name,
+                # Show the exact IP (and RTL order for Arabic) to key into the
+                # TV's four boxes, so it is never confused with another machine.
+                "ha_host": host,
+                "ha_host_boxes": ip_boxes(host),
+                "ha_host_rtl": ip_boxes(host, reverse=True),
+            },
             last_step=False,
         )
 

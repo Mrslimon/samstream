@@ -23,6 +23,10 @@ from .tv_settings import ensure_tv_secret
 
 PARALLEL_UPDATES = 1
 NOTICE_SECONDS = 10.0
+# Don't repeat a byte-identical message while its notice could still be on screen:
+# a flood of the same "motion detected" collapses to one, distinct events still get
+# through, and the same text sent again after the window shows again.
+DEDUP_SECONDS = NOTICE_SECONDS
 
 
 async def async_setup_entry(
@@ -43,6 +47,8 @@ class SamstreamNotify(SamstreamEntity, NotifyEntity):
     def __init__(self, coordinator: SamstreamCoordinator) -> None:
         """Create the notify entity for the coordinator's TV."""
         super().__init__(coordinator, "notify")
+        self._last: tuple[str, str] | None = None
+        self._last_at = 0.0
 
     async def async_send_message(self, message: str, title: str | None = None) -> None:
         """Post a native TV notification; fall back to the on-screen notice.
@@ -51,7 +57,16 @@ class SamstreamNotify(SamstreamEntity, NotifyEntity):
         notification with a chime over whatever is playing, without interrupting
         it. When it is not installed or not reachable, show the message on the
         Samstream app instead, which briefly takes the screen and returns.
+
+        A byte-identical message repeated within `DEDUP_SECONDS` is dropped, so an
+        automation firing on every motion frame does not flood the screen.
         """
+        signature = (title or "", message)
+        now = self.hass.loop.time()
+        if signature == self._last and now - self._last_at < DEDUP_SECONDS:
+            return
+        self._last, self._last_at = signature, now
+
         entry = self.coordinator.config_entry
         host = entry.data.get(CONF_HOST)
         if host:
