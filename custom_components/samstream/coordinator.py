@@ -23,7 +23,6 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
     APP_SCAN_INTERVAL,
-    CONF_EXTRA_APPS,
     CONF_WOL_TARGET,
     DOMAIN,
     OCF_FRESH,
@@ -53,11 +52,6 @@ class SamstreamState:
     app_name: str | None = None
     # What the TV reports over local control (OCF); None when that is off.
     ocf: OcfTvState | None = None
-
-
-def parse_app_ids(text: str) -> list[str]:
-    """Split the "extra app IDs" option (comma, space or newline separated)."""
-    return [part for part in text.replace(",", " ").split() if part]
 
 
 def default_wol_target(host: str) -> str:
@@ -230,26 +224,25 @@ class SamstreamCoordinator(DataUpdateCoordinator[SamstreamState]):
             and now - self._apps_scanned_at < APP_SCAN_INTERVAL.total_seconds()
         ):
             return
-        extra = parse_app_ids(self.config_entry.options.get(CONF_EXTRA_APPS, ""))
         listed = await async_list_apps(self.hass, self.config_entry)
         if listed is not None:
-            # Developer Mode: the TV lists every app, catalog not needed.
+            # Developer Mode: the TV lists every app over sdb, so there is nothing
+            # left to probe and no need for a manual "extra app IDs" option.
             apps = {app.app_id: app.name for app in listed}
             versions = {app.app_id: app.version for app in listed}
             self.app_source = "tv"
-            missing = [app_id for app_id in extra if app_id not in apps]
+            missing: list[str] = []
         else:
+            # No sdb app list (Developer Mode off): probe the known catalog.
             apps, versions = {}, {}
             self.app_source = "catalog"
-            missing = [*KNOWN_APPS, *extra]
+            missing = [*KNOWN_APPS]
         if missing:
             try:
                 found = await self.tv.installed_apps(missing)
             except SamstreamError as err:
                 _LOGGER.debug("App scan on %s failed: %s", self.config_entry.title, err)
-                if listed is None:
-                    return
-                found = []
+                return
             apps |= {app.app_id: app.name for app in found}
             versions |= {app.app_id: app.version for app in found}
         self.apps = apps

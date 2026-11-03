@@ -49,7 +49,12 @@ from .app_signing import (
     async_save_signing,
 )
 from .const import CONF_DUID, DOMAIN
-from .tv_settings import add_package_settings, package_settings
+from .notifier import NOTIFIER_APP_ID, stamp_notifier_key
+from .tv_settings import (
+    add_package_settings,
+    ensure_tv_secret,
+    package_settings,
+)
 
 if TYPE_CHECKING:
     from . import SamstreamConfigEntry
@@ -59,6 +64,9 @@ _LOGGER = logging.getLogger(__name__)
 _KEY_STORE_VERSION = 1
 _KEY_STORE = f"{DOMAIN}.sdb_key"
 BUNDLED_PACKAGE = Path(__file__).parent / "bundled" / "samstream.wgt"
+# The native notifier (.NET, nodisplay) ships alongside the web app and is
+# installed in the same sdb session. It is signed with the same HA identity.
+BUNDLED_NOTIFIER = Path(__file__).parent / "bundled" / "notifier.tpk"
 # What vd_appinstall reports when the installed copy has another author.
 AUTHOR_MISMATCH = "Author certificate not match"
 
@@ -218,6 +226,52 @@ async def async_install_package(
         coordinator.async_update_listeners()
 
 
+# Both apps Samstream installs, removed together by the uninstall action.
+SAMSTREAM_APP_IDS = (SAMSTREAM_APP_ID, NOTIFIER_APP_ID)
+
+
+async def async_uninstall_package(
+    hass: HomeAssistant, entry: SamstreamConfigEntry
+) -> list[str]:
+    """Remove both Samstream apps from the TV; return the app IDs removed.
+
+    The counterpart to install: the two-package design means the web app and the
+    notifier both come off. sdb must be reachable (Developer Mode on) — an
+    unreachable TV raises the repair issue via `_sdb`. Each app is best-effort:
+    one that is already gone is not an error, so the other is still removed.
+    """
+    coordinator = entry.runtime_data.coordinator
+    if coordinator.installing:
+        raise HomeAssistantError(
+            translation_domain=DOMAIN, translation_key="install_in_progress"
+        )
+    coordinator.installing = True
+    coordinator.async_update_listeners()
+    try:
+        removed: list[str] = []
+        async with _sdb(hass, entry) as sdb:
+            for app_id in SAMSTREAM_APP_IDS:
+                try:
+                    output = await sdb.uninstall(app_id)
+                except SdbError as err:
+                    _LOGGER.warning(
+                        "Could not uninstall %s from %s: %s", app_id, entry.title, err
+                    )
+                    continue
+                if "uninstall completed" in output:
+                    removed.append(app_id)
+                    _LOGGER.info("Uninstalled %s from %s", app_id, entry.title)
+                else:
+                    _LOGGER.debug(
+                        "%s was not installed on %s: %s", app_id, entry.title, output
+                    )
+        await coordinator.async_rescan_apps()
+        return removed
+    finally:
+        coordinator.installing = False
+        coordinator.async_update_listeners()
+
+
 async def _async_install(
     hass: HomeAssistant, entry: SamstreamConfigEntry, package: Path | None
 ) -> InstallResult:
@@ -285,9 +339,73 @@ async def _async_install(
                 translation_key="install_failed",
                 translation_placeholders={"error": str(err)},
             ) from err
+        # The notifier rides on the same session. It is best-effort: the web
+        # app's on-screen notice is the fallback, so a notifier failure must
+        # not fail the install the user asked for.
+        await _async_install_notifier(hass, entry, sdb, setup)
     _LOGGER.info("Installed %s on %s", SAMSTREAM_APP_ID, entry.title)
     await entry.runtime_data.coordinator.async_rescan_apps()
     return result
+
+
+async def _async_install_notifier(
+    hass: HomeAssistant,
+    entry: SamstreamConfigEntry,
+    sdb: SdbClient,
+    setup: SigningSetup | None,
+) -> None:
+    """Stamp the TV secret, sign, and install the bundled notifier .tpk.
+
+    Shares the caller's sdb session (DUID already checked there). Never raises:
+    a missing package or an install error is logged and the web app stands on
+    its own.
+    """
+    if setup is None:
+        # A retail TV refuses an unsigned package, so there is nothing to try.
+        _LOGGER.debug("No signing set up; skipping the notifier install")
+        return
+    try:
+        tpk = await hass.async_add_executor_job(BUNDLED_NOTIFIER.read_bytes)
+    except OSError:
+        _LOGGER.warning("No bundled notifier at %s; skipping", BUNDLED_NOTIFIER)
+        return
+    # Stamp the TV secret first, then sign, so the signature covers the key.
+    secret = ensure_tv_secret(hass, entry)
+    tpk = await hass.async_add_executor_job(stamp_notifier_key, tpk, secret)
+    try:
+        tpk = await hass.async_add_executor_job(
+            sign_wgt, tpk, setup.author, setup.distributor
+        )
+    except SigningError as err:
+        _LOGGER.warning("Could not sign the notifier for %s: %s", entry.title, err)
+        return
+    try:
+        await _install_notifier_replacing_other_author(sdb, tpk, entry)
+    except SdbError as err:
+        _LOGGER.warning(
+            "Notifier install on %s failed (web-app notice still works): %s",
+            entry.title,
+            err,
+        )
+        return
+    _LOGGER.info("Installed %s on %s", NOTIFIER_APP_ID, entry.title)
+
+
+async def _install_notifier_replacing_other_author(
+    sdb: SdbClient, tpk: bytes, entry: SamstreamConfigEntry
+) -> InstallResult:
+    """Install the notifier; replace a copy signed by another author first."""
+    try:
+        return await sdb.install(tpk, NOTIFIER_APP_ID)
+    except SdbError as err:
+        if AUTHOR_MISMATCH not in str(err):
+            raise
+    _LOGGER.warning(
+        "Notifier on %s was signed by another author certificate; reinstalling",
+        entry.title,
+    )
+    await sdb.uninstall(NOTIFIER_APP_ID)
+    return await sdb.install(tpk, NOTIFIER_APP_ID)
 
 
 async def _install_replacing_other_author(

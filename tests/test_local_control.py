@@ -823,7 +823,11 @@ async def test_first_setup_unreachable_tv_uses_the_lan_helper(
     """HA cannot find the TV: LAN helper; finishing anyway keeps local control."""
     flows = hass.config_entries.flow
     flow = await _to_local_offer(hass)
-    with patch(f"{FLOW}.discover", side_effect=OcfError("no answer")):
+    # Unreachable now surfaces at the PIN trigger (tried first, before discovery).
+    with (
+        patch(f"{FLOW}.trigger_pin", side_effect=OcfError("no answer")),
+        patch(f"{FLOW}.discover", side_effect=OcfError("no answer")),
+    ):
         result = await flows.async_configure(flow, {"set_up": True})
     assert result["step_id"] == "local_control_connect_lan"
     with patch.object(

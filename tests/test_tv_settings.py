@@ -148,7 +148,8 @@ async def test_installed_package_carries_settings(
         "button", "press", {"entity_id": INSTALL_BUTTON}, blocking=True
     )
 
-    pushed, app_id = sdb.install.await_args.args
+    # The web app is the first install; the notifier rides along as the second.
+    pushed, app_id = sdb.install.await_args_list[0].args
     assert app_id == SAMSTREAM_APP_ID
     archive = zipfile.ZipFile(io.BytesIO(pushed))
     settings = json.loads(archive.read("samstream.json"))

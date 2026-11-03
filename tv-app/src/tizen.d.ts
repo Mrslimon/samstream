@@ -25,6 +25,12 @@ export interface TizenApplicationControl {
   uri: string | null;
 }
 
+/** A key/value extra passed with an ApplicationControl (built with `new tizen.ApplicationControlData`). */
+export interface TizenApplicationControlData {
+  key: string;
+  value: string[];
+}
+
 export interface AVPlay {
   open(url: string): void;
   close(): void;
@@ -72,6 +78,7 @@ declare global {
             id: string | null,
             success?: () => void,
             error?: (error: { name?: string; message?: string }) => void,
+            replyCallback?: unknown,
           ): void;
         };
         ApplicationControl: new (
@@ -79,8 +86,12 @@ declare global {
           uri?: string | null,
           mime?: string | null,
           category?: string | null,
-          data?: unknown[],
+          data?: TizenApplicationControlData[],
         ) => TizenApplicationControl;
+        ApplicationControlData: new (
+          key: string,
+          value: string[],
+        ) => TizenApplicationControlData;
       }
     | undefined;
 }

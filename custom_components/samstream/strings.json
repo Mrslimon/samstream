@@ -123,12 +123,10 @@
         "title": "Wake-on-LAN",
         "description": "Home Assistant wakes the TV with a Wake-on-LAN packet sent to this address. Use your network's broadcast address (for example 192.168.1.255). Inside Docker a global broadcast (255.255.255.255) does not reach the TV.",
         "data": {
-          "wol_target": "Wake-on-LAN address",
-          "extra_apps": "Extra app IDs"
+          "wol_target": "Wake-on-LAN address"
         },
         "data_description": {
-          "wol_target": "IPv4 broadcast address of the TV's network, or the TV's own IP.",
-          "extra_apps": "Tizen app IDs missing from the built-in list, separated by spaces or commas. Find an app's ID in the current app sensor while it is open."
+          "wol_target": "IPv4 broadcast address of the TV's network, or the TV's own IP."
         }
       },
       "init": {
@@ -574,6 +572,10 @@
           "description": "Optional. A .wgt relative to the config folder. Leave empty to install the Samstream app bundled with the integration, signed with Home Assistant's certificates."
         }
       }
+    },
+    "uninstall_app": {
+      "name": "Remove Samstream from the TV",
+      "description": "Removes the Samstream apps (the TV app and its notifier) from the TV over Developer Mode (sdb). Returns the apps that were removed."
     },
     "play_stream": {
       "name": "Play camera on TV",

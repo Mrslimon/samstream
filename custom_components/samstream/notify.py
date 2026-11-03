@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from homeassistant.components.notify import NotifyEntity
 from homeassistant.components.notify.const import NotifyEntityFeature
+from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
@@ -17,6 +18,8 @@ from . import SamstreamConfigEntry
 from .const import DOMAIN
 from .coordinator import SamstreamCoordinator
 from .entity import SamstreamEntity
+from .notifier import async_post_native
+from .tv_settings import ensure_tv_secret
 
 PARALLEL_UPDATES = 1
 NOTICE_SECONDS = 10.0
@@ -42,8 +45,22 @@ class SamstreamNotify(SamstreamEntity, NotifyEntity):
         super().__init__(coordinator, "notify")
 
     async def async_send_message(self, message: str, title: str | None = None) -> None:
-        """Show `message` (and `title`) on the TV for NOTICE_SECONDS."""
+        """Post a native TV notification; fall back to the on-screen notice.
+
+        The native notifier (the sideloaded .NET app) overlays a real Samsung
+        notification with a chime over whatever is playing, without interrupting
+        it. When it is not installed or not reachable, show the message on the
+        Samstream app instead, which briefly takes the screen and returns.
+        """
         entry = self.coordinator.config_entry
+        host = entry.data.get(CONF_HOST)
+        if host:
+            secret = ensure_tv_secret(self.hass, entry)
+            if await async_post_native(
+                self.hass, host, secret, title or "Samstream", message
+            ):
+                return
+
         player = er.async_get(self.hass).async_get_entity_id(
             "media_player", DOMAIN, f"{entry.unique_id or entry.entry_id}_media_player"
         )

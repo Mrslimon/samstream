@@ -505,7 +505,8 @@ async def test_button_signs_bundled_app(
         "button", "press", {"entity_id": INSTALL_BUTTON}, blocking=True
     )
 
-    pushed, app_id = sdb.install.await_args.args
+    # The web app is the first install (the notifier rides along as the second).
+    pushed, app_id = sdb.install.await_args_list[0].args
     assert app_id == SAMSTREAM_APP_ID
     names = zipfile.ZipFile(io.BytesIO(pushed)).namelist()
     assert names[:2] == ["author-signature.xml", "signature1.xml"]
@@ -539,7 +540,8 @@ async def test_button_unavailable_while_installing(
     release.set()
     await press
     assert hass.states.get(INSTALL_BUTTON).state != "unavailable"
-    assert sdb.install.await_count == 1
+    # The web app, then the notifier alongside it.
+    assert sdb.install.await_count == 2
 
 
 async def test_button_available_again_after_error(

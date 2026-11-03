@@ -245,6 +245,15 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     service.async_register_platform_entity_service(
         hass,
         DOMAIN,
+        "uninstall_app",
+        entity_domain=MEDIA_PLAYER_DOMAIN,
+        schema={},
+        func="async_uninstall_app",
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    service.async_register_platform_entity_service(
+        hass,
+        DOMAIN,
         "upload_art",
         entity_domain=MEDIA_PLAYER_DOMAIN,
         schema={

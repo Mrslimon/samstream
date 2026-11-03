@@ -35,6 +35,7 @@ from custom_components.samstream.installer import (
     ha_lan_host,
     ip_boxes,
 )
+from custom_components.samstream.notifier import NOTIFIER_APP_ID, NOTIFIER_KEY_FILE
 
 from .conftest import NETFLIX, YOUTUBE
 from .test_app_signing import setup_for
@@ -334,10 +335,101 @@ async def test_install_refused_when_certificate_lacks_tv(
     await hass.services.async_call(
         DOMAIN, "install_app", {"entity_id": TV}, blocking=True, return_response=True
     )
-    sdb.install.assert_awaited_once()
+    # The bundled web app installs, and the notifier rides on the same session.
+    installed_ids = [call.args[1] for call in sdb.install.await_args_list]
+    assert installed_ids == [SAMSTREAM_APP_ID, NOTIFIER_APP_ID]
     assert (
         ir.async_get(hass).async_get_issue(
             DOMAIN, f"duid_not_covered_{setup_entry.entry_id}"
         )
         is None
     )
+
+
+@pytest.mark.usefixtures("setup_entry")
+async def test_notifier_installed_alongside_signed_and_stamped(
+    hass: HomeAssistant, sdb: MagicMock
+) -> None:
+    """The bundled install also installs the notifier, key-stamped and signed."""
+    await async_save_signing(hass, setup_for(["EXCBZZZZGFIFJSY"]))
+    await hass.services.async_call(
+        DOMAIN, "install_app", {"entity_id": TV}, blocking=True, return_response=True
+    )
+    assert sdb.install.await_count == 2
+    notifier_tpk, app_id = sdb.install.await_args_list[1].args
+    assert app_id == NOTIFIER_APP_ID
+    names = zipfile.ZipFile(io.BytesIO(notifier_tpk)).namelist()
+    # The TV secret is stamped in, and HA re-signed it (covers the key file).
+    assert NOTIFIER_KEY_FILE in names
+    assert "author-signature.xml" in names
+    assert "signature1.xml" in names
+
+
+@pytest.mark.usefixtures("setup_entry")
+async def test_notifier_failure_does_not_fail_web_install(
+    hass: HomeAssistant, sdb: MagicMock
+) -> None:
+    """A notifier install error is swallowed; the web app install still succeeds."""
+    await async_save_signing(hass, setup_for(["EXCBZZZZGFIFJSY"]))
+    sdb.install.side_effect = [
+        InstallResult(SAMSTREAM_APP_ID, LOG),
+        SdbError("Install of org.samstream.notifier failed: whatever"),
+    ]
+    response = await hass.services.async_call(
+        DOMAIN, "install_app", {"entity_id": TV}, blocking=True, return_response=True
+    )
+    # The web app's result is returned even though the notifier install failed.
+    assert response[TV]["app_id"] == SAMSTREAM_APP_ID
+    assert sdb.install.await_count == 2
+
+
+async def _uninstall(hass: HomeAssistant) -> Any:
+    return await hass.services.async_call(
+        DOMAIN,
+        "uninstall_app",
+        {ATTR_ENTITY_ID: TV},
+        blocking=True,
+        return_response=True,
+    )
+
+
+@pytest.mark.usefixtures("setup_entry")
+async def test_uninstall_removes_both_apps(
+    hass: HomeAssistant, mock_tv: MagicMock, sdb: MagicMock
+) -> None:
+    """Uninstall removes the web app and the notifier, and reports both."""
+    mock_tv.installed_apps.return_value = [YOUTUBE, NETFLIX]
+    sdb.uninstall = AsyncMock(return_value="uninstall completed")
+
+    response = await _uninstall(hass)
+
+    assert response[TV]["removed"] == [SAMSTREAM_APP_ID, NOTIFIER_APP_ID]
+    removed_ids = [call.args[0] for call in sdb.uninstall.await_args_list]
+    assert removed_ids == [SAMSTREAM_APP_ID, NOTIFIER_APP_ID]
+
+
+@pytest.mark.usefixtures("setup_entry")
+async def test_uninstall_skips_an_app_that_is_not_installed(
+    hass: HomeAssistant, mock_tv: MagicMock, sdb: MagicMock
+) -> None:
+    """An app already gone is not reported, but the other is still removed."""
+    mock_tv.installed_apps.return_value = [YOUTUBE, NETFLIX]
+    sdb.uninstall = AsyncMock(
+        side_effect=["uninstall completed", "was get app info failed"]
+    )
+
+    response = await _uninstall(hass)
+
+    # The notifier was not installed; only the web app came off.
+    assert response[TV]["removed"] == [SAMSTREAM_APP_ID]
+    assert sdb.uninstall.await_count == 2
+
+
+@pytest.mark.usefixtures("setup_entry")
+async def test_uninstall_requires_sdb(
+    hass: HomeAssistant, sdb: MagicMock
+) -> None:
+    """When the TV refuses sdb, uninstall raises and the repair issue is created."""
+    sdb.connect = AsyncMock(side_effect=SdbConnectionError("refused"))
+    with pytest.raises(HomeAssistantError):
+        await _uninstall(hass)

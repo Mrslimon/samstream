@@ -45,3 +45,14 @@ oicseek/tv_state*.json
 
 # Scratch files
 scratchpad/
+
+# OCF / recovery spikes and tooling caches: keys, certs, device ACL dumps, vendored
+# deps and agent runtime state never go in git.
+oicseek/
+dsh-acl-recovery/
+tv-app/probe/
+.claude-flow/
+
+# .NET notifier build output (the prebuilt .tpk is bundled in the integration)
+tv-app/notifier-dotnet/bin/
+tv-app/notifier-dotnet/obj/

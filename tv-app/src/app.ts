@@ -44,6 +44,7 @@ export interface AppElements {
   hud: HTMLElement;
   hudLabel: HTMLElement;
   hudClock: HTMLElement;
+  controls: HTMLElement;
   noticeClock: HTMLElement;
   toast: HTMLElement;
   tvFrame: HTMLElement;
@@ -294,6 +295,8 @@ export class App {
   }
 
   private onPlayerKey(key: number): void {
+    // Any key wakes the camera chrome (top bar + controls), SmartThings-style.
+    this.showHud(this.streamLabel());
     if (key === KEY_RIGHT) this.play(this.current + 1);
     else if (key === KEY_LEFT) this.play(this.current - 1);
     else if (key === KEY_ENTER) this.play(this.current);
@@ -386,6 +389,8 @@ export class App {
   private setTvCorner(corner: Corner | undefined): void {
     const video = this.el.video;
     const frame = this.el.tvFrame;
+    // The full control cluster belongs to the full-screen camera, not the corner.
+    this.el.controls.hidden = Boolean(corner);
     const clear = () => {
       document.documentElement.classList.remove("tv-corner");
       video.style.clipPath = "";
@@ -455,11 +460,12 @@ export class App {
   private showHud(label: string): void {
     this.el.hudLabel.textContent = label;
     this.el.hud.classList.remove("compact");
+    this.el.controls.classList.remove("dim");
     clearTimeout(this.hudTimer);
-    this.hudTimer = setTimeout(
-      () => this.el.hud.classList.add("compact"),
-      HUD_FULL_MS,
-    );
+    this.hudTimer = setTimeout(() => {
+      this.el.hud.classList.add("compact");
+      this.el.controls.classList.add("dim");
+    }, HUD_FULL_MS);
   }
 
   private updateClock(): void {

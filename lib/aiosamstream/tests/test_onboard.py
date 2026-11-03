@@ -87,6 +87,20 @@ def test_trigger_pin_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
     onboard.trigger_pin("192.0.2.1")  # 2.04 Changed: the TV shows its PIN
 
 
+def test_trigger_pin_retries_a_dropped_packet(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A lost first datagram is retried, not treated as an unreachable TV."""
+    replies = [None, SimpleNamespace(code=0x44, payload=b"")]  # drop, then 2.04
+
+    def request(_ip: str, _href: str, code: int, **_: object) -> object:
+        return replies.pop(0) if code == POST else None
+
+    monkeypatch.setattr(onboard, "_plain_request", request)
+    onboard.trigger_pin("192.0.2.1")  # succeeds on the second try
+    assert replies == []  # both the dropped attempt and the retry were used
+
+
 def _response(
     token: bytes,
     code: int,

@@ -206,9 +206,15 @@ Source: PatrickSt1991/Samsung-Jellyfin-Installer (MIT), `Apps2Samsung.Core/Certi
 - **Architecture change:** milestone 8 plays MSE, not AVPlay. Milestone 10 adds an HA WebSocket proxy view to HA's built-in go2rtc, so the TV never talks to go2rtc directly. The proxy also avoids go2rtc's same-origin check, which rejects the TV app's `file://` origin.
 
 ### Roadmap addition (after milestone 6, 2026-10-21)
-- **7c. Revisit app detection with the full app list.**
-  - **Problem today:** 2020+ firmware does not answer `ed.installedApp.get`, so milestone 6 probes a catalog of known IDs, plus the user's "Extra app IDs" option, through `GET /api/v2/applications/<id>`. The current app is the one reporting `visible: true` (YouTube was confirmed on the QN800C).
-  - **Fix:** once milestone 7's sdb client works, read the real installed list from the TV (`vd_applist` / `pkgcmd`) and feed the scan from it. Drop the catalog to a fallback for TVs without Developer Mode, and remove the need for manual extra IDs.
+- **7c. Revisit app detection with the full app list — DONE (2026-11-03).** The coordinator reads the TV's full
+  installed-app list over sdb (`async_list_apps` → `vd_applist`) whenever Developer Mode is on (`app_source="tv"`),
+  so there is nothing left to probe. The REST catalog (`KNOWN_APPS`) is now only an automatic fallback for a TV
+  without Developer Mode (`app_source="catalog"`). **The manual "Extra app IDs" option was REMOVED (user request,
+  2026-11-03):** the field is gone from the options flow, the coordinator no longer reads it, and `async_step_network`
+  strips a stored `extra_apps` from existing entries on next save. `parse_app_ids` deleted; strings/ar/en cleaned.
+  - *(history) Problem was:* 2020+ firmware does not answer `ed.installedApp.get`, so milestone 6 probed a catalog
+    plus a manual "Extra app IDs" option. The sdb `vd_applist` returns the real list (23 apps on the QN800C), so the
+    manual option is obsolete.
   - **Also re-check:** whether the full list exposes home / Live TV / HDMI, which are "unknown" today, and whether foreground detection can avoid polling every app ID.
 
 ### Roadmap additions (2026-10-21)
@@ -413,6 +419,18 @@ Researched ollo69/ha-samsungtv-smart for features we lack. Its `set_art_mode` on
        (input, app, volume) shows on screen.
     7. **Trade-off reminder + release:** while local control is on, SmartThings can't see the TV;
        Options → "Release local control" gives it back without a reset.
+  - **OCF onboarding robustness fix (2026-11-03, user hit it):** the PIN appeared ~30-40 s late and setup kept
+    dropping to the LAN helper. Root causes + fixes: (a) `local_control_connect` ran the slow `discover`
+    (unicast ×3 + multicast, up to ~24 s) BEFORE `trigger_pin`, so the PIN only fired at the end — **reordered to
+    trigger the PIN first** (shows in ~1 s; it also proves reachability, so discovery no longer waits on flaky
+    retries); (b) `_plain_request` parsed any datagram that arrived without matching it to the request, so a stray/
+    retransmitted packet raised `CoapError` that escaped uncaught (crashing the step or forcing LAN) — **now caught →
+    `None`**; (c) `trigger_pin` broke out on the first non-success reply — **now retries the `oxmsel` POST 3× and only
+    then reads the owned-state**, so a one-off bad datagram is absorbed. Verified: a raw probe from the HA container
+    showed the POST returns 2.04 and the DOXM GET parses (owned=false) when the TV is answering. **Caveat (TV state,
+    not code):** the TV answers plain CoAP on 5683 only while awake and in its provisioning window — it idles and goes
+    silent (hence step 2 wakes it and every step has retry). Tests: `lib/.../test_onboard.py` (PIN retry),
+    `tests/test_local_control.py` (unreachable surfaces at the trigger).
   - **Port 5684 detection (built with OCF, last).** The integration installs via HACS on any HA, so at
     enable time it finds out whether the TV can reach HA on TCP 5684, and says exactly how to open it:
     - Read `installation_type` from `homeassistant.helpers.system_info.async_get_system_info`:
@@ -583,3 +601,178 @@ Samstream app is already installed and can be launched via HA.
 - **Onboarding:** pointing the TV at HA still needs the DTLS owner session (the oicseek tools on a PC) until a supported DTLS path exists.
 - **Not yet verified:** commands (POST) over the cloud channel.
 - **Privacy:** `/sec/tv/appdata/ssoservice` carries the Samsung account email. Never log it or store it, and redact it in diagnostics.
+
+### Roadmap addition (2026-10-30): Quick Settings channel and a native TV alert (both before 22 and 23)
+Found by logging the SmartThings TV plugin (WEBTVPlugin 4.IR02.0922) over adb. The plugin talks to the TV **locally**, over the same `wss://<tv>:8002/api/v2/channels/<id>` websocket we use for art.
+
+- **19d. Quick Settings over `com.samsung.tv.mobilebff`.**
+  - **Message shape:** each message is an `ms.channel.emit` with event `/sec/tv/appdata/mobilebff`. Its data is a JSON string `{"version":"0.2","id":"<cmd>","seqId":"..","lastUpdated":"","params":{..},"timeout":10000}`, and the reply carries `statusCode:"100"`.
+  - **Verified from the laptop (Frame @ .22):** `get.system.info.bool`, and `get.settings.data`, which returns the whole Quick Settings menu: Picture Mode, Sound Mode, Sound Output, Game Mode (Off/On/Auto), Subtitle, Sleep Timer (Off/30/60/120/180), AI Mode, Energy Saving, Multi View, Brightness (25/50). Each entry has title, subTitle, the current index, and per-choice ids like `s/setting.layer.gamemode@On` with `actionType` toggle/list and `dim` (greyed out). The TV also pushes `event.setting.update` whenever a setting changes.
+  - **Still to capture:** the **write** command. Use adb logcat of the SmartThings plugin while changing Sleep Timer, Game Mode, Sound Mode and Subtitle from the phone. Do not pin `-s ip:port`, because the wireless-debugging port changes on reconnect.
+  - **Deliver:** `select` entities (picture mode, sound mode, game mode, sleep timer, sound output), switches (energy saving, AI mode), a subtitle select, and a brightness number. Each entity is created only if the TV lists that setting, and is unavailable while `dim` is true.
+  - **Verify:** change each one from HA and see it on the TV. Change it on the TV and see HA update from the push.
+- **19e. Native TV alert through the TV's SmartThings Hub (Matter) — DROPPED 2026-11-03 (user).** Superseded by
+  the sideloaded **.NET notifier** (24a–d), which does better: a native Samsung popup with a chime **and our own
+  custom text**, overlaid on whatever is playing, fully local, no phone and no SmartThings pairing. The Matter
+  leak-sensor route only ever gave a fixed device-name title. Removed from scope; kept here for history only.
+  - ~~The idea: Samsung TVs show a native popup with a chime when a SmartThings doorbell rings. The TV's built-in
+    SmartThings Hub is a Matter controller. HA exposes a virtual doorbell to that hub through a Matter bridge, and
+    `notify` presses it. The popup text is Samsung's, not ours.~~
+- **Not usable as a notification:** the SmartThings "this TV needs reset" popup. That is OCF Easy Setup `sendResetProvisioningInfo` (native code in the app), sent when the TV belongs to another account. Pressing OK on the TV drops its owner. It goes in the guided setup (22) as the way to hand the TV back, never as an alert. Routine "Notify" actions only reach members' phones.
+
+### ★ BREAKTHROUGH (2026-11-03): a sideloaded .NET app posts a native custom-text notification (with chime) — the "dead end" below is OVERTURNED for the .NET path
+The 2026-11-02 verdict only closed the **web-app** route. A minimal **Tizen.NET** app (`tv-app/noti-probe-dotnet/`) calling `Tizen.Applications.Notifications.NotificationManager.Post(new Notification{Title,Content})` — privilege `http://tizen.org/privilege/notification` (public level), signed with HA's Samsung cert — **rendered a native Samsung notification in the upper-right WITH a chime and our own text** on the QN800C (Tizen 9), confirmed on screen by the user. So `feature/notification=false` gates only the **web** `tizen.notification` API; the **.NET** `NotificationManager` path is not gated and works for a public-cert app. This gives LOCAL + NATIVE + CUSTOM-TEXT notifications without Matter and without the platform-only `iot-service-notification-v2`.
+- **Build/sign/install that worked:** .NET SDK 10 only (no workload); enable a NuGet source first (`dotnet nuget add source https://api.nuget.org/v3/index.json`), then `<Project Sdk="Tizen.NET.Sdk">` + `global.json` pin `Tizen.NET.Sdk 1.2.1` + TFM `tizen40` + `Tizen.NET 6.0.0.14995` → `dotnet build -c Release` emits a `.tpk`. A `.tpk` signs exactly like a `.wgt` (`aiosamstream.signing.sign_wgt` after stripping the default signatures); HA's distributor cert covers both TV DUIDs. Install via `tizen install`, launch via `sdb shell app_launcher`. Retail sdb blocks shell stdout / pull / dlog, so the probe painted its result on screen. See [[samstream-tv-notifications]].
+- **New milestone — 16/19 revision: ship a `.NET` "notifier" companion app. FULL PATH PROVEN 2026-11-03.** `tv-app/notifier-dotnet` is a Tizen.NET UI app that starts an HTTP listener on `:8181` and stays resident; `GET http://<tv-ip>:8181/?title=..&content=..` makes it call `NotificationManager.Post`, and the native notification **overlays the foreground app** (confirmed over YouTube, video uninterrupted, chime + both text fields). So HA fires a TV notification with a plain HTTP GET — local, native, custom-text, non-interrupting. This is the PRIMARY notification route; Matter leak-sensor (19f) demotes to a no-sideload fallback.
+  - **Gotchas proven:** the NUI drain `Timer` must be a retained field (a local gets GC'd → silently stops → "HTTP 200 but no notification"); `sdb app_launcher` can't start/trigger a sideloaded app here (queues + floods on manual open) so the app must start in-system (on-boot / user / another app's launchAppControl); NUI UI text only updates on the main thread.
+  - Build/sign/install recipe + the breakthrough details in [[samstream-tv-notifications]]. Starting point = `tv-app/notifier-dotnet` (the proven HTTP notifier).
+
+### Milestone 25 (user request, 2026-11-03): uninstall the TV apps from HA configuration
+- **Goal:** from HA (options flow + a button/service), **uninstall the apps Samstream installed on the TV**
+  — the web app (`SmStrm0001.Samstream`) and the notifier (`org.samstream.notifier`) — so the user can cleanly
+  remove Samstream from the TV without a PC or sdb tooling. Natural cleanup counterpart to the install path, and
+  needed because the two-package design means two apps to remove.
+- **Mechanism:** `aiosamstream`'s sdb client already does `sdb.uninstall(app_id)` (used in installer.py's
+  author-mismatch reinstall). Add `async_uninstall_package(app_id)` + a service `samstream.uninstall_app` and/or an
+  options-flow step "Remove Samstream from the TV" that uninstalls both apps (confirm first), with a repairs/notice
+  on success. Also offer it when the integration/entry is removed (best-effort, non-blocking). Gate behind sdb being
+  reachable (Developer Mode on); clear error if not.
+- **DONE (2026-11-03, needs on-device verify).** `installer.async_uninstall_package(hass, entry)` removes BOTH apps
+  (`SAMSTREAM_APP_IDS = (SmStrm0001.Samstream, org.samstream.notifier)`) in one sdb session via `sdb.uninstall`;
+  best-effort per app (an app that is already gone — `"was get app info failed"` — is skipped, not an error, so the
+  other still comes off), returns the list actually removed, then `async_rescan_apps`. Reuses `_sdb` so an
+  unreachable TV raises the same Developer-Mode repair issue the install path uses, and reuses `coordinator.installing`
+  so install and uninstall can't overlap. Exposed as the `samstream.uninstall_app` **service** (media_player
+  `async_uninstall_app` → response `{"removed": [...]}`), registered in `__init__.py`, with `services.yaml` +
+  `strings.json` text ("Remove Samstream from the TV"). Chose a deliberate service over a one-tap button for a
+  destructive action; an options-flow "remove" step and the on-entry-removal hook remain optional follow-ups. Tests:
+  `test_installer.py` (removes both, skips an absent app, requires sdb).
+- **Verify — DONE (2026-11-03, QN800C):** `samstream.uninstall_app` from HA removed both (`removed: [SmStrm0001.Samstream, org.samstream.notifier]`); a follow-up `install_app` reinstalled both cleanly. Full install→uninstall→reinstall cycle driven entirely from HA.
+
+### Camera-regression learning (2026-11-03, during the on-device notifier spike)
+- **Never install a hand-run `npm run build` onto a TV.** `npm run build` loads `.env.local`, which bakes
+  `VITE_SPIKE_STREAMS` (dev streams at the laptop's go2rtc) into the bundle → the app's play path hits a dead
+  dev stream → **"WebSocket error"** and the camera won't play. The real bundle is built by
+  `scripts/bundle_tv_app.py`, which forces `VITE_SPIKE_STREAMS=""` and rejects any stream URL in the output. Fix
+  was to rebuild with that script and reinstall; it also now carries the `startNotifier` change.
+
+### Milestone 24 (to build): productionise the native .NET notifier
+Starting point is the working spike in `tv-app/notifier-dotnet` (Tizen.NET, `tizen40`, HTTP listener on `:8181`, `NotificationManager.Post`). Build steps, each verifiable:
+
+- **24a. Harden the notifier app — DONE (2026-11-03, needs on-device re-verify of the auth path).**
+  - **"Encrypted, only HA can control" is a signed request, not a plain token.** Each post carries
+    `?title=&content=&ts=&nonce=&sig=`, where `sig = hex(HMAC_SHA256(secret, ts "\n" nonce "\n" title "\n" content))`.
+    The notifier recomputes the HMAC with its copy of the secret and refuses (401, before any work) anything
+    whose signature is wrong, whose `ts` is more than 30 s from its clock, or whose `nonce` it has already seen
+    inside that window (single-use → captured requests can't replay). Constant-time compare; **fail closed** —
+    with no key installed, every post is refused. A plain `?token=` was rejected as the design because it is a
+    bearer secret that replays if sniffed on the LAN; the HMAC gives the same "only HA" guarantee and can't be
+    replayed. (True payload *confidentiality* would need AES-GCM or TLS; the notification text ends up on the
+    screen anyway, so authentication — not secrecy — is the control that matters. AES-GCM over the query is a
+    cheap later upgrade with the same key if wanted.)
+  - **The secret is the existing per-TV `tv_secret`.** HA stamps it into the package as `res/shared.key`
+    (`notifier.stamp_notifier_key`, a pure zip rewrite — no .NET toolchain in HA, mirrors `samstream.json`),
+    and the notifier reads it from its resource dir. Same credential the web app's `/session` uses.
+  - Kept the main-thread drain-`Timer`-as-a-field pattern (a local Timer gets GC'd — proven). Returns
+    `{"ok":true}`; added **`GET /health`** (no auth) so HA can see the app is resident (24b).
+  - **Built:** `tv-app/notifier-dotnet/Program.cs` (compiles to a fresh `.tpk`), `custom_components/samstream/notifier.py`
+    (signer, `async_post_native`, `async_notifier_alive`, `stamp_notifier_key`), `notify.py` now tries the native
+    notifier first and falls back to the on-screen notice. Tests: `tests/test_notifier.py` (sign/verify agreement,
+    fresh nonce, stamp roundtrip, health, post ok/refused/unreachable) + `tests/test_notify.py` (native-first,
+    fallback). Crypto agreement and the zip stamp verified standalone; ruff clean; HA-harness tests run in CI
+    (not installable on native Windows). **Still to verify on the TV:** a signed GET posts; a wrong/absent/old/replayed
+    `sig` is refused; `/health` answers.
+- **Single app vs. without an icon (answering the user's 2026-11-03 question).** The notification path is
+  **only** reachable from .NET (`NotificationManager.Post`); the web `tizen.notification` API is dead on these
+  TVs (`feature/notification=false`), so the notifier cannot be merged into the HTML web app and keep working.
+  "One app" therefore means one of:
+  - **(A) Hybrid Tizen package** — one package id / one launcher icon containing the web UI-app + a .NET
+    service-app; the web component starts the service in-package. Genuine single app and single icon. **Risk:**
+    hybrid web+.NET packaging and signing on this TV is unverified, and the earlier `nodisplay`/service variants
+    never started (partly the sdb-can't-launch limitation). Needs an on-device spike.
+  - **(B) Two packages, behaves as one (lowest risk, recommended interim)** — keep the notifier its own tiny
+    package but have the Samstream **web app auto-start it** via `launchAppControl(org.samstream.notifier)`
+    (the `openExternal`/`launchAppControl` primitive already exists in `tv-app/src/app.ts`). The user only ever
+    opens Samstream; the notifier rides along. HA's `/health` + re-trigger covers a kill.
+  - **Without an icon** = `nodisplay="true"` (or a `service-application`): no launcher icon. Viable **only**
+    coupled with a reliable auto-start (an iconless app can't be opened by hand), so it depends on (A) or (B)'s
+    start path. The spike's failed `nodisplay` attempts were really launch failures (sdb can't start sideloaded
+    apps), so this needs re-testing once the web app does the launching.
+  - **SPIKE RESULT (2026-11-03, on the QN800C): the true single hybrid (A) is NOT possible; shipped (B) with
+    the same UX.** Tizen Studio has no Web-UI + .NET hybrid: `tizen package -t wgt -r <notifier.tpk>` is rejected
+    ("reference must be a web widget"), native-primary rejects a .NET build dir, and the only web hybrid template
+    is WebWebUIServiceApplication (web UI + *web* JS service) — and a JS service can't post notifications. So the
+    notifier ships as **its own `nodisplay` package `org.samstream.notifier`** (no launcher icon) and the web app
+    **auto-starts it** — same result the user wanted: one visible icon, seamless.
+    - the web app **starts the notifier and hands it the secret** on boot — `tv-app/src/notifier.ts` (`startNotifier`
+      → `launchAppControl(org.samstream.notifier, extras={samstream_secret})`), wired in `main.ts`; the notifier
+      reads that secret in `OnAppControlReceived`, falling back to a stamped `res/shared.key`;
+    - `npm run tv:notifier` builds the `.tpk`; `tv:notifier-install` installs it (`tv-app/scripts/tizen.mjs`).
+    - **UX fix (found + fixed on-device):** launching the notifier brought its NUI window to the FRONT over
+      Samstream (a black screen that broke the camera, since Samstream was no longer foreground). `Window.Lower()`
+      alone is unreliable (can surface Home). Fix: the notifier **re-raises Samstream** after starting
+      (`AppControl … SendLaunchRequest`, needs `application.launch`), plus `Lower()` and `SetAcceptFocus(false)` and
+      a brand-navy (not black) window. No loop: the web app starts the notifier only on a fresh `boot()`, never on
+      the appcontrol re-raise.
+    - **VERIFIED on the QN800C (2026-11-03):** signed notifier installs with HA's cert (no err 118); web app's
+      `startNotifier` starts the nodisplay notifier (`/health` 200 first poll); auth fully holds
+      (unsigned/bad-sig/stale → 401, valid signed → 200, replay → 401); after launch Samstream is `visible:true`
+      (foreground) and a signed post overlays it with the notifier backgrounded. Signing done inside the HA
+      container (keys/secret stay on the server); install from the laptop (the TV's dev-mode host). **User visual
+      confirm of the overlay + camera pending.**
+    - **Still open:** keep-resident across standby (a bare REST re-raise won't restart a dead notifier — only a
+      fresh `boot()` does; consider `on-boot` / a health-check re-trigger), and cold `notify` before the web app
+      was ever opened (the stamped `res/shared.key` covers the key; the app just needs to be running). TV app: 40
+      vitest + typecheck clean. See `docs/hybrid-package.md`.
+- **24b. Keep it resident — web-app auto-start VERIFIED (2026-11-03), on-boot/standby survival is the spike.** The
+  Samstream **web app** calls `launchAppControl(org.samstream.notifier)` on boot (`tv-app/src/notifier.ts`,
+  `main.ts`), so the notifier runs whenever Samstream has been opened — and an in-package launch sidesteps the
+  "sdb can't start a sideloaded app" limitation. HA has a liveness check (`notifier.async_notifier_alive` →
+  `GET /health`). **VERIFIED end-to-end 2026-11-03 (QN800C):** after HA reinstalled both apps and launched Samstream
+  via `launch_app`, the notifier came up on its own (`/health` 200 within ~6 s) and `notify.send_message` posted a
+  native toast — the whole chain (HA install → HA launch → notifier auto-start → signed notify → overlay) driven from
+  HA. **Still to decide/verify on the TV:** survival across a standby/wake cycle; whether to add `on-boot="true"`
+  and/or a shared-data-dir key so a cold `notify` works before the web app was ever opened (see
+  `docs/hybrid-package.md`).
+- **24c. HA `notify` integration — DONE (2026-11-03).** `custom_components/samstream/notifier.py`
+  (`async_post_native`) issues the **signed** `GET http://<tv>:8181/notify?title=&content=&ts=&nonce=&sig=`
+  (per-TV host + `tv_secret`; never raises — a miss falls back). `notify.py`'s `async_send_message` tries the
+  native notifier first and falls back to the on-screen Samstream notice (`show_message`) when it is unreachable
+  or refuses. Diagnostics redaction of
+  the secret is already covered by the existing `tv_secret` redaction. Tests: `tests/test_notify.py` (native-first
+  + fallback), `tests/test_notifier.py`.
+- **24d. Zero-config install of the notifier — DONE (2026-11-03, needs on-device end-to-end from HA).** The unsigned notifier `.tpk` is bundled at `custom_components/samstream/bundled/notifier.tpk` (built by `dotnet build -c Release` in `tv-app/notifier-dotnet`, no `res/shared.key`, icons `res/icons/{samstream,info}.png` included). `installer._async_install` now installs it **in the same sdb session** right after the web app: `_async_install_notifier` reads the bundle, stamps `res/shared.key`=`ensure_tv_secret` (via `notifier.stamp_notifier_key`), re-signs with the per-TV HA identity (`sign_wgt` strips the build's default Tizen sigs; distributor cert already covers the DUID checked for the web app), and `sdb.install(tpk, NOTIFIER_APP_ID)` — replacing an other-author copy first. **Best-effort:** gated on signing being set up, and any failure is logged (the web-app on-screen notice is the fallback), so it never fails the install the user asked for. Build-time `.tpk` build+sign is NOT needed in HA (no .NET toolchain) — the bundle is prebuilt and HA only stamps+signs (pure zip + XML-DSig). Tests: `test_installer.py` (installed alongside, stamped+signed, failure-isolated). **ON-DEVICE VERIFIED (2026-11-03, QN800C):** `samstream.install_app` (bundled) from HA alone signed+installed BOTH apps (log: `Installed org.samstream.notifier` + `Installed SmStrm0001.Samstream`). Needed the TV's Developer Mode Host PC IP set to the HA server **192.168.1.5** (was the laptop .21); the integration raises a clear repair/error until it is.
+- **24e. Polish.** Notification styling/options (icon, severity → style), de-duplication (avoid repeat floods), behaviour when the TV is off/standby (does the chime wake anything? document), and localisation (Arabic RTL text in `content`).
+- **Verify (end to end):** from HA, `notify` → native notification overlays whatever is playing on the TV with custom text + chime, no interruption; unauthenticated posts are rejected; the notifier auto-recovers after standby.
+
+### Decision (2026-11-02, SUPERSEDED by the 2026-11-03 breakthrough above for custom text): native popup = Matter leak sensor only; direct triggering of the TV's notification app is a confirmed dead end
+Empirically closed on the Frame (QA55LS03DAUXEG) with a signed probe web app running the tests in-page. `com.samsung.tv.iot-service-notification-v2` is the app that renders Samsung's native SmartThings popups (its resources are all doorbell/camera/leak assets). It cannot be triggered by any non-platform (web / partner-signed) app:
+- **message-port:** 6 notification/SmartThings apps × 18 port names × trusted+untrusted = 216/216 `NotFoundError`, including against the *running* `com.samsung.tizen.smartthings-client`.
+- **app-control / launch_on_event:** firing its only declared control (`operation/launch_on_event` + uri `file:///tmp/IoT_S_Notification`), explicit and implicit, with a rich payload → `UnknownError`; the target app never launched and nothing appeared on screen. That event is a reserved platform event-broker (esd) event, not publishable from the Web Device API (no `eventsystem` in `tizen.*`).
+- **OCF:** the app is `use.network=false`, fed by the on-device SmartThings hub; no LAN-reachable OCF resource originates a notification render.
+So the native popup can only be driven by a device event on the TV's built-in SmartThings hub → **ship 19f (Matter leak sensor) for the native popup+chime, and the Samstream app-launch notice for custom text.** (Tooling note: on this TV `appcmd_support:disabled` is normal and does not block installs; raw `sdb install` only pushes — use the Tizen IDE CLI `tizen install` for the real pkgcmd handshake. Dev-mode host = laptop 192.168.1.21; only HA's Samsung cert installs.)
+
+### Roadmap addition (2026-10-30): native TV popup via a disposable Matter leak sensor — DROPPED 2026-11-03 (user)
+**DROPPED.** This whole Matter-leak-sensor native-alert line is removed from scope. The sideloaded **.NET notifier**
+(24a–d, verified on-device) does strictly better: a native Samsung popup with a chime **and arbitrary custom text**,
+overlaid on the running app, with no phone, no SmartThings pairing, and no device to create/tear down. The research
+below is kept only for history (it remains true: a Matter leak sensor does pop up, but only with a fixed device-name
+title). See [[samstream-tv-notifications]].
+
+- ~~**19f. Native alert.** On `notify`, present a Matter leak sensor to the TV's SmartThings hub, set it to "leak",
+  let the TV pop up, then remove the device again. (title = device name, no custom text.)~~ **DROPPED — use the .NET notifier.**
+  - *(history)* Eligibility tested: the TV's Notification list pops up for a **leak sensor** only (not button/doorbell/
+    contact/motion/smoke); title = device name at pairing. Would have needed a minimal Matter device in the
+    integration and a one-time phone pairing — all obviated by the notifier.
+### Roadmap addition (2026-11-03): investigate tizen-camera-pip for the camera implementation
+- **23. Investigate `dzikus/tizen-camera-pip` — DONE 2026-11-03, verdict: camera-over-content PiP is NOT achievable; keep the current renderer.** That project is a **web app like ours** and hit the **same wall milestone 17 found**: compositing live input behind the app's HTML (`show()`) makes the platform **unload the app ~2.9 s later**, in every variant. Its `camera-corner`/`source-corner` layouts use `tvwindow` (the TV's own tuner/HDMI PiP, not an arbitrary RTSP camera) and fall back; the **only reliable layout is `fullscreen`**, where it plays one camera through AVPlay's hardware decoder and, on exit, relaunches the previously-watched app by ID over the local REST API — i.e. exactly our `play_stream` + `return_to_previous`. It uses only the **public-level `tv.window`** privilege (dev cert), so no hidden capability. Independent web search confirms "you cannot [overlay] over other application unless you have ownership and source code"; true overlay needs the **platform-only `window.priority.set`** (same gate as the native-notification research — see [[samstream-tv-notifications]]), which our HA/partner cert cannot get. **Conclusion:** there is nothing to swap in for the corner logic — keep full-screen camera + return-to-previous as the cross-app path, and the native `tvwindow` corner only for the TV's own sources. Sources: github.com/dzikus/tizen-camera-pip, Tizen forum "Showing Overlay Elements over 3rd party app".
+
+### Roadmap addition (2026-11-03): TV app visual redesign from scratch — DONE (supersedes the 7b UI spec)
+- **TV app redesigned from scratch in a new theme ("Night watch"), per the user's "design from scratch / new theme" directive**, driven by the `design-taste-frontend` skill's house rules and laws (not its web draw — a fixed 1920×1080 D-pad app has no scroll scenes or responsive widths). Supersedes the old 7b spec (hero/info cards, #3A9BD9 blue, 12/14px square buttons).
+  - **Idea (from the subject):** a home's porch light left on through the night. The screen is a calm dark field lit by **one warm amber accent** (`--accent` #F2A93B) on every affordance — focus ring, primary button, the ready "light" (status dot), the progress bar — that turns **red** only on an alert. Red/orange/green appear *only* as alarm signals on a full-screen notice (`data-severity`).
+  - **Two themes** kept (HA `settings.theme`): dark **Night watch** (default living-room look) and light **Daybreak** (neutral daytime). Both redesigned cohesively.
+  - **House rules applied:** no gradients (dropped the success radial + bottom scrim), no hairline rules (action-bar/hud-clock borders → tone steps), no eyebrow (version moved off the hero into a quiet bottom corner), no shadows on things at rest (cards separated by a tone step; shadows only on glass that truly floats over live video), pill buttons decided once, one `h1` title that says what the app is ("Your cameras on the big screen"), a heading on the home, equal margins, no empty half (left copy answered by the "watch" lens motif on the right).
+  - **Type:** single family **Readex Pro** kept (serves Arabic RTL + Latin equally; a Latin-only display face would split the heading voice by language). Weights 600 display / 300 lede give the range. User offered a pairing; a unified bilingual voice is the stronger call here.
+  - **Files:** `tv-app/src/styles.css` (full rewrite), `tv-app/index.html` (home restructured: wordmark header, stage with the lens motif, action bar, corner version). All JS-driven ids/classes preserved; `tv-app` typecheck + 40 vitest + production build all green. Verified by 1920×1080 headless screenshots of Home (dark/light/RTL), Notice (alert), Player overlay. **Ships on the next `tv:deploy` / HA `.wgt` rebuild — on-device visual confirm pending.**
+
+- **19g. Camera / video doorbell — BLOCKED on the TV's built-in hub (revisit).** SmartThings accepts a Matter camera (ep 0x0142 + separate 0x0143 doorbell ep); the TV lists the doorbell but its alert toggle can't be enabled and live view is a black spinner. The hub sends VideoStreamAllocate but never ProvideOffer/SolicitOffer, even with two-way-talk declared, so no WebRTC. Likely the TV's built-in hub does not run Matter camera video yet. go2rtc (serving the Hikvision H264/PCMU stream) + a WebRTC answer path are already written. **Revisit** with a dedicated SmartThings hub (Station/Aeotec) or a later TV firmware. If it ever works, a short rendered-text video could be the notification itself (custom text + sound, native).

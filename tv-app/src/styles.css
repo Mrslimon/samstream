@@ -1,44 +1,58 @@
-/* Samstream TV UI, 1920x1080, D-pad only. Theme set from Home Assistant. */
+/* Samstream TV UI, 1920x1080, D-pad only. Theme set from Home Assistant.
 
-/* Light (default): cool off-white with white cards. */
+   Night-watch: the screen is a calm field lit by one warm light. Amber is the
+   single accent on every affordance (focus, primary action, the ready light,
+   the progress bar); red / orange / green appear only as alarm signals on a
+   full-screen notice. No gradients, no hairline rules, no shadows on things at
+   rest: surfaces are separated by a step in tone. Glass panels over live video
+   are the one thing that truly floats, so they carry a shadow. */
+
+/* Light (Daybreak): a clean, neutral daytime field. */
 :root {
-  --bg: #f3f5f8;
+  --bg: #eef1f5;
   --surface: #ffffff;
-  --well: #e9edf2;
-  --accent: #2e86d6;
-  --accent-soft: rgba(46, 134, 214, 0.2);
+  --panel: #e4e9f0;
+  --well: #dde3ec;
+  --ink: #141b24;
+  --muted: #5a6b7e;
+  --accent: #b9780f;
+  --accent-soft: rgba(185, 120, 15, 0.16);
   --on-accent: #ffffff;
-  --text: #18202b;
-  --muted: #667487;
-  --line: rgba(24, 32, 43, 0.08);
-  --shadow:
-    0 12px 32px rgba(24, 32, 43, 0.08), 0 2px 6px rgba(24, 32, 43, 0.06);
-  --well-shadow: inset 0 2px 12px rgba(24, 32, 43, 0.08);
-  --bar: rgba(243, 245, 248, 0.94);
-  --alert: #dc0014;
-  --radius-card: 14px;
-  --radius-button: 12px;
-  --gutter: 96px;
+  --alert: #d21f12;
+  --warning: #c25e00;
+  --success: #1f9d5b;
+  --glass: rgba(16, 22, 30, 0.72);
+  --glass-ink: #ffffff;
+  --float:
+    0 24px 60px rgba(8, 12, 18, 0.45), 0 2px 8px rgba(8, 12, 18, 0.28);
+  /* Tighter shadow that grounds a small glass pill on live video. */
+  --glass-float: 0 10px 28px rgba(8, 12, 18, 0.5);
+  --bar: var(--surface);
+  --radius-panel: 20px;
+  --radius-card: 24px;
+  --gutter: 110px;
   font-family: "Readex Pro", sans-serif;
-  color: var(--text);
+  color: var(--ink);
 }
 
-/* Dark security theme. */
+/* Dark (Night watch): the default living-room look, a deep calm night field. */
 :root[data-theme="dark"] {
-  --bg: #0b1420;
-  --surface: #1a2636;
-  --well: #0b1420;
-  --accent: #3a9bd9;
-  --accent-soft: rgba(58, 155, 217, 0.2);
-  --on-accent: #0b1420;
-  --text: #e8ecf0;
-  --muted: #8a9bae;
-  --line: rgba(58, 155, 217, 0.12);
-  --shadow:
-    inset 0 0 0 1px rgba(58, 155, 217, 0.12),
-    inset 0 24px 60px rgba(0, 0, 0, 0.35);
-  --well-shadow: inset 0 0 40px rgba(0, 0, 0, 0.6);
-  --bar: rgba(11, 20, 32, 0.96);
+  --bg: #0a0e14;
+  --surface: #151b25;
+  --panel: #10161f;
+  --well: #0d121a;
+  --ink: #eef2f6;
+  --muted: #93a1b3;
+  --accent: #f2a93b;
+  --accent-soft: rgba(242, 169, 59, 0.18);
+  --on-accent: #140f06;
+  --alert: #ff4b3e;
+  --warning: #ff8a3d;
+  --success: #39c07a;
+  --glass: rgba(8, 11, 17, 0.66);
+  --glass-ink: #ffffff;
+  --float: 0 24px 64px rgba(0, 0, 0, 0.55);
+  --bar: var(--panel);
 }
 
 html,
@@ -88,109 +102,130 @@ body.playing {
   position: absolute;
   inset: 0;
   box-sizing: border-box;
-  padding-block: 64px 200px;
+  padding-block: 72px 212px;
   padding-inline: var(--gutter);
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 56px;
 }
 
-.card {
-  background: var(--surface);
-  border-radius: var(--radius-card);
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  color: var(--ink);
 }
 
-.hero {
+.brand svg {
+  width: 52px;
+  height: 52px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#app-name {
+  margin: 0;
+  font-weight: 600;
+  font-size: 40px;
+  letter-spacing: -0.01em;
+}
+
+/* The stage fills the screen: the message on one side, the watch light on the
+   other, so neither half is empty. */
+.stage {
   flex: 1;
   display: flex;
-  gap: 48px;
-  padding: 56px;
-  box-shadow: var(--shadow);
+  align-items: center;
+  gap: 72px;
 }
 
-.hero-text {
+.stage-copy {
   flex: 1;
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
 
-.eyebrow {
+h1 {
   margin: 0;
-  font-weight: 400;
-  font-size: 26px;
-  color: var(--muted);
+  font-weight: 600;
+  font-size: 92px;
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  max-width: 14ch;
 }
 
-h1 {
-  margin-block: 8px 24px;
-  font-weight: 600;
-  font-size: 88px;
-  line-height: 1.1;
+.lede {
+  margin-block: 32px 0;
+  max-width: 24ch;
+  font-weight: 300;
+  font-size: 38px;
+  line-height: 1.45;
+  color: var(--muted);
 }
 
 .status {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin: 0;
+  gap: 20px;
+  margin-block: 48px 0;
   font-weight: 400;
   font-size: 34px;
-  color: var(--muted);
+  color: var(--ink);
 }
 
+/* The ready light: the home's porch light, lit amber when all is well. */
 .dot {
-  width: 18px;
-  height: 18px;
+  position: relative;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: var(--muted);
+  flex: none;
 }
 
 .dot.ready {
   background: var(--accent);
-  box-shadow: 0 0 0 6px var(--accent-soft);
+  box-shadow: 0 0 0 8px var(--accent-soft);
+  animation: breathe 4s ease-in-out infinite;
 }
 
-.preview {
-  width: 720px;
-  aspect-ratio: 16 / 9;
-  align-self: center;
-  border-radius: var(--radius-card);
-  background: var(--well);
-  box-shadow: var(--well-shadow);
+/* The watch: one big amber eye that holds the light. Drawn in code, no photo
+   exists of an idle camera. */
+.watch {
+  flex: none;
+  width: 760px;
+  height: 620px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
-  color: var(--accent);
+  gap: 40px;
+  border-radius: var(--radius-card);
+  background: var(--panel);
 }
 
-.preview p {
+.watch svg {
+  width: 300px;
+  height: 300px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.watch .lens {
+  fill: var(--accent-soft);
+}
+
+#preview-text {
   margin: 0;
-  font-weight: 300;
-  font-size: 28px;
-  color: var(--muted);
-}
-
-.info {
-  box-shadow: var(--shadow);
-  padding-block: 40px;
-  padding-inline: 56px;
-}
-
-.info h2 {
-  margin: 0 0 12px;
-  font-weight: 500;
-  font-size: 44px;
-}
-
-.info p {
-  margin: 0;
-  max-width: 1400px;
-  font-weight: 300;
-  font-size: 32px;
-  line-height: 1.5;
+  font-weight: 400;
+  font-size: 30px;
   color: var(--muted);
 }
 
@@ -200,29 +235,37 @@ h1 {
   position: fixed;
   inset-inline: 0;
   inset-block-end: 0;
-  height: 168px;
+  height: 180px;
   box-sizing: border-box;
   padding-inline: var(--gutter);
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 28px;
   background: var(--bar);
-  border-block-start: 1px solid var(--line);
+}
+
+.version {
+  position: fixed;
+  inset-block-end: 40px;
+  inset-inline-end: var(--gutter);
+  margin: 0;
+  font-size: 24px;
+  color: var(--muted);
 }
 
 button {
-  min-width: 280px;
-  min-height: 88px;
-  padding-inline: 48px;
-  border-radius: var(--radius-button);
+  min-width: 300px;
+  min-height: 96px;
+  padding-inline: 56px;
+  border: none;
+  border-radius: 999px;
   font:
-    500 32px "Readex Pro",
+    500 34px "Readex Pro",
     sans-serif;
-  border: 3px solid var(--accent);
   outline: none;
   transition:
-    transform 120ms ease,
-    box-shadow 120ms ease;
+    transform 140ms ease,
+    box-shadow 140ms ease;
 }
 
 button.primary {
@@ -231,16 +274,17 @@ button.primary {
 }
 
 button.secondary {
-  background: transparent;
-  color: var(--accent);
+  background: var(--panel);
+  color: var(--ink);
 }
 
-/* Focus must be obvious from the sofa. */
+/* Focus must be obvious from the sofa: the button lifts and a thick ring in the
+   ink colour wraps it, clear of the ground. */
 button:focus {
   transform: scale(1.06);
   box-shadow:
-    0 0 0 5px var(--bg),
-    0 0 0 9px var(--text);
+    0 0 0 6px var(--bg),
+    0 0 0 11px var(--ink);
 }
 
 /* ---- Player ------------------------------------------------------------ */
@@ -251,40 +295,67 @@ button:focus {
 }
 
 /* Overlays sit on live video of any brightness: dark glass, white text. Plain
-   rgba instead of backdrop-filter, which the TV's video plane does not blur. */
+   rgba instead of backdrop-filter, which the TV's video plane does not blur.
+   These truly float over video, so they carry a shadow. */
 .hud,
 .chip,
 #overlay > p {
-  background: rgba(14, 18, 26, 0.62);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
-  color: #fff;
+  background: var(--glass);
+  color: var(--glass-ink);
+  box-shadow: var(--glass-float);
 }
 
 .hud {
   position: absolute;
-  inset-block-start: 48px;
+  inset-block-start: 56px;
   inset-inline-start: var(--gutter);
   display: flex;
   align-items: center;
-  padding: 10px;
+  padding: 12px;
   border-radius: 999px;
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 500;
   white-space: nowrap;
   animation: fade-in 400ms ease-out;
 }
 
+/* The camera's own top bar: a full-width scrim with the name on one side and the
+   LIVE badge + clock on the other, like the SmartThings live view. A gradient is
+   allowed here — a scrim for text sitting over live video. */
+#hud {
+  inset-block-start: 0;
+  inset-inline: 0;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 32px;
+  padding: 48px var(--gutter) 72px;
+  border-radius: 0;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0));
+  box-shadow: none;
+  font-size: 36px;
+  font-weight: 600;
+  white-space: normal;
+  transition: opacity 400ms ease;
+}
+
+.hud-meta {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: none;
+}
+
 .live {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding-block: 6px;
-  padding-inline: 16px;
+  gap: 12px;
+  padding-block: 8px;
+  padding-inline: 20px;
   border-radius: 999px;
   background: var(--alert);
-  font-size: 20px;
-  font-weight: 600;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
 }
 
 html[lang="en"] .live {
@@ -294,8 +365,8 @@ html[lang="en"] .live {
 
 .live::before {
   content: "";
-  width: 10px;
-  height: 10px;
+  width: 11px;
+  height: 11px;
   border-radius: 50%;
   background: #fff;
   animation: pulse 1.6s ease-in-out infinite;
@@ -305,7 +376,7 @@ html[lang="en"] .live {
 .hud-clock {
   overflow: hidden;
   max-width: 900px;
-  margin-inline-start: 18px;
+  margin-inline-start: 20px;
   transition:
     max-width 500ms ease,
     margin 500ms ease,
@@ -313,10 +384,9 @@ html[lang="en"] .live {
 }
 
 .hud-clock {
-  margin-inline-end: 12px;
-  padding-inline-start: 18px;
-  border-inline-start: 1px solid rgba(255, 255, 255, 0.25);
-  color: rgba(255, 255, 255, 0.7);
+  margin-inline-end: 14px;
+  padding-inline-start: 20px;
+  color: rgba(255, 255, 255, 0.65);
   font-weight: 400;
 }
 
@@ -324,26 +394,31 @@ html[lang="en"] .live {
   display: none;
 }
 
+/* In the camera top bar the name leads, flush with the gutter. */
+#hud .hud-label {
+  margin-inline-start: 0;
+  line-height: 1.1;
+}
+
 .hud.compact .hud-label,
 .hud.compact .hud-clock {
   max-width: 0;
   margin-inline: 0;
   padding-inline-start: 0;
-  border: 0;
   opacity: 0;
 }
 
 .chip {
   position: absolute;
-  inset-block-start: 48px;
+  inset-block-start: 56px;
   inset-inline: 0;
   width: -webkit-max-content;
   width: max-content;
   margin-inline: auto;
-  padding-block: 12px;
-  padding-inline: 28px;
+  padding-block: 14px;
+  padding-inline: 32px;
   border-radius: 999px;
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 500;
 }
 
@@ -356,7 +431,8 @@ html[lang="en"] .live {
   /* Symmetric, so physical sides (Chromium 56 has no inset-inline). */
   left: var(--gutter);
   right: var(--gutter);
-  inset-block-end: 72px;
+  /* Clear of the bottom control cluster. */
+  inset-block-end: 232px;
   display: flex;
   justify-content: center;
 }
@@ -364,10 +440,10 @@ html[lang="en"] .live {
 #overlay > p {
   max-width: 1400px;
   margin: 0;
-  padding-block: 24px;
-  padding-inline: 40px;
-  border-radius: 24px;
-  font-size: 40px;
+  padding-block: 28px;
+  padding-inline: 48px;
+  border-radius: 28px;
+  font-size: 42px;
   font-weight: 500;
   line-height: 1.45;
   /* Each message picks its own direction; mixed Arabic/English stays ordered. */
@@ -394,9 +470,59 @@ html[lang="en"] .live {
   );
 }
 
+/* Bottom control cluster, SmartThings-style: round buttons on a scrim that fades
+   with the top bar. They are D-pad hints (◀ ▶ switch, fit, Back closes), not
+   focus targets, so the ring never lands on them. */
+.cam-controls {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  display: flex;
+  justify-content: center;
+  gap: 44px;
+  padding: 80px 0 56px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0));
+  transition: opacity 400ms ease;
+}
+
+.cam-controls.dim {
+  opacity: 0;
+}
+
+.cam-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: var(--glass-float);
+}
+
+.cam-btn svg {
+  width: 46px;
+  height: 46px;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 @keyframes pulse {
   50% {
     opacity: 0.3;
+  }
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 8px var(--accent-soft);
+  }
+  50% {
+    box-shadow: 0 0 0 14px var(--accent-soft);
   }
 }
 
@@ -428,13 +554,12 @@ html.tv-corner body {
   background: transparent;
 }
 
-
 .tv-frame {
   position: absolute;
   box-sizing: border-box;
   border: 3px solid rgba(255, 255, 255, 0.85);
-  border-radius: 6px;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  border-radius: 10px;
+  box-shadow: var(--float);
   pointer-events: none;
 }
 
@@ -452,22 +577,17 @@ html.tv-corner body {
 }
 
 #notice[data-severity="warning"] {
-  --tone: #e8a317;
+  --tone: var(--warning);
 }
 
 #notice[data-severity="alert"] {
   --tone: var(--alert);
 }
 
-/* Success: the ring and tick draw themselves, a glow bursts once, and a soft
-   green light breathes behind the card. */
+/* Success: the ring and tick draw themselves, a glow bursts once from the icon,
+   and the whole field holds a soft green. */
 #notice[data-severity="success"] {
-  --tone: #2fbf71;
-  background:
-    radial-gradient(circle at 50% 45%, rgba(47, 191, 113, 0.16), transparent 55%),
-    var(--bg);
-  background-position: center;
-  animation: success-breathe 4s ease-in-out 1.2s infinite;
+  --tone: var(--success);
 }
 
 #notice[data-severity="success"] .notice-icon {
@@ -494,34 +614,45 @@ html.tv-corner body {
 
 .notice-clock {
   position: absolute;
-  inset-block-start: 48px;
+  inset-block-start: 56px;
   inset-inline-end: var(--gutter);
   color: var(--muted);
-  font-size: 28px;
+  font-size: 30px;
 }
 
+/* The tone bar along the top names the severity by colour; the card sits a step
+   above the field, no shadow at rest. */
 .notice-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   max-width: 1400px;
-  padding-block: 64px;
-  padding-inline: 96px;
-  border-radius: 28px;
+  padding-block: 88px 72px;
+  padding-inline: 112px;
+  border-radius: var(--radius-card);
   background: var(--surface);
-  box-shadow: var(--shadow);
-  border-block-start: 8px solid var(--tone);
   text-align: center;
+  overflow: hidden;
   animation: rise-in 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.notice-card::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  height: 12px;
+  background: var(--tone);
 }
 
 .notice-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 128px;
-  height: 128px;
-  margin-block-end: 32px;
+  width: 140px;
+  height: 140px;
+  margin-block-end: 40px;
   border-radius: 50%;
   background: var(--well);
   color: var(--tone);
@@ -532,8 +663,8 @@ html.tv-corner body {
 }
 
 .notice-icon svg {
-  width: 72px;
-  height: 72px;
+  width: 80px;
+  height: 80px;
   fill: none;
   stroke: currentColor;
   stroke-width: 4;
@@ -543,14 +674,15 @@ html.tv-corner body {
 
 #notice-title {
   margin: 0;
-  font-size: 64px;
+  font-size: 68px;
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
   unicode-bidi: isolate;
 }
 
 .notice-body {
-  margin-block-start: 24px;
+  margin-block-start: 28px;
 }
 
 .notice-body > p {
@@ -558,7 +690,7 @@ html.tv-corner body {
   margin: 0;
   overflow: hidden;
   color: var(--muted);
-  font-size: 40px;
+  font-size: 42px;
   line-height: 1.5;
   overflow-wrap: break-word;
   unicode-bidi: isolate;
@@ -597,29 +729,19 @@ html.tv-corner body {
 
 @keyframes success-burst {
   0% {
-    box-shadow: 0 0 0 0 rgba(47, 191, 113, 0.55);
+    box-shadow: 0 0 0 0 rgba(57, 192, 122, 0.55);
   }
   100% {
-    box-shadow: 0 0 0 56px rgba(47, 191, 113, 0);
-  }
-}
-
-@keyframes success-breathe {
-  0%,
-  100% {
-    background-size: 100% 100%;
-  }
-  50% {
-    background-size: 112% 112%;
+    box-shadow: 0 0 0 56px rgba(57, 192, 122, 0);
   }
 }
 
 @keyframes ring {
   0% {
-    box-shadow: 0 0 0 0 rgba(220, 0, 20, 0.45);
+    box-shadow: 0 0 0 0 rgba(255, 75, 62, 0.45);
   }
   100% {
-    box-shadow: 0 0 0 36px rgba(220, 0, 20, 0);
+    box-shadow: 0 0 0 36px rgba(255, 75, 62, 0);
   }
 }
 
@@ -656,23 +778,23 @@ html.tv-corner body {
 }
 
 .media-hud {
-  padding-inline: 28px;
+  padding-inline: 32px;
 }
 
 .media-progress {
   position: absolute;
   left: var(--gutter);
   right: var(--gutter);
-  inset-block-end: 56px;
-  height: 6px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.25);
+  inset-block-end: 64px;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.22);
 }
 
 #media-bar {
   width: 0;
   height: 100%;
-  border-radius: 3px;
+  border-radius: 4px;
   background: var(--accent);
 }
 
@@ -683,26 +805,31 @@ html.tv-corner body {
 
 /* ---- Help card and debug panel ----------------------------------------- */
 
+/* The help card floats over whatever is on screen, so it carries a shadow. */
 #help {
   position: absolute;
-  inset-block-start: 64px;
+  inset-block-start: 72px;
   inset-inline-end: var(--gutter);
-  width: 760px;
-  padding: 40px 48px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+  width: 780px;
+  box-sizing: border-box;
+  padding: 48px 56px;
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+  box-shadow: var(--float);
 }
 
 #help h2 {
-  margin: 0 0 20px;
-  font-weight: 500;
-  font-size: 36px;
+  margin: 0 0 28px;
+  font-weight: 600;
+  font-size: 40px;
+  letter-spacing: -0.01em;
   color: var(--accent);
 }
 
 #help p {
   margin: 0;
-  font-weight: 300;
-  font-size: 28px;
+  font-weight: 400;
+  font-size: 30px;
   line-height: 1.7;
   unicode-bidi: isolate;
 }
@@ -713,12 +840,12 @@ html.tv-corner body {
   inset-inline-start: 32px;
   max-width: 1200px;
   margin: 0;
-  padding: 16px 24px;
+  padding: 18px 26px;
   font:
     400 22px/1.4 "Readex Pro",
     sans-serif;
   white-space: pre-wrap;
   color: #e8ecf0;
-  background: rgba(11, 20, 32, 0.85);
-  border-radius: var(--radius-card);
+  background: rgba(8, 11, 17, 0.85);
+  border-radius: var(--radius-panel);
 }

@@ -11,6 +11,7 @@ import { App, type AppElements, type Connection } from "./app";
 import { parseOpen, parsePayload, readLaunchPayload } from "./launch";
 import { resolveLanguage, strings } from "./i18n";
 import { parseMedia, parseNotice } from "./notice";
+import { startNotifier } from "./notifier";
 import { fetchSession, loadSettings, xhrFetch } from "./settings";
 import { parseStreams } from "./streams";
 
@@ -66,6 +67,7 @@ async function boot(): Promise<void> {
     hud: byId("hud"),
     hudLabel: byId("hud-label"),
     hudClock: byId("hud-clock"),
+    controls: byId("cam-controls"),
     toast: byId("toast"),
     tvFrame: byId("tv-frame"),
     mjpeg: byId<HTMLImageElement>("mjpeg-image"),
@@ -102,6 +104,13 @@ async function boot(): Promise<void> {
   ];
   const app = new App(elements, streams, __APP_VERSION__, language, connection);
   app.start();
+
+  // Start the notifier (the .NET half of the package) and hand it this TV's
+  // secret, so HA can post native notifications while Samstream is open and
+  // after it backgrounds. A no-op off a real TV or before HA has installed us.
+  if (config?.tv_secret) {
+    startNotifier(config.tv_secret, (message) => app.debug(message));
+  }
   app.debug(`settings: ${source} ${JSON.stringify(settings)}`);
   app.debug(`home assistant: ${haUrl ? haUrl.replace(/\/\/.*@/, "//") : "not set (not installed by HA)"}`);
 

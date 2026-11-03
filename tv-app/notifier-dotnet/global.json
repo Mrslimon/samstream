@@ -1,0 +1,5 @@
+{
+  "msbuild-sdks": {
+    "Tizen.NET.Sdk": "1.2.1"
+  }
+}

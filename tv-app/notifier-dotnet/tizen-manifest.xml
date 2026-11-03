@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The notifier is the .NET companion to the Samstream web app. Tizen has no
+     Web-UI + .NET-service hybrid (only Web+Web or Native+Native), so it ships as
+     its own package — but nodisplay="true" keeps it off the launcher (no second
+     icon), and the web app starts it in the background with launchAppControl, so
+     the user only ever sees and opens Samstream. -->
+<manifest xmlns="http://tizen.org/ns/packages" api-version="4.0" package="org.samstream.notifier" version="1.0.0">
+  <profile name="tv" />
+  <ui-application appid="org.samstream.notifier"
+                  exec="Notifier.dll"
+                  type="dotnet"
+                  multiple="false"
+                  taskmanage="false"
+                  nodisplay="true"
+                  launch_mode="single">
+    <label>Samstream Notifier</label>
+  </ui-application>
+  <privileges>
+    <privilege>http://tizen.org/privilege/notification</privilege>
+    <privilege>http://tizen.org/privilege/internet</privilege>
+    <!-- To raise Samstream back to the front after we are launched, so we never
+         cover the app the user is watching. -->
+    <privilege>http://tizen.org/privilege/application.launch</privilege>
+  </privileges>
+</manifest>

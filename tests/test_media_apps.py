@@ -20,11 +20,7 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
-from custom_components.samstream.const import (
-    CONF_EXTRA_APPS,
-    CONF_WOL_TARGET,
-    DOMAIN,
-)
+from custom_components.samstream.const import DOMAIN
 
 from .conftest import NETFLIX
 
@@ -77,21 +73,6 @@ async def test_apps_scanned_once_then_cached(
 
     mock_tv.installed_apps.assert_awaited_once()
     assert mock_tv.foreground_app.await_count >= 3
-
-
-async def test_extra_app_ids_are_scanned(
-    hass: HomeAssistant, mock_entry: MockConfigEntry, mock_tv: MagicMock
-) -> None:
-    hass.config_entries.async_update_entry(
-        mock_entry,
-        options={CONF_WOL_TARGET: "192.168.1.255", CONF_EXTRA_APPS: "my.app other.app"},
-    )
-    await hass.config_entries.async_setup(mock_entry.entry_id)
-    await hass.async_block_till_done()
-
-    scanned = mock_tv.installed_apps.await_args.args[0]
-    assert scanned[-2:] == ["my.app", "other.app"]
-    assert "111299001912" in scanned
 
 
 @pytest.mark.usefixtures("setup_entry")
@@ -247,9 +228,6 @@ async def test_failed_scan_retried_next_poll(
 async def test_full_app_list_from_sdb(
     hass: HomeAssistant, mock_entry: MockConfigEntry, mock_tv: MagicMock
 ) -> None:
-    hass.config_entries.async_update_entry(
-        mock_entry, options={CONF_EXTRA_APPS: "111477000821 my.extra"}
-    )
     mock_tv.list_apps.return_value = [
         ListedApp("111299001912", "9Ur5IzDKqV.TizenYouTube", "YouTube", "2.1.527"),
         ListedApp("111477000821", "Ggl33q588H.MBC", "شاهد MBC", "6.68.1"),
@@ -262,8 +240,8 @@ async def test_full_app_list_from_sdb(
     assert coordinator.app_source == "tv"
     assert coordinator.apps == {"111299001912": "YouTube", "111477000821": "شاهد MBC"}
     assert coordinator.app_versions["111477000821"] == "6.68.1"
-    # Only the extra ID the TV did not list is probed over REST.
-    mock_tv.installed_apps.assert_awaited_once_with(["my.extra"])
+    # The sdb list is complete, so nothing is probed over REST.
+    mock_tv.installed_apps.assert_not_awaited()
     state = hass.states.get(TV)
     assert state.attributes["source_list"] == [
         "Home",

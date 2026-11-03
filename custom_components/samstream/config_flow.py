@@ -103,7 +103,7 @@ from .const import (
     OCF_ONBOARD_TIMEOUT,
     THEMES,
 )
-from .coordinator import default_wol_target, parse_app_ids
+from .coordinator import default_wol_target
 from .installer import (
     async_import_certificates,
     async_obtain_samsung_certificates,
@@ -184,10 +184,14 @@ class _LocalControlSteps(ConfigEntryBaseFlow):
         host = self._lc_host()
         if self._ocf_port is None:
             try:
+                # Ask for the PIN FIRST, so it appears on screen within a second;
+                # it also proves the TV answers plain CoAP. Only then spend time
+                # finding the secure port (a reply here is near-certain once the
+                # trigger worked, so discovery no longer waits on flaky retries).
+                await self.hass.async_add_executor_job(trigger_pin, host)
                 port, device_uuid = await self.hass.async_add_executor_job(
                     discover, host
                 )
-                await self.hass.async_add_executor_job(trigger_pin, host)
             except OcfTvOwnedError as err:
                 _LOGGER.info("Local control: %s is owned (%s)", host, err)
                 return await self.async_step_local_control_owned()
@@ -827,7 +831,7 @@ class SamstreamOptionsFlow(_LocalControlSteps, OptionsFlow):
     async def async_step_network(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Ask for the Wake-on-LAN target and apps missing from the catalog."""
+        """Ask where Wake-on-LAN packets go (the apps come from the TV itself)."""
         errors: dict[str, str] = {}
         if user_input is not None:
             target = user_input[CONF_WOL_TARGET].strip()
@@ -836,13 +840,14 @@ class SamstreamOptionsFlow(_LocalControlSteps, OptionsFlow):
             except ValueError:
                 errors[CONF_WOL_TARGET] = "invalid_address"
             else:
-                extra = " ".join(parse_app_ids(user_input.get(CONF_EXTRA_APPS, "")))
+                # Drop any stored extra-app IDs: Developer Mode lists every app.
+                options = {
+                    key: value
+                    for key, value in self.config_entry.options.items()
+                    if key != CONF_EXTRA_APPS
+                }
                 return self.async_create_entry(
-                    data={
-                        **self.config_entry.options,
-                        CONF_WOL_TARGET: target,
-                        CONF_EXTRA_APPS: extra,
-                    }
+                    data={**options, CONF_WOL_TARGET: target}
                 )
         current = self.config_entry.options.get(CONF_WOL_TARGET) or default_wol_target(
             self.config_entry.data[CONF_HOST]
@@ -850,13 +855,7 @@ class SamstreamOptionsFlow(_LocalControlSteps, OptionsFlow):
         return self.async_show_form(
             step_id="network",
             data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_WOL_TARGET, default=current): str,
-                    vol.Optional(
-                        CONF_EXTRA_APPS,
-                        default=self.config_entry.options.get(CONF_EXTRA_APPS, ""),
-                    ): str,
-                }
+                {vol.Required(CONF_WOL_TARGET, default=current): str}
             ),
             errors=errors,
         )

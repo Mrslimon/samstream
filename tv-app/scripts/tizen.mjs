@@ -1,7 +1,12 @@
 // Package dist/ as a signed .wgt and deploy it with the Tizen Studio CLI.
-// Usage: node --env-file-if-exists=.env.local scripts/tizen.mjs <package|install|run|deploy>
+// Usage: node --env-file-if-exists=.env.local scripts/tizen.mjs <package|install|run|deploy|notifier|notifier-install>
+//
+// The notifier is a separate nodisplay .NET package (Tizen has no Web-UI + .NET
+// hybrid — see docs/hybrid-package.md). "notifier" builds its .tpk;
+// "notifier-install" installs that .tpk on the TV. The web app starts it, so the
+// user sees only Samstream's icon.
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const tizenHome = process.env.TIZEN_HOME ?? "C:\\tizen-studio";
@@ -13,6 +18,11 @@ const target = `${process.env.TV_HOST ?? fail("TV_HOST is not set")}:26101`;
 const configXml = readFileSync("public/config.xml", "utf8");
 const appId = configXml.match(/<tizen:application id="([^"]+)"/)?.[1] ?? fail("no app id in config.xml");
 const wgt = "Samstream.wgt";
+// The .NET notifier project and the .tpk `dotnet build` emits for it.
+const notifierDir = "notifier-dotnet";
+const notifierTpkDir = join(notifierDir, "bin", "Release", "tizen40");
+const notifierTpk = join(notifierTpkDir, "org.samstream.notifier-1.0.0.tpk");
+const dotnet = process.env.DOTNET ?? "dotnet";
 
 function fail(message) {
   console.error(message);
@@ -46,6 +56,15 @@ function withProfilesPath(run) {
 
 const steps = {
   package: () => withProfilesPath(() => exec(tizen, ["package", "-t", "wgt", "-s", profile, "--", "dist"])),
+  // Build the .NET notifier .tpk (its own nodisplay package).
+  notifier: () => exec(dotnet, ["build", "-c", "Release", notifierDir]),
+  // Install the notifier .tpk on the TV. Re-sign with HA's identity first for a
+  // retail TV (the dev profile here won't install — err 118).
+  "notifier-install": () => {
+    if (!existsSync(notifierTpk)) fail(`notifier .tpk not found at ${notifierTpk} (run "notifier" first)`);
+    exec(sdb, ["connect", target]);
+    exec(tizen, ["install", "-n", notifierTpk, "-s", target, "--", notifierTpkDir]);
+  },
   install: () => {
     exec(sdb, ["connect", target]);
     exec(tizen, ["install", "-n", wgt, "-s", target, "--", "dist"]);

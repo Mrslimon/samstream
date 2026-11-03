@@ -55,7 +55,11 @@ from .const import (
 )
 from .coordinator import SamstreamCoordinator
 from .entity import SamstreamEntity
-from .installer import async_install_package, resolve_package_path
+from .installer import (
+    async_install_package,
+    async_uninstall_package,
+    resolve_package_path,
+)
 from .keys import normalize_key
 from .stream_relay import async_publish_stream, tv_mjpeg_url, tv_stream_url
 from .tv_session import (
@@ -972,6 +976,14 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         )
         log: list[JsonValueType] = list(result.lines)
         return {"app_id": result.app_id, "log": log}
+
+    async def async_uninstall_app(self) -> ServiceResponse:
+        """Remove both Samstream apps from the TV (the `uninstall_app` action)."""
+        removed = await async_uninstall_package(
+            self.hass, self.coordinator.config_entry
+        )
+        removed_ids: list[JsonValueType] = list(removed)
+        return {"removed": removed_ids}
 
     async def async_local_control_request(
         self, *, method: str, resource: str, body: dict[str, Any] | None = None

@@ -34,6 +34,12 @@ install_app:
       selector:
         text:
 
+uninstall_app:
+  target:
+    entity:
+      integration: samstream
+      domain: media_player
+
 select_art:
   target:
     entity:

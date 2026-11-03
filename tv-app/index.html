@@ -16,24 +16,29 @@
     <img id="mjpeg-image" alt="" />
 
     <main id="home">
-      <section class="card hero">
-        <div class="hero-text">
-          <p class="eyebrow" id="version"></p>
-          <h1 id="app-name">Samstream</h1>
+      <header class="brand">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <rect x="6" y="20" width="36" height="26" rx="7" />
+          <path d="M42 29 58 21v24l-16-8z" />
+          <circle cx="24" cy="33" r="7" />
+        </svg>
+        <span id="app-name">Samstream</span>
+      </header>
+
+      <section class="stage">
+        <div class="stage-copy">
+          <h1 id="info-title"></h1>
+          <p class="lede" id="info-text"></p>
           <p class="status"><span class="dot" id="status-dot"></span><span id="status-text"></span></p>
         </div>
-        <div class="preview" aria-hidden="true">
-          <svg viewBox="0 0 64 64" width="120" height="120">
-            <rect x="6" y="18" width="38" height="28" rx="6" fill="none" stroke="currentColor" stroke-width="4" />
-            <path d="M44 28 58 20v24l-14-8z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round" />
+        <div class="watch" aria-hidden="true">
+          <svg viewBox="0 0 64 64">
+            <circle cx="32" cy="32" r="26" />
+            <circle class="lens" cx="32" cy="32" r="15" />
+            <circle cx="32" cy="32" r="6" />
           </svg>
           <p id="preview-text"></p>
         </div>
-      </section>
-
-      <section class="card info">
-        <h2 id="info-title"></h2>
-        <p id="info-text"></p>
       </section>
 
       <nav class="action-bar">
@@ -41,18 +46,39 @@
         <button type="button" class="secondary" id="help-button"></button>
         <button type="button" class="secondary" id="exit-button"></button>
       </nav>
+      <span class="version" id="version"></span>
     </main>
 
     <section id="player" hidden>
+      <!-- Top scrim: camera name on one side, LIVE badge and clock on the other,
+           the way the SmartThings camera view presents a live feed. -->
       <div class="hud" id="hud">
-        <span class="live" id="live"></span>
         <span class="hud-label" id="hud-label" dir="auto"></span>
-        <span class="hud-clock" id="hud-clock"></span>
+        <span class="hud-meta">
+          <span class="live" id="live"></span>
+          <span class="hud-clock" id="hud-clock"></span>
+        </span>
       </div>
       <!-- Outline of the TV's own picture (Live TV / HDMI) shown in a corner -->
       <div class="tv-frame" id="tv-frame" hidden></div>
       <div class="chip" id="toast" hidden></div>
       <div id="overlay" aria-live="polite" hidden></div>
+      <!-- Bottom control cluster (SmartThings-style round buttons); hints for the
+           D-pad keys, not focus targets. Fades with the top bar after a moment. -->
+      <div class="cam-controls" id="cam-controls" aria-hidden="true">
+        <span class="cam-btn">
+          <svg viewBox="0 0 48 48"><path d="M30 12 18 24l12 12"/></svg>
+        </span>
+        <span class="cam-btn">
+          <svg viewBox="0 0 48 48"><path d="M18 12l12 12-12 12"/></svg>
+        </span>
+        <span class="cam-btn">
+          <svg viewBox="0 0 48 48"><rect x="10" y="14" width="28" height="20" rx="3"/><path d="M18 22v4M30 22v4"/></svg>
+        </span>
+        <span class="cam-btn cam-btn-close">
+          <svg viewBox="0 0 48 48"><path d="M15 15l18 18M33 15 15 33"/></svg>
+        </span>
+      </div>
     </section>
 
     <section id="notice" hidden>

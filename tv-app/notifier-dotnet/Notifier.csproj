@@ -1,0 +1,15 @@
+<Project Sdk="Tizen.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>tizen40</TargetFramework>
+    <!-- Its own package id (Tizen has no Web-UI + .NET hybrid). nodisplay keeps it
+         off the launcher; the web app starts it. See docs/hybrid-package.md. -->
+    <PackageId>org.samstream.notifier</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Tizen.NET" Version="6.0.0.14995" />
+  </ItemGroup>
+
+</Project>

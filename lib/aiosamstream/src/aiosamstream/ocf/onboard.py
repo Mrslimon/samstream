@@ -34,6 +34,7 @@ from . import cbor
 from .coap_tcp import (
     URI_PATH,
     URI_QUERY,
+    CoapError,
     code_text,
     encode_body,
     is_success,
@@ -274,7 +275,14 @@ def _plain_request(
         return None
     finally:
         sock.close()
-    return _parse_coap(datagram)
+    try:
+        return _parse_coap(datagram)
+    except CoapError:
+        # A stray or retransmitted datagram (we do not match the token) can be
+        # mis-framed; treat it like no reply so the caller retries rather than
+        # crashing the flow.
+        _LOGGER.debug("Ignoring an unparseable plain-CoAP datagram from %s", ip)
+        return None
 
 
 # --------------------------------------------------------------------------- #
@@ -355,12 +363,18 @@ def _discover_multicast(ip: str) -> int | None:
 def trigger_pin(ip: str) -> None:
     """Ask the TV to show its 8-digit Random-PIN (plain CoAP `oxmsel=1`).
 
-    Raises `OcfTvOwnedError` when the TV already has an owner: an owned TV
-    (e.g. still added in SmartThings) refuses the request and shows no PIN.
+    Retries the request: a single dropped UDP datagram should not look like an
+    unreachable TV (which would wrongly send setup to the LAN helper). Raises
+    `OcfTvOwnedError` when the TV already has an owner (e.g. still added in
+    SmartThings): an owned TV refuses the request and shows no PIN.
     """
-    reply = _plain_request(ip, DOXM, POST, payload=cbor.dumps({"oxmsel": 1}))
-    if reply is not None and is_success(reply.code):
-        return
+    payload = cbor.dumps({"oxmsel": 1})
+    for _ in range(3):
+        reply = _plain_request(ip, DOXM, POST, payload=payload)
+        if reply is not None and is_success(reply.code):
+            return
+    # No success after retries (a dropped or stray datagram, or a refusal): find
+    # out why — an owned TV answers the GET with owned=true.
     doxm = _plain_request(ip, DOXM, GET)
     body = cbor.loads(doxm.payload) if doxm and doxm.payload else None
     if isinstance(body, dict) and body.get("owned") is True:
