@@ -408,7 +408,7 @@ async def test_session_view(
     first = await (
         await client.get(f"/api/samstream/tv/{secret}/session?since=0")
     ).json()
-    assert first["settings"] == {"language": "auto", "theme": "light"}
+    assert first["settings"] == {"language": "auto", "theme": "light", "cameras": []}
     assert first["command"]["action"] == "play"
     assert first["command"]["stream"]["label"] == "Gate"
 

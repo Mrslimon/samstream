@@ -60,6 +60,8 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    EntitySelector,
+    EntitySelectorConfig,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
@@ -73,6 +75,7 @@ from .app_signing import SigningSetup, async_load_signing
 from .const import (
     CONF_AUTHOR_P12,
     CONF_AUTO_UPDATE,
+    CONF_CAMERAS,
     CONF_DISTRIBUTOR_P12,
     CONF_EXTRA_APPS,
     CONF_FRAME_POWER,
@@ -101,6 +104,7 @@ from .const import (
     FRAME_POWER_MODES,
     ISSUE_OCF_RELEASE,
     LANGUAGES,
+    MAX_CONFIGURED_CAMERAS,
     OCF_ONBOARD_TIMEOUT,
     THEMES,
 )
@@ -799,12 +803,42 @@ class SamstreamOptionsFlow(_LocalControlSteps, OptionsFlow):
             step_id="init",
             menu_options=[
                 "tv_app",
+                "cameras",
                 "network",
                 "voice_bridge",
                 "local_control",
                 "app_signing",
             ],
         )
+
+    async def async_step_cameras(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Pick and order the cameras Left/Right flips between on the TV.
+
+        Numbered rather than a single multi-select: HA's entity picker has no
+        drag-to-reorder, so the field order is the only way to let a plain
+        options form capture an order at all.
+        """
+        options = self.config_entry.options
+        if user_input is not None:
+            cameras = [
+                user_input[key]
+                for i in range(1, MAX_CONFIGURED_CAMERAS + 1)
+                if (key := f"camera_{i}") in user_input
+            ]
+            return self.async_create_entry(data={**options, CONF_CAMERAS: cameras})
+        current = options.get(CONF_CAMERAS, [])
+        schema: dict[Any, Any] = {}
+        for i in range(1, MAX_CONFIGURED_CAMERAS + 1):
+            default = current[i - 1] if i <= len(current) else None
+            field = (
+                vol.Optional(f"camera_{i}", default=default)
+                if default
+                else vol.Optional(f"camera_{i}")
+            )
+            schema[field] = EntitySelector(EntitySelectorConfig(domain="camera"))
+        return self.async_show_form(step_id="cameras", data_schema=vol.Schema(schema))
 
     async def async_step_tv_app(
         self, user_input: dict[str, Any] | None = None

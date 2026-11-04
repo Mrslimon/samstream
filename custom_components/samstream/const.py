@@ -12,6 +12,10 @@ CONF_DUID: Final = "duid"
 CONF_WOL_TARGET: Final = "wol_target"
 CONF_HA_URL: Final = "ha_url"
 CONF_EXTRA_APPS: Final = "extra_apps"
+# Fixed, ordered list of camera entity ids the TV app can flip between (Left/
+# Right) without an automation having played one first.
+CONF_CAMERAS: Final = "cameras"
+MAX_CONFIGURED_CAMERAS: Final = 9  # the TV app's digit keys 1-9
 CONF_LANGUAGE: Final = "language"
 CONF_THEME: Final = "theme"
 # Install newer bundled TV apps by themselves (when the TV is on and idle).

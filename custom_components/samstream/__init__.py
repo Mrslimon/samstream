@@ -49,7 +49,7 @@ from .onboard_tool import SamstreamOnboardToolView
 from .signin import SamstreamSignInView
 from .stream_relay import SamstreamMjpegView, SamstreamStreamView
 from .tv_session import SamstreamTvSessionView
-from .tv_settings import SamstreamTvSettingsView
+from .tv_settings import SamstreamTvSettingsView, async_resolve_cameras
 from .validation import vol
 from .voice import async_setup_voice
 from .welcome import async_setup_welcome
@@ -80,6 +80,8 @@ class SamstreamData:
     bundled_version: str | None = None
     # Options at setup: a data-only update (e.g. the TV secret) must not reload.
     options: dict[str, Any] = field(default_factory=dict)
+    # The configured camera list, pre-registered in go2rtc; see tv_settings.py.
+    cameras: list[dict[str, str]] = field(default_factory=list)
 
 
 type SamstreamConfigEntry = ConfigEntry[SamstreamData]
@@ -327,6 +329,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SamstreamConfigEntry) ->
         coordinator=coordinator,
         bundled_version=await async_bundled_version(hass),
         options=dict(entry.options),
+        cameras=await async_resolve_cameras(hass, entry),
     )
 
     connections = set()

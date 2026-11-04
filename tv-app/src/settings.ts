@@ -6,12 +6,16 @@
  * unreachable it uses the last answer it got, then the package's copy.
  */
 
+import { parseCameraList, type CameraStream } from "./streams";
+
 export type LanguageSetting = "auto" | "ar" | "en";
 export type Theme = "light" | "dark";
 
 export interface TvSettings {
   language: LanguageSetting;
   theme: Theme;
+  /** Configure → Cameras: what Left/Right flips between, ready at launch. */
+  cameras: CameraStream[];
 }
 
 export interface PackageConfig {
@@ -27,7 +31,7 @@ export interface SettingsStore {
   setItem(key: string, value: string): void;
 }
 
-export const DEFAULT_SETTINGS: TvSettings = { language: "auto", theme: "light" };
+export const DEFAULT_SETTINGS: TvSettings = { language: "auto", theme: "light", cameras: [] };
 const CACHE_KEY = "samstream.settings";
 const HA_TIMEOUT_MS = 3_000;
 const LANGUAGES: readonly LanguageSetting[] = ["auto", "ar", "en"];
@@ -38,10 +42,11 @@ export function normalizeSettings(raw: unknown): Partial<TvSettings> {
   if (typeof raw !== "object" || raw === null) {
     return {};
   }
-  const { language, theme } = raw as Record<string, unknown>;
+  const { language, theme, cameras } = raw as Record<string, unknown>;
   const result: Partial<TvSettings> = {};
   if (LANGUAGES.includes(language as LanguageSetting)) result.language = language as LanguageSetting;
   if (THEMES.includes(theme as Theme)) result.theme = theme as Theme;
+  if (cameras !== undefined) result.cameras = parseCameraList(cameras);
   return result;
 }
 

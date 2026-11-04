@@ -30,6 +30,24 @@ describe("normalizeSettings", () => {
     expect(normalizeSettings({ language: "fr", theme: "neon" })).toEqual({});
     expect(normalizeSettings(null)).toEqual({});
   });
+
+  it("parses the configured camera list, dropping malformed entries", () => {
+    expect(
+      normalizeSettings({
+        cameras: [
+          { label: "Front door", url: "ws://ha/stream/a", type: "mse" },
+          { label: "no url" },
+          "not an object",
+        ],
+      }),
+    ).toEqual({
+      cameras: [{ label: "Front door", url: "ws://ha/stream/a", type: "mse" }],
+    });
+  });
+
+  it("omits cameras entirely when the field is absent (vs. clearing it)", () => {
+    expect(normalizeSettings({ language: "ar" })).toEqual({ language: "ar" });
+  });
 });
 
 describe("loadSettings", () => {
@@ -47,7 +65,7 @@ describe("loadSettings", () => {
       store,
     );
     expect(loaded.source).toBe("home-assistant");
-    expect(loaded.settings).toEqual({ language: "ar", theme: "light" });
+    expect(loaded.settings).toEqual({ language: "ar", theme: "light", cameras: [] });
     expect(loaded.session?.seq).toBe(3);
     expect((loaded.session?.command as { action: string }).action).toBe("play");
     expect(JSON.parse(store.data["samstream.settings"])).toEqual({ language: "ar", theme: "light" });
@@ -60,20 +78,20 @@ describe("loadSettings", () => {
       store,
     );
     expect(loaded.source).toBe("cache");
-    expect(loaded.settings).toEqual({ language: "ar", theme: "dark" });
+    expect(loaded.settings).toEqual({ language: "ar", theme: "dark", cameras: [] });
   });
 
   it("uses the package's copy without a cache", async () => {
     const loaded = await loadSettings(fakeFetch({ "samstream.json": CONFIG }), memoryStore());
     expect(loaded.source).toBe("package");
-    expect(loaded.settings).toEqual({ language: "en", theme: "dark" });
+    expect(loaded.settings).toEqual({ language: "en", theme: "dark", cameras: [] });
     expect(loaded.config?.tv_secret).toBe("s3cr3t");
   });
 
   it("defaults for a build not installed by Home Assistant", async () => {
     const loaded = await loadSettings(fakeFetch({}), undefined);
     expect(loaded).toEqual({
-      settings: { language: "auto", theme: "light" },
+      settings: { language: "auto", theme: "light", cameras: [] },
       config: undefined,
       source: "default",
     });

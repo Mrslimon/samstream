@@ -119,6 +119,21 @@
   },
   "options": {
     "step": {
+      "cameras": {
+        "title": "Cameras",
+        "description": "Pick up to 9 cameras Left/Right flips between on the TV, in order — ready to show even before an automation has played one. Leave a slot empty to use fewer.",
+        "data": {
+          "camera_1": "Camera 1",
+          "camera_2": "Camera 2",
+          "camera_3": "Camera 3",
+          "camera_4": "Camera 4",
+          "camera_5": "Camera 5",
+          "camera_6": "Camera 6",
+          "camera_7": "Camera 7",
+          "camera_8": "Camera 8",
+          "camera_9": "Camera 9"
+        }
+      },
       "network": {
         "title": "Wake-on-LAN",
         "description": "Home Assistant wakes the TV with a Wake-on-LAN packet sent to this address. Use your network's broadcast address (for example 192.168.1.255). Inside Docker a global broadcast (255.255.255.255) does not reach the TV.",
@@ -133,6 +148,7 @@
         "title": "Samstream options",
         "menu_options": {
           "tv_app": "TV app: language and theme",
+          "cameras": "Cameras: pick and order what Left/Right flips between",
           "network": "Network: Wake-on-LAN and extra apps",
           "voice_bridge": "Voice bridge: Bixby, Alexa or the TV app to Assist",
           "local_control": "Local control: SmartThings features over your own network",

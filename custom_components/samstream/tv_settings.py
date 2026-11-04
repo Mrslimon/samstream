@@ -9,17 +9,20 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 import secrets
 import zipfile
 from http import HTTPStatus
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from aiohttp import web
+from homeassistant.components.camera import async_get_stream_source
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.http import KEY_HASS, HomeAssistantView
 from homeassistant.helpers.network import NoURLAvailableError, get_url
 
 from .const import (
+    CONF_CAMERAS,
     CONF_LANGUAGE,
     CONF_THEME,
     CONF_TV_SECRET,
@@ -27,9 +30,12 @@ from .const import (
     DEFAULT_THEME,
     DOMAIN,
 )
+from .stream_relay import async_publish_stream, tv_stream_url
 
 if TYPE_CHECKING:
     from . import SamstreamConfigEntry
+
+_LOGGER = logging.getLogger(__name__)
 
 PACKAGE_SETTINGS_FILE = "samstream.json"
 # The app is a file:// page on the TV; let it read the answer.
@@ -47,11 +53,53 @@ def ensure_tv_secret(hass: HomeAssistant, entry: SamstreamConfigEntry) -> str:
     return secret
 
 
-def tv_settings(entry: SamstreamConfigEntry) -> dict[str, str]:
-    """Return what the TV app applies: UI language and theme."""
+async def async_resolve_cameras(
+    hass: HomeAssistant, entry: SamstreamConfigEntry
+) -> list[dict[str, str]]:
+    """Pre-register the configured cameras in go2rtc; return the TV's list.
+
+    Run once at setup (and on reload, e.g. after the Cameras option changes),
+    not per-request: `/settings` and `/session` are polled constantly, and
+    re-registering already-registered go2rtc streams on every poll would be
+    pure overhead. The result is cached on `entry.runtime_data.cameras`.
+
+    In the configured order, so Left/Right on the TV cycles through them even
+    before any `play_stream` automation has run. A camera that has gone (removed,
+    renamed) or whose stream can't be resolved right now is skipped, not fatal.
+    """
+    cameras = entry.options.get(CONF_CAMERAS, [])
+    if not cameras:
+        return []
+    ensure_tv_secret(hass, entry)  # tv_stream_url needs it; not guaranteed yet
+    streams: list[dict[str, str]] = []
+    for camera in cameras:
+        state = hass.states.get(camera)
+        try:
+            source = await async_get_stream_source(hass, camera)
+            if not source:
+                _LOGGER.debug("Camera list: %s has no stream source", camera)
+                continue
+            name = await async_publish_stream(hass, entry, source)
+            url = tv_stream_url(hass, entry, name)
+        except Exception as err:  # noqa: BLE001 - one bad camera must not break the rest
+            _LOGGER.debug("Camera list: skipping %s (%s)", camera, err)
+            continue
+        streams.append(
+            {
+                "label": state.name if state else camera,
+                "url": url,
+                "type": "mse",
+            }
+        )
+    return streams
+
+
+def tv_settings(entry: SamstreamConfigEntry) -> dict[str, Any]:
+    """Return what the TV app applies: UI language, theme, and its camera list."""
     return {
         "language": entry.options.get(CONF_LANGUAGE, DEFAULT_LANGUAGE),
         "theme": entry.options.get(CONF_THEME, DEFAULT_THEME),
+        "cameras": entry.runtime_data.cameras if entry.runtime_data else [],
     }
 
 

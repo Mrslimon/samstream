@@ -98,8 +98,11 @@ async function boot(): Promise<void> {
       ? "connected"
       : "offline";
   const previous = lastStream(haUrl);
+  // Resume where it left off first, then the configured list (Configure →
+  // Cameras), so Left/Right works even before any play_stream automation.
   const streams = [
     ...(previous ? [previous.stream] : []),
+    ...settings.cameras.filter((stream) => stream.url !== previous?.stream.url),
     ...parseStreams(import.meta.env.VITE_SPIKE_STREAMS),
   ];
   const app = new App(elements, streams, __APP_VERSION__, language, connection);

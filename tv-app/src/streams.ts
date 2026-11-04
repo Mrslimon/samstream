@@ -16,27 +16,32 @@ export interface CameraStream {
   mjpegUrl?: string;
 }
 
+/** Keep only well-formed entries (anything else dropped, not the whole list). */
+export function parseCameraList(raw: unknown): CameraStream[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.filter(
+    (item): item is CameraStream =>
+      typeof item === "object" &&
+      item !== null &&
+      typeof (item as CameraStream).label === "string" &&
+      typeof (item as CameraStream).url === "string",
+  );
+}
+
 /**
  * Development streams from VITE_SPIKE_STREAMS (a JSON array of {label, url, type?});
  * anything malformed is dropped. Bundled builds have none: Home Assistant sends
- * the stream at launch from milestone 8.
+ * the configured camera list (milestone 8, Configure → Cameras) and ad-hoc
+ * `play_stream` calls send one more at launch.
  */
 export function parseStreams(raw: string | undefined): CameraStream[] {
   if (!raw) {
     return [];
   }
   try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed.filter(
-      (item): item is CameraStream =>
-        typeof item === "object" &&
-        item !== null &&
-        typeof (item as CameraStream).label === "string" &&
-        typeof (item as CameraStream).url === "string",
-    );
+    return parseCameraList(JSON.parse(raw));
   } catch {
     return [];
   }
