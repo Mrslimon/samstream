@@ -57,9 +57,13 @@ def box(kind: bytes, payload: bytes = b"") -> bytes:
     return (8 + len(payload)).to_bytes(4, "big") + kind + payload
 
 
-# fMP4 as ffmpeg writes it: ftyp + moov (H.264 High 5.0 in avcC), then fragments.
+# fMP4 as ffmpeg writes it: ftyp + moov (H.264 High 4.1 in avcC, TV-safe), then
+# fragments. UNSAFE_MOOV is a camera at Level 5.0 - not in the TV's accepted
+# set (tv-app/src/mse.ts VIDEO_CODECS) - which `_serve` transcodes instead of
+# copying (see stream_relay._TV_SAFE_AVC_CODECS).
 FTYP = box(b"ftyp", b"isom")
-MOOV = box(b"moov", box(b"avcC", bytes([1, 0x64, 0x00, 0x32, 0xFF])))
+MOOV = box(b"moov", box(b"avcC", bytes([1, 0x64, 0x00, 0x29, 0xFF])))
+UNSAFE_MOOV = box(b"moov", box(b"avcC", bytes([1, 0x64, 0x00, 0x32, 0xFF])))
 MOOF, MDAT = box(b"moof", b"m" * 4), box(b"mdat", b"frame")
 
 
@@ -313,11 +317,55 @@ async def test_relay(
             fragment = await socket.receive_bytes(timeout=5)
         await asyncio.wait_for(ffmpeg.killed.wait(), 5)
 
-    assert hello == {"type": "mse", "value": 'video/mp4; codecs="avc1.640032"'}
+    assert hello == {"type": "mse", "value": 'video/mp4; codecs="avc1.640029"'}
     assert init == FTYP + MOOV
     assert fragment == MOOF + MDAT
     assert f"rtsp://127.0.0.1:18554/{stream_name(RTSP)}" in ffmpeg.args
-    assert "copy" in ffmpeg.args  # remux only, never transcode
+    assert "copy" in ffmpeg.args  # a TV-safe codec: remux only, never transcode
+
+
+async def test_relay_transcodes_a_codec_the_tv_cannot_play(
+    hass: HomeAssistant,
+    setup_entry: MockConfigEntry,
+    mock_tv: MagicMock,
+    go2rtc: FakeGo2rtc,
+    hass_client_no_auth: ClientSessionGenerator,
+) -> None:
+    """A copy at an unsupported level (e.g. 5.0) gets transcoded, once."""
+    client, path = await open_relay(hass, mock_tv, hass_client_no_auth)
+    outputs = [FTYP + UNSAFE_MOOV + MOOF + MDAT, FTYP + MOOV + MOOF + MDAT]
+    calls: list[tuple[str, ...]] = []
+    killed = [asyncio.Event(), asyncio.Event()]
+
+    async def fake_exec(*args: str, **_kwargs: Any) -> Any:
+        index = len(calls)
+        calls.append(args)
+        stdout = asyncio.StreamReader()
+        stdout.feed_data(outputs[index])
+        event = killed[index]
+
+        async def wait() -> int:
+            await event.wait()
+            return -9
+
+        return SimpleNamespace(stdout=stdout, kill=event.set, wait=wait)
+
+    with patch(SUBPROCESS, fake_exec):
+        async with client.ws_connect(path) as socket:
+            await socket.send_str(json.dumps({"type": "mse"}))
+            hello = await socket.receive_json(timeout=5)
+            init = await socket.receive_bytes(timeout=5)
+            fragment = await socket.receive_bytes(timeout=5)
+        await asyncio.wait_for(killed[1].wait(), 5)
+
+    assert hello == {"type": "mse", "value": 'video/mp4; codecs="avc1.640029"'}
+    assert init == FTYP + MOOV
+    assert fragment == MOOF + MDAT
+    assert len(calls) == 2
+    assert "copy" in calls[0]
+    assert "copy" not in calls[1]
+    assert "libx264" in calls[1]
+    assert killed[0].is_set()  # the first (unsafe-codec) process was killed
 
 
 @pytest.mark.usefixtures("server_sockets")
@@ -452,7 +500,8 @@ async def test_old_command_expires(
 
 
 def test_mse_codec() -> None:
-    assert mse_codec(MOOV) == "avc1.640032"
+    assert mse_codec(MOOV) == "avc1.640029"
+    assert mse_codec(UNSAFE_MOOV) == "avc1.640032"
     assert mse_codec(box(b"moov", box(b"hvcC"))).startswith("hvc1.")
     with pytest.raises(ValueError, match="no H"):
         mse_codec(box(b"moov"))

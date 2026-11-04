@@ -60,6 +60,13 @@ _REQUEST_TIMEOUT = 10.0
 _DEFAULT_RTSP = "127.0.0.1:18554"
 # Codec string for H.265 cameras (the TV's own offer); H.264 is read from avcC.
 _HEVC_CODEC = "hvc1.1.6.L153.B0"
+# H.264 levels the TV's MSE client is confirmed to accept (tv-app/src/mse.ts
+# VIDEO_CODECS). A camera encoding at another level (e.g. Level 5.0,
+# "avc1.640032" - some DVRs/NVRs default to it) plays fine through ffmpeg but
+# the TV's own decoder refuses it; the stream copy gets transcoded once to a
+# safe level instead, rather than asking every camera to be reconfigured.
+_TV_SAFE_AVC_CODECS = frozenset({"avc1.640029", "avc1.64002A", "avc1.640033"})
+_TRANSCODE_LEVEL = "4.1"  # matches avc1.640029 above
 
 
 def _go2rtc(hass: HomeAssistant) -> tuple[str, aiohttp.ClientSession]:
@@ -381,16 +388,94 @@ def ffmpeg_args(source: str) -> list[str]:
     ]
 
 
-async def _serve(socket: web.WebSocketResponse, source: str) -> None:
-    process = await asyncio.create_subprocess_exec(
-        *ffmpeg_args(source),
+def transcode_args(source: str) -> list[str]:
+    """Re-encode the video track to a level the TV's MSE client accepts.
+
+    Used only once a copy's codec turns out not to be in `_TV_SAFE_AVC_CODECS`
+    (most cameras never hit this; it's the fallback, not the default).
+    """
+    return [
+        _FFMPEG,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-fflags",
+        "nobuffer",
+        "-probesize",
+        "500000",
+        "-analyzeduration",
+        "1000000",
+        "-rtsp_transport",
+        "tcp",
+        "-i",
+        source,
+        "-map",
+        "0:v:0",
+        "-c:v",
+        "libx264",
+        "-profile:v",
+        "high",
+        "-level:v",
+        _TRANSCODE_LEVEL,
+        "-preset",
+        "veryfast",
+        "-f",
+        "mp4",
+        "-movflags",
+        "empty_moov+default_base_moof+frag_keyframe",
+        "-frag_duration",
+        "100000",
+        "pipe:1",
+    ]
+
+
+async def _start_ffmpeg(args: list[str]) -> asyncio.subprocess.Process:
+    return await asyncio.create_subprocess_exec(
+        *args,
         stdin=asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.DEVNULL,
     )
+
+
+async def _kill(process: asyncio.subprocess.Process) -> None:
+    with contextlib.suppress(ProcessLookupError):
+        process.kill()
+    await process.wait()
+
+
+async def _serve(socket: web.WebSocketResponse, source: str) -> None:
+    process = await _start_ffmpeg(ffmpeg_args(source))
     stdout = process.stdout
     if stdout is None:  # pragma: no cover - PIPE always gives a reader
         return
+    try:
+        init, codec = await _read_init(stdout)
+    except (ValueError, EOFError, ConnectionError) as err:
+        await socket.send_str(json.dumps({"type": "error", "value": str(err)}))
+        await _kill(process)
+        return
+    if codec not in _TV_SAFE_AVC_CODECS and codec != _HEVC_CODEC:
+        _LOGGER.debug(
+            "TV stream from %s: %s not TV-safe, transcoding instead of copying",
+            source,
+            codec,
+        )
+        await _kill(process)
+        process = await _start_ffmpeg(transcode_args(source))
+        stdout = process.stdout
+        if stdout is None:  # pragma: no cover - PIPE always gives a reader
+            return
+        try:
+            init, codec = await _read_init(stdout)
+        except (ValueError, EOFError, ConnectionError) as err:
+            await socket.send_str(json.dumps({"type": "error", "value": str(err)}))
+            await _kill(process)
+            return
+    await socket.send_str(
+        json.dumps({"type": "mse", "value": f'video/mp4; codecs="{codec}"'})
+    )
+    await socket.send_bytes(init)
     tasks = [
         asyncio.ensure_future(_send_fmp4(stdout, socket)),
         asyncio.ensure_future(_until_closed(socket)),
@@ -401,9 +486,7 @@ async def _serve(socket: web.WebSocketResponse, source: str) -> None:
         _LOGGER.debug("TV stream from %s ended", source)
         for task in tasks:
             task.cancel()
-        with contextlib.suppress(ProcessLookupError):
-            process.kill()
-        await process.wait()
+        await _kill(process)
         for task in tasks:
             with contextlib.suppress(
                 asyncio.CancelledError, asyncio.IncompleteReadError, ConnectionError
@@ -440,25 +523,25 @@ def mse_codec(init: bytes) -> str:
     raise ValueError(msg)
 
 
-async def _send_fmp4(
-    reader: asyncio.StreamReader, socket: web.WebSocketResponse
-) -> None:
-    """Send go2rtc's MSE handshake, the init segment, then whole fragments."""
+async def _read_init(reader: asyncio.StreamReader) -> tuple[bytes, str]:
+    """Read ffmpeg's init segment (up to and including `moov`).
+
+    Returns it with its codec string. Raises `ValueError` if it has no
+    H.264/H.265 track.
+    """
     init = b""
     while True:
         kind, box = await _read_box(reader)
         init += box
         if kind == b"moov":
             break
-    try:
-        codec = mse_codec(init)
-    except ValueError as err:
-        await socket.send_str(json.dumps({"type": "error", "value": str(err)}))
-        return
-    await socket.send_str(
-        json.dumps({"type": "mse", "value": f'video/mp4; codecs="{codec}"'})
-    )
-    await socket.send_bytes(init)
+    return init, mse_codec(init)
+
+
+async def _send_fmp4(
+    reader: asyncio.StreamReader, socket: web.WebSocketResponse
+) -> None:
+    """Send whole fragments as they arrive (the init segment already went)."""
     fragment = b""
     while True:
         kind, box = await _read_box(reader)
