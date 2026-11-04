@@ -37,7 +37,7 @@ rules:
   log-when-unavailable: done # Logged once when the TV goes off or unreachable.
   parallel-updates: done # PARALLEL_UPDATES in every platform.
   reauthentication-flow: done # Revoked token -> reauth (Allow on the TV again).
-  test-coverage: done # 97 %.
+  test-coverage: done # custom_components/samstream: ~95% (measured, not estimated).
 
   # Gold
   devices: done

@@ -314,6 +314,37 @@ async def test_options_release_hands_the_tv_back(
     assert ocf_entry.options[CONF_OCF] is False
 
 
+async def test_options_release_raises_an_issue_when_it_fails(
+    hass: HomeAssistant, ocf_entry: MockConfigEntry
+) -> None:
+    """A release that fails still turns local control off, but is not silent."""
+    hass.config_entries.async_update_entry(
+        ocf_entry, data={**ocf_entry.data, CONF_OCF_OWNER_PSK: "cd" * 16}
+    )
+    options = hass.config_entries.options
+    result = await options.async_init(ocf_entry.entry_id)
+    result = await options.async_configure(
+        result["flow_id"], {"next_step_id": "local_control"}
+    )
+    flow = result["flow_id"]
+    result = await options.async_configure(
+        flow, {"next_step_id": "local_control_release"}
+    )
+    assert result["type"] is FlowResultType.FORM
+    with patch(
+        "custom_components.samstream.config_flow.release_tv",
+        side_effect=OcfError("no reply"),
+    ):
+        result = await options.async_configure(flow, {})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+    assert ocf_entry.options[CONF_OCF] is False
+    issue = ir.async_get(hass).async_get_issue(
+        DOMAIN, f"ocf_release_{ocf_entry.entry_id}"
+    )
+    assert issue is not None
+
+
 async def test_removing_the_device_releases_the_tv_first(
     hass: HomeAssistant, ocf_entry: MockConfigEntry
 ) -> None:
