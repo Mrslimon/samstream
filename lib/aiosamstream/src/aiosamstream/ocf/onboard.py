@@ -57,6 +57,9 @@ _CBOR_UINT16 = 0x19  # CBOR head byte for a following uint16
 _PLAIN_PORT = 5683
 _MCAST = "224.0.1.187"
 _PBKDF2_ITERS = 1000
+# How long to let the TV's DTLS stack settle between the PIN session closing
+# and the owner session opening (see onboard_tv).
+_OWNER_SESSION_SETTLE = 2.0
 _PIN_IDENTITY = b"oic.sec.doxm.rdp"
 
 DOXM = "/oic/sec/doxm"
@@ -433,6 +436,12 @@ def onboard_tv(  # noqa: PLR0913
         device_uuid = device_uuid or found_uuid
 
     owner_psk = _take_ownership(ip, secure_port, pin, device_uuid, obt_uuid)
+    # The TV's embedded DTLS stack needs a moment after closing the PIN
+    # session before it can handshake a new one: opening the owner session
+    # immediately gets "no server Finished" (confirmed live: 0/1 without this
+    # pause, 1/1 with it, both phases otherwise identical). Not a timeout on
+    # our end - the TV's own session teardown is still in flight.
+    time.sleep(_OWNER_SESSION_SETTLE)
     _provision_cloud(
         ip,
         secure_port,

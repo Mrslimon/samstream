@@ -328,6 +328,11 @@ Samsung's TVs set some hard limits. Samstream works around what it can; these re
 - **Local control was working, then stopped:** open **Configure → Local control** again — a
   TV that reverted to unowned (a factory/network reset, or it was re-added in SmartThings)
   shows as disconnected rather than erroring; pair it again from there.
+- **Pairing fails with "no server Finished from the TV", and a power cycle does not fix it:**
+  the TV's own local-control security state can get stuck even while it reports no owner — a
+  plain restart does not always clear it. Add the TV in the SmartThings app, then remove it
+  again right away; that forces a real reset of this state that a power cycle does not. Try
+  pairing again afterward.
 - **A full diagnostics download** (Settings → Devices & services → Samstream → the TV → ⋮ →
   Download diagnostics) has secrets removed and is the fastest way to attach useful detail to
   a bug report.

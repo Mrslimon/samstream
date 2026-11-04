@@ -359,7 +359,11 @@ class _LocalControlSteps(ConfigEntryBaseFlow):
                             cloud_uuid=settings.identity.cloud_uuid,
                             cis=cis,
                             access_token=self._lc_token(),
-                            device_uuid=self._ocf_device_uuid,
+                            # Discovery itself is flaky (comment above); a retry
+                            # must re-fetch both together, or a bad device_uuid
+                            # from the first discovery stays wrong forever while
+                            # only the port gets refreshed.
+                            device_uuid=self._ocf_device_uuid if attempt == 0 else None,
                             secure_port=self._ocf_port if attempt == 0 else None,
                         )
                     )
