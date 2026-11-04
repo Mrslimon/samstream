@@ -285,7 +285,7 @@
       },
       "local_control_release": {
         "title": "Hand the TV back to SmartThings",
-        "description": "Home Assistant will hand the TV back to SmartThings — it keeps its apps and settings and becomes available in the SmartThings app again.\n\nIf you set it up here, or pasted the helper's credential, just select Submit. Otherwise run the LAN helper again on that computer, then select Submit:\n\n`python3 samstream-onboard.pyz release --credential <the credential>`"
+        "description": "Home Assistant will hand the TV back to SmartThings — it keeps its apps and settings and becomes available in the SmartThings app again.\n\nIf you set it up here, or pasted the helper's credential, just select Submit. Otherwise run the LAN helper again on that computer, then select Submit:\n\n`python3 samstream-onboard.pyz release --credential`, followed by the credential the helper showed you"
       },
       "local_control_failed": {
         "title": "Home Assistant could not set up the TV",

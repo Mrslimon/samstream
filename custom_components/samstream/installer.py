@@ -514,7 +514,7 @@ async def async_bundled_version(hass: HomeAssistant) -> str | None:
     try:
         wgt = await hass.async_add_executor_job(BUNDLED_PACKAGE.read_bytes)
         return package_version(wgt)
-    except (OSError, SigningError):
+    except OSError, SigningError:
         _LOGGER.warning("No usable bundled Samstream app at %s", BUNDLED_PACKAGE)
         return None
 

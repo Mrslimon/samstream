@@ -163,7 +163,7 @@ async def _best_icon(session: aiohttp.ClientSession, domain: str) -> bytes:
             ) as response:
                 ok = response.status == HTTPStatus.OK
                 data = await response.read() if ok else b""
-        except (aiohttp.ClientError, TimeoutError):
+        except aiohttp.ClientError, TimeoutError:
             continue
         if png_size(data) > png_size(best):
             best = data

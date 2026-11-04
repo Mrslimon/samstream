@@ -1,6 +1,12 @@
 {
   "domain": "samstream",
   "name": "Samstream",
+  "after_dependencies": [
+    "camera",
+    "conversation",
+    "go2rtc",
+    "media_source"
+  ],
   "codeowners": [
     "@Mrslimon"
   ],
@@ -22,17 +28,11 @@
   "requirements": [
     "aiosamstream==0.1.0"
   ],
-  "version": "0.1.0",
-  "after_dependencies": [
-    "camera",
-    "conversation",
-    "go2rtc",
-    "media_source"
-  ],
   "ssdp": [
     {
       "st": "urn:samsung.com:device:RemoteControlReceiver:1",
       "manufacturer": "Samsung Electronics"
     }
-  ]
+  ],
+  "version": "0.1.0"
 }

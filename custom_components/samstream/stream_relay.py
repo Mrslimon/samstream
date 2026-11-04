@@ -309,7 +309,7 @@ class SamstreamMjpegView(HomeAssistantView):
             stdout = process.stdout
             while stdout is not None and (chunk := await stdout.read(65536)):
                 await response.write(chunk)
-        except (ConnectionError, aiohttp.ClientError):
+        except ConnectionError, aiohttp.ClientError:
             pass  # The TV went away.
         finally:
             with contextlib.suppress(ProcessLookupError):

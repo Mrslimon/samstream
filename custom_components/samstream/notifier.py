@@ -122,9 +122,7 @@ async def async_post_native(  # noqa: PLR0913 - one argument per notification fi
         async with session.get(url, timeout=_TIMEOUT) as resp:
             if resp.status == HTTPStatus.OK:
                 return True
-            _LOGGER.debug(
-                "Notifier on %s refused the post: HTTP %s", host, resp.status
-            )
+            _LOGGER.debug("Notifier on %s refused the post: HTTP %s", host, resp.status)
             return False
     except (aiohttp.ClientError, TimeoutError) as err:
         _LOGGER.debug("Could not reach the notifier on %s: %s", host, err)

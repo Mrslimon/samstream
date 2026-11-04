@@ -294,7 +294,7 @@ class _LocalControlSteps(ConfigEntryBaseFlow):
         if credential:
             try:
                 cred = decode_credential(credential)
-            except (ValueError, KeyError):
+            except ValueError, KeyError:
                 return self._lc_lan_form({"credential": "invalid_credential"})
             self._lc_store(
                 {
@@ -1181,7 +1181,7 @@ class SamstreamOptionsFlow(_LocalControlSteps, OptionsFlow):
                     str(imported.get("ca_key", "")).strip().encode(),
                     str(imported.get("cloud_uuid", "")).strip(),
                 )
-            except (ValueError, TypeError, UnsupportedAlgorithm):
+            except ValueError, TypeError, UnsupportedAlgorithm:
                 return settings, "invalid_cloud_identity"
         host = str(user_input.get(CONF_OCF_HOST) or "").strip() or None
         return CloudSettings(identity, int(user_input[CONF_OCF_PORT]), host), None

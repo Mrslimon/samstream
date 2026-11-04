@@ -266,7 +266,7 @@ class OcfService:
         try:
             async with asyncio.timeout(REACH_TIMEOUT):
                 _, writer = await asyncio.open_connection(host, port, ssl=probe)
-        except (OSError, TimeoutError):
+        except OSError, TimeoutError:
             return False
         writer.close()
         with contextlib.suppress(OSError):

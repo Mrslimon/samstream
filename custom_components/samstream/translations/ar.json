@@ -285,7 +285,7 @@
       },
       "local_control_release": {
         "title": "إعادة التلفزيون إلى SmartThings",
-        "description": "سيعيد Home Assistant التلفزيون إلى SmartThings — يحتفظ بتطبيقاته وإعداداته ويصبح متاحًا في تطبيق SmartThings مرة أخرى.\n\nإذا أعددته هنا أو لصقت بيانات اعتماد الأداة، فاختر إرسال فقط. وإلا شغّل أداة الشبكة المحلية مجددًا على ذلك الجهاز ثم اختر إرسال:\n\n`python3 samstream-onboard.pyz release --credential <بيانات الاعتماد>`"
+        "description": "سيعيد Home Assistant التلفزيون إلى SmartThings — يحتفظ بتطبيقاته وإعداداته ويصبح متاحًا في تطبيق SmartThings مرة أخرى.\n\nإذا أعددته هنا أو لصقت بيانات اعتماد الأداة، فاختر إرسال فقط. وإلا شغّل أداة الشبكة المحلية مجددًا على ذلك الجهاز ثم اختر إرسال:\n\n`python3 samstream-onboard.pyz release --credential`، متبوعة ببيانات الاعتماد التي أظهرتها الأداة"
       },
       "local_control_failed": {
         "title": "تعذّر على Home Assistant إعداد التلفزيون",

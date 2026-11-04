@@ -426,9 +426,7 @@ async def test_uninstall_skips_an_app_that_is_not_installed(
 
 
 @pytest.mark.usefixtures("setup_entry")
-async def test_uninstall_requires_sdb(
-    hass: HomeAssistant, sdb: MagicMock
-) -> None:
+async def test_uninstall_requires_sdb(hass: HomeAssistant, sdb: MagicMock) -> None:
     """When the TV refuses sdb, uninstall raises and the repair issue is created."""
     sdb.connect = AsyncMock(side_effect=SdbConnectionError("refused"))
     with pytest.raises(HomeAssistantError):

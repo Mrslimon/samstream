@@ -155,7 +155,7 @@ def api(path: str, method: str = "GET") -> int:
             return int(response.status)
     except urllib.error.HTTPError as err:
         return err.code
-    except (urllib.error.URLError, TimeoutError, ConnectionError):
+    except urllib.error.URLError, TimeoutError, ConnectionError:
         return 0
 
 
