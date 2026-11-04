@@ -136,5 +136,5 @@ class SamstreamTvSessionView(HomeAssistantView):
 def _int_query(request: web.Request, name: str) -> int | None:
     try:
         return int(request.query[name])
-    except KeyError, ValueError:
+    except (KeyError, ValueError):
         return None

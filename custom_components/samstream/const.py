@@ -42,6 +42,8 @@ CONF_OCF_SECURE_PORT: Final = "ocf_secure_port"
 CONF_OCF_WELCOME: Final = "ocf_welcome"
 DEFAULT_OCF_PORT: Final = 5684
 ISSUE_OCF_PORT: Final = "ocf_port"
+# Per-entry: raised when release_tv could not confirm the TV let go of ownership.
+ISSUE_OCF_RELEASE: Final = "ocf_release"
 # How long onboarding waits for the TV to dial the cloud after it is pointed at us.
 OCF_ONBOARD_TIMEOUT: Final = 90
 # OCF state counts as live this long after the TV last reported (it re-dials ~2 s).

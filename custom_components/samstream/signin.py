@@ -92,7 +92,7 @@ class SamstreamSignInView(HomeAssistantView):
         try:
             data = await request.json()
             body = data["body"]
-        except ValueError, KeyError, TypeError:
+        except (ValueError, KeyError, TypeError):
             return self.json_message('Expected {"body": ...}', HTTPStatus.BAD_REQUEST)
         if not isinstance(body, str):
             return self.json_message('Expected {"body": ...}', HTTPStatus.BAD_REQUEST)

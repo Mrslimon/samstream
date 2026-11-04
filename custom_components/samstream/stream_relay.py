@@ -29,6 +29,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.http import KEY_HASS, HomeAssistantView
 from homeassistant.helpers.network import NoURLAvailableError, get_url
+from homeassistant.helpers.storage import Store
 
 from .const import CONF_TV_SECRET, DOMAIN
 
@@ -40,7 +41,18 @@ _LOGGER = logging.getLogger(__name__)
 # HA's go2rtc integration keeps {url, session} here; the session talks to the
 # Unix socket with go2rtc's credentials.
 _GO2RTC_DATA = "go2rtc"
+# In-memory registry {name: set(entry_id)} of streams a TV may open, rebuilt at
+# startup from the persistent store below (both go2rtc's registration and this
+# dict are otherwise lost on restart, so a replayed stream URL would 404).
 _PUBLISHED = f"{DOMAIN}_streams"
+# {name: source} alongside _PUBLISHED, so a stream can be re-registered in
+# go2rtc on demand after a restart. The source (an RTSP URL, possibly with
+# credentials) stays server-side: it is never sent to the TV or logged.
+_SOURCES = f"{DOMAIN}_stream_sources"
+_STORE = f"{DOMAIN}_stream_store"
+_LOADED = f"{DOMAIN}_streams_loaded"
+_STORE_VERSION = 1
+_STORE_KEY = f"{DOMAIN}.streams"
 _FFMPEG = "ffmpeg"
 # The app asks for the stream right after the socket opens.
 _REQUEST_TIMEOUT = 10.0
@@ -66,10 +78,68 @@ def stream_name(source: str) -> str:
     return "samstream_" + hashlib.sha256(source.encode()).hexdigest()[:16]
 
 
+async def _ensure_loaded(hass: HomeAssistant) -> None:
+    """Rebuild the in-memory stream registry from the store, once per run.
+
+    go2rtc's registration and `_PUBLISHED` are both lost on restart, so a TV
+    replaying a saved stream URL would otherwise 404 ("ws closed"). The store
+    keeps {name: {source, entries}} so the relay can re-register on demand.
+    """
+    if hass.data.get(_LOADED):
+        return
+    hass.data[_LOADED] = True
+    store: Store[dict[str, Any]] = hass.data.setdefault(
+        _STORE, Store(hass, _STORE_VERSION, _STORE_KEY)
+    )
+    data = await store.async_load()
+    published: dict[str, set[str]] = hass.data.setdefault(_PUBLISHED, {})
+    sources: dict[str, str] = hass.data.setdefault(_SOURCES, {})
+    for name, record in (data or {}).get("streams", {}).items():
+        source = record.get("source")
+        entries = record.get("entries", [])
+        if not isinstance(source, str) or not entries:
+            continue
+        published.setdefault(name, set()).update(entries)
+        sources[name] = source
+
+
+async def _save(hass: HomeAssistant) -> None:
+    """Persist the current registry so replays survive a restart."""
+    published: dict[str, set[str]] = hass.data.get(_PUBLISHED, {})
+    sources: dict[str, str] = hass.data.get(_SOURCES, {})
+    streams = {
+        name: {"source": sources[name], "entries": sorted(entries)}
+        for name, entries in published.items()
+        if name in sources and entries
+    }
+    store: Store[dict[str, Any]] = hass.data.setdefault(
+        _STORE, Store(hass, _STORE_VERSION, _STORE_KEY)
+    )
+    await store.async_save({"streams": streams})
+
+
+async def _reregister(hass: HomeAssistant, name: str) -> None:
+    """Re-add `name` to go2rtc from its stored source (idempotent).
+
+    After a restart go2rtc no longer knows the stream, so the relay registers it
+    again the first time a TV asks for it. go2rtc's PUT is idempotent.
+    """
+    source = hass.data.get(_SOURCES, {}).get(name)
+    if not source:
+        return
+    url, session = _go2rtc(hass)
+    with contextlib.suppress(aiohttp.ClientError):
+        async with session.put(
+            f"{url}api/streams", params={"name": name, "src": source}
+        ):
+            pass
+
+
 async def async_publish_stream(
     hass: HomeAssistant, entry: SamstreamConfigEntry, source: str
 ) -> str:
     """Register `source` (RTSP URL) in go2rtc for this TV; return the stream name."""
+    await _ensure_loaded(hass)
     url, session = _go2rtc(hass)
     name = stream_name(source)
     try:
@@ -93,6 +163,8 @@ async def async_publish_stream(
     # A camera can be on several TVs at once: each one may open the stream.
     published: dict[str, set[str]] = hass.data.setdefault(_PUBLISHED, {})
     published.setdefault(name, set()).add(entry.entry_id)
+    hass.data.setdefault(_SOURCES, {})[name] = source
+    await _save(hass)
     return name
 
 
@@ -129,8 +201,12 @@ class SamstreamStreamView(HomeAssistantView):
     ) -> web.StreamResponse:
         """Upgrade to WebSocket and stream fMP4 until either side stops."""
         hass = request.app[KEY_HASS]
+        await _ensure_loaded(hass)
         if not _allowed(hass, name, secret):
             return web.Response(status=HTTPStatus.NOT_FOUND)
+        # go2rtc forgets the stream on restart; re-add it before serving so a
+        # replayed URL plays instead of closing ("ws closed").
+        await _reregister(hass, name)
         source = await _restream_url(hass, name)
 
         socket = web.WebSocketResponse(heartbeat=30)
@@ -210,8 +286,10 @@ class SamstreamMjpegView(HomeAssistantView):
     ) -> web.StreamResponse:
         """Stream JPEG frames until the TV stops reading."""
         hass = request.app[KEY_HASS]
+        await _ensure_loaded(hass)
         if not _allowed(hass, name, secret):
             return web.Response(status=HTTPStatus.NOT_FOUND)
+        await _reregister(hass, name)
         source = await _restream_url(hass, name)
         process = await asyncio.create_subprocess_exec(
             *mjpeg_args(source),
@@ -231,7 +309,7 @@ class SamstreamMjpegView(HomeAssistantView):
             stdout = process.stdout
             while stdout is not None and (chunk := await stdout.read(65536)):
                 await response.write(chunk)
-        except ConnectionError, aiohttp.ClientError:
+        except (ConnectionError, aiohttp.ClientError):
             pass  # The TV went away.
         finally:
             with contextlib.suppress(ProcessLookupError):

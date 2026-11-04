@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Any
 
-from aiosamstream import SamsungTV
+from aiosamstream import OcfError, SamsungTV
+from aiosamstream.ocf import release_tv
 from homeassistant.components.media_player.const import DOMAIN as MEDIA_PLAYER_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_MAC, CONF_MODEL, CONF_NAME, Platform
@@ -13,6 +16,7 @@ from homeassistant.core import HomeAssistant, SupportsResponse
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers import service
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_time_interval
@@ -30,8 +34,11 @@ from .const import (
     ATTR_APP_ID,
     ATTR_PATH,
     CERT_CHECK_INTERVAL,
+    CONF_OCF_OWNER_PSK,
+    CONF_OCF_SECURE_PORT,
     CONF_TOKEN,
     DOMAIN,
+    ISSUE_OCF_RELEASE,
     TV_CORNERS,
 )
 from .coordinator import SamstreamCoordinator
@@ -46,6 +53,8 @@ from .tv_settings import SamstreamTvSettingsView
 from .validation import vol
 from .voice import async_setup_voice
 from .welcome import async_setup_welcome
+
+_LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -366,6 +375,49 @@ async def async_unload_entry(hass: HomeAssistant, entry: SamstreamConfigEntry) -
         forget_art_gallery(hass, entry.entry_id)
         await entry.runtime_data.tv.close()
     return unloaded
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: SamstreamConfigEntry) -> None:
+    """Release the TV from local control before deleting it for good.
+
+    Runs after `async_unload_entry`, when the user deletes the device/entry
+    rather than just disabling or reloading it. If this Home Assistant holds
+    an OCF owner credential for the TV, hand it back to SmartThings first; a
+    device removed without that leaves the TV still owned by this HA with no
+    way back short of a TV-side reset (see the `ocf_release` repair issue).
+    HA removes the entry regardless of what happens here, so this is
+    best-effort: failures are logged and surfaced as a repair issue, not
+    raised.
+    """
+    owner = entry.data.get(CONF_OCF_OWNER_PSK)
+    if not owner:
+        return
+    settings = await async_get_ocf_service(hass).async_load()
+    try:
+        await hass.async_add_executor_job(
+            partial(
+                release_tv,
+                entry.data[CONF_HOST],
+                settings.obt_uuid,
+                owner,
+                entry.data.get(CONF_OCF_SECURE_PORT),
+            )
+        )
+    except OcfError as err:
+        _LOGGER.warning(
+            "Local control: could not release %s while removing it: %s",
+            entry.data[CONF_HOST],
+            err,
+        )
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            f"{ISSUE_OCF_RELEASE}_{entry.entry_id}",
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=ISSUE_OCF_RELEASE,
+            translation_placeholders={"name": entry.title},
+        )
 
 
 def _remove_old_remote(hass: HomeAssistant, entry: SamstreamConfigEntry) -> None:

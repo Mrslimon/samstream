@@ -6,7 +6,6 @@ import asyncio
 import ipaddress
 import logging
 from collections.abc import Mapping
-from contextlib import suppress
 from functools import partial
 from typing import Any
 from urllib.parse import unquote, urlencode, urlparse
@@ -58,6 +57,7 @@ from homeassistant.const import (
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import section
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     SelectSelector,
@@ -99,6 +99,7 @@ from .const import (
     DEFAULT_TV_CORNER,
     DOMAIN,
     FRAME_POWER_MODES,
+    ISSUE_OCF_RELEASE,
     LANGUAGES,
     OCF_ONBOARD_TIMEOUT,
     THEMES,
@@ -127,6 +128,9 @@ _LOGGER = logging.getLogger(__name__)
 
 # The access token identifies the TV to the local cloud: keep it unguessable.
 MIN_OCF_TOKEN = 16
+# PIN onboarding tries a few times: the TV's secure port rotates, so a handshake
+# can land on a just-rotated port. Each attempt re-discovers the live port.
+_ONBOARD_ATTEMPTS = 3
 # Reconnect (Configure): wait for the TV before the restart, then for it to
 # come back once the viewer allowed it on screen.
 RECONNECT_WAIT = 30
@@ -152,6 +156,7 @@ class _LocalControlSteps(ConfigEntryBaseFlow):
         self._ocf_pin = ""
         self._ocf_port: int | None = None
         self._ocf_device_uuid: str | None = None
+        self._lc_error = ""  # the last onboarding error, shown on the failed screen
 
     def _lc_host(self) -> str:
         raise NotImplementedError
@@ -186,14 +191,16 @@ class _LocalControlSteps(ConfigEntryBaseFlow):
         host = self._lc_host()
         if self._ocf_port is None:
             try:
-                # Ask for the PIN FIRST, so it appears on screen within a second;
-                # it also proves the TV answers plain CoAP. Only then spend time
-                # finding the secure port (a reply here is near-certain once the
-                # trigger worked, so discovery no longer waits on flaky retries).
-                await self.hass.async_add_executor_job(trigger_pin, host)
+                # Discover FIRST: a reply proves HA can reach the TV over plain
+                # CoAP and yields the secure port + device UUID. Only then trigger
+                # the PIN. This way an unreachable TV surfaces as OcfError (-> LAN
+                # helper) and an owned TV as OcfTvOwnedError (-> "already owned"),
+                # instead of an ambiguous PIN-trigger refusal being misread as
+                # "service not found" and wrongly routed to the LAN helper.
                 port, device_uuid = await self.hass.async_add_executor_job(
                     discover, host
                 )
+                await self.hass.async_add_executor_job(trigger_pin, host)
             except OcfTvOwnedError as err:
                 _LOGGER.info("Local control: %s is owned (%s)", host, err)
                 return await self.async_step_local_control_owned()
@@ -287,7 +294,7 @@ class _LocalControlSteps(ConfigEntryBaseFlow):
         if credential:
             try:
                 cred = decode_credential(credential)
-            except ValueError, KeyError:
+            except (ValueError, KeyError):
                 return self._lc_lan_form({"credential": "invalid_credential"})
             self._lc_store(
                 {
@@ -328,23 +335,45 @@ class _LocalControlSteps(ConfigEntryBaseFlow):
         settings = await service.async_load()
         cis = service.cis()
         if self._lc_mode == "pin" and cis is not None:
-            try:
-                result = await self.hass.async_add_executor_job(
-                    partial(
-                        onboard_tv,
-                        self._lc_host(),
-                        self._ocf_pin,
-                        obt_uuid=settings.obt_uuid,
-                        ca_der=settings.identity.ca_der,
-                        cloud_uuid=settings.identity.cloud_uuid,
-                        cis=cis,
-                        access_token=self._lc_token(),
-                        device_uuid=self._ocf_device_uuid,
-                        secure_port=self._ocf_port,
+            # Reuse the secure port found on the connect screen: per the
+            # protocol doc (ocf-local-protocol.md 2 and 10) it changes only on
+            # power cycle / reset, not continuously, so it is still valid when
+            # the user has typed the PIN. Re-discovery is flaky (the TV answers
+            # plain CoAP only intermittently, worse after heavy OCF traffic),
+            # so only fall back to it (secure_port=None) on later attempts if
+            # the known port's handshake fails.
+            result = None
+            for attempt in range(_ONBOARD_ATTEMPTS):
+                try:
+                    result = await self.hass.async_add_executor_job(
+                        partial(
+                            onboard_tv,
+                            self._lc_host(),
+                            self._ocf_pin,
+                            obt_uuid=settings.obt_uuid,
+                            ca_der=settings.identity.ca_der,
+                            cloud_uuid=settings.identity.cloud_uuid,
+                            cis=cis,
+                            access_token=self._lc_token(),
+                            device_uuid=self._ocf_device_uuid,
+                            secure_port=self._ocf_port if attempt == 0 else None,
+                        )
                     )
-                )
-            except OcfError as err:
-                _LOGGER.warning("Local control onboarding failed: %s", err)
+                    break
+                except OcfError as err:
+                    self._lc_error = str(err)
+                    if attempt + 1 < _ONBOARD_ATTEMPTS:
+                        _LOGGER.info(
+                            "Onboarding attempt %d failed (%s); retrying with a "
+                            "fresh secure-port discovery",
+                            attempt + 1,
+                            err,
+                        )
+                        await asyncio.sleep(1)
+                        continue
+                    _LOGGER.warning("Local control onboarding failed: %s", err)
+                    return "failed"
+            if result is None:  # every attempt exhausted without a result
                 return "failed"
             self._lc_onboarded = True
             self._lc_store(
@@ -379,7 +408,12 @@ class _LocalControlSteps(ConfigEntryBaseFlow):
         return self.async_show_menu(
             step_id="local_control_failed",
             menu_options=self._lc_trouble_menu(),
-            description_placeholders={"name": self._lc_name()},
+            description_placeholders={
+                "name": self._lc_name(),
+                # The exact reason from onboarding (e.g. the DTLS handshake error),
+                # so the dialog says what went wrong instead of only generic hints.
+                "error": self._lc_error or "the TV did not complete the connection",
+            },
         )
 
     async def async_step_local_control_owned(
@@ -1097,7 +1131,7 @@ class SamstreamOptionsFlow(_LocalControlSteps, OptionsFlow):
             settings = await async_get_service(self.hass).async_load()
             owner = entry.data.get(CONF_OCF_OWNER_PSK)
             if owner:
-                with suppress(OcfError):
+                try:
                     await self.hass.async_add_executor_job(
                         partial(
                             release_tv,
@@ -1106,6 +1140,25 @@ class SamstreamOptionsFlow(_LocalControlSteps, OptionsFlow):
                             owner,
                             entry.data.get(CONF_OCF_SECURE_PORT),
                         )
+                    )
+                except OcfError as err:
+                    # Local control is still turned off below: nothing more to
+                    # do from this flow, but a swallowed failure here would
+                    # leave the TV believing it is still owned by this Home
+                    # Assistant with no way back short of a TV-side reset.
+                    _LOGGER.warning(
+                        "Local control: could not confirm %s released ownership: %s",
+                        entry.data[CONF_HOST],
+                        err,
+                    )
+                    ir.async_create_issue(
+                        self.hass,
+                        DOMAIN,
+                        f"{ISSUE_OCF_RELEASE}_{entry.entry_id}",
+                        is_fixable=False,
+                        severity=ir.IssueSeverity.WARNING,
+                        translation_key=ISSUE_OCF_RELEASE,
+                        translation_placeholders={"name": entry.title},
                     )
             return self.async_create_entry(data={**entry.options, CONF_OCF: False})
         return self.async_show_form(
@@ -1128,7 +1181,7 @@ class SamstreamOptionsFlow(_LocalControlSteps, OptionsFlow):
                     str(imported.get("ca_key", "")).strip().encode(),
                     str(imported.get("cloud_uuid", "")).strip(),
                 )
-            except ValueError, TypeError, UnsupportedAlgorithm:
+            except (ValueError, TypeError, UnsupportedAlgorithm):
                 return settings, "invalid_cloud_identity"
         host = str(user_input.get(CONF_OCF_HOST) or "").strip() or None
         return CloudSettings(identity, int(user_input[CONF_OCF_PORT]), host), None

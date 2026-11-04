@@ -163,6 +163,7 @@ export class App {
     for (const player of this.players()) player.setFit(this.fit);
 
     this.renderHome(version);
+    this.renderControlLabels();
   }
 
   start(): void {
@@ -272,6 +273,24 @@ export class App {
     this.el.live.textContent = this.text.live;
   }
 
+  /** Name the SmartThings-style control hints in the UI language. */
+  private renderControlLabels(): void {
+    const controls = this.el.controls;
+    const label = (dir: string): HTMLElement | null =>
+      controls.querySelector<HTMLElement>(`.cam-ctl[data-dir="${dir}"] .cam-label`);
+    const names: Record<string, string> = {
+      up: this.text.camFit,
+      left: this.text.camPrev,
+      right: this.text.camNext,
+    };
+    for (const [dir, name] of Object.entries(names)) {
+      const element = label(dir);
+      if (element) element.textContent = name;
+    }
+    const close = controls.querySelector<HTMLElement>(".cam-close-text");
+    if (close) close.textContent = this.text.close;
+  }
+
   private onKey(key: number): void {
     if (key === KEY_YELLOW) {
       this.el.debug.hidden = !this.el.debug.hidden;
@@ -296,18 +315,61 @@ export class App {
 
   private onPlayerKey(key: number): void {
     // Any key wakes the camera chrome (top bar + controls), SmartThings-style.
+    // The D-pad drives the triangle: Up = fit, Left = previous, Right = next,
+    // Down = close; the matching control lights up so the press is visible.
     this.showHud(this.streamLabel());
-    if (key === KEY_RIGHT) this.play(this.current + 1);
-    else if (key === KEY_LEFT) this.play(this.current - 1);
-    else if (key === KEY_ENTER) this.play(this.current);
-    else if (key > KEY_0 && key <= KEY_9) this.play(key - KEY_0 - 1);
-    else if (key === KEY_UP || key === KEY_DOWN) {
-      this.fit = nextFit(this.fit, key === KEY_UP ? 1 : -1);
+    if (key === KEY_RIGHT) {
+      this.pressControl("right");
+      this.play(this.current + 1);
+    } else if (key === KEY_LEFT) {
+      this.pressControl("left");
+      this.play(this.current - 1);
+    } else if (key === KEY_UP) {
+      this.pressControl("up");
+      this.fit = nextFit(this.fit, 1);
       saveFit(this.fit);
       for (const player of this.players()) player.setFit(this.fit);
       this.toast(FIT_LABELS[this.fit]);
-    } else if (key === KEY_BACK) {
+    } else if (key === KEY_ENTER) {
+      this.play(this.current);
+    } else if (key > KEY_0 && key <= KEY_9) {
+      this.play(key - KEY_0 - 1);
+    } else if (key === KEY_DOWN || key === KEY_BACK) {
+      this.pressControl("down");
       this.back();
+    }
+  }
+
+  /** Light up the control the pressed D-pad key maps to, and pulse it. */
+  private pressControl(dir: "up" | "left" | "right" | "down"): void {
+    const controls = this.el.controls;
+    if (dir === "down") {
+      this.pulse(controls.querySelector<HTMLElement>(".cam-close-hint"));
+      return;
+    }
+    const target = controls.querySelector<HTMLElement>(`.cam-ctl[data-dir="${dir}"]`);
+    // Move the "focus" highlight to the direction just pressed.
+    for (const ctl of controls.querySelectorAll<HTMLElement>(".cam-ctl")) {
+      ctl.classList.toggle("active", ctl === target);
+    }
+    this.pulse(target);
+  }
+
+  /** Re-fire the press animation, even on repeated presses of the same key. */
+  private pulse(element: HTMLElement | null): void {
+    if (!element) return;
+    element.classList.remove("pressed");
+    // Force a reflow so removing then adding the class restarts the animation.
+    void element.offsetWidth;
+    element.classList.add("pressed");
+  }
+
+  /** Drop the control highlight so a freshly opened camera starts neutral. */
+  private clearControls(): void {
+    for (const element of this.el.controls.querySelectorAll<HTMLElement>(
+      ".cam-ctl, .cam-close-hint",
+    )) {
+      element.classList.remove("active", "pressed");
     }
   }
 
@@ -348,6 +410,9 @@ export class App {
     if (this.streams.length === 0) {
       return;
     }
+    // Opening the camera from home / a notice starts with no control lit; moving
+    // between cameras keeps the highlight on the last direction pressed.
+    if (!this.playing) this.clearControls();
     this.current = (index + this.streams.length) % this.streams.length;
     const stream = this.streams[this.current];
     // Corner mode: pictures, since a playing video would take the TV's layer.

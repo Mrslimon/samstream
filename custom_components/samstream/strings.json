@@ -71,7 +71,7 @@
       },
       "local_control_failed": {
         "title": "Home Assistant could not set up the TV",
-        "description": "{name} did not accept Home Assistant as its owner. The usual reasons:\n\n- **Its local SmartThings service is stuck** after an earlier attempt. Unplug the TV from the wall for 30 seconds, turn it on, then try again.\n- **It is still set up in SmartThings** on a phone or account. Remove it in the SmartThings app first — a TV answers only one owner.\n- **The PIN was mistyped or expired.** Try again for a fresh PIN.\n\nYou can also set it up with the LAN helper from a computer on the TV's network.",
+        "description": "{name} did not accept Home Assistant as its owner.\n\n**What the TV reported:** {error}\n\nThe usual reasons:\n\n- **Its local SmartThings service is stuck** after an earlier attempt. Unplug the TV from the wall for 30 seconds, turn it on, then try again.\n- **It is still set up in SmartThings** on a phone or account. Remove it in the SmartThings app first — a TV answers only one owner.\n- **The PIN was mistyped or expired.** Try again for a fresh PIN.\n\nYou can also set it up with the LAN helper from a computer on the TV's network.",
         "menu_options": {
           "local_control_connect": "Try again",
           "local_control_lan": "Use the LAN helper on a computer",
@@ -289,7 +289,7 @@
       },
       "local_control_failed": {
         "title": "Home Assistant could not set up the TV",
-        "description": "{name} did not accept Home Assistant as its owner. The usual reasons:\n\n- **Its local SmartThings service is stuck** after an earlier attempt. Unplug the TV from the wall for 30 seconds, turn it on, then try again.\n- **It is still set up in SmartThings** on a phone or account. Remove it in the SmartThings app first — a TV answers only one owner.\n- **The PIN was mistyped or expired.** Try again for a fresh PIN.\n\nYou can also set it up with the LAN helper from a computer on the TV's network.",
+        "description": "{name} did not accept Home Assistant as its owner.\n\n**What the TV reported:** {error}\n\nThe usual reasons:\n\n- **Its local SmartThings service is stuck** after an earlier attempt. Unplug the TV from the wall for 30 seconds, turn it on, then try again.\n- **It is still set up in SmartThings** on a phone or account. Remove it in the SmartThings app first — a TV answers only one owner.\n- **The PIN was mistyped or expired.** Try again for a fresh PIN.\n\nYou can also set it up with the LAN helper from a computer on the TV's network.",
         "menu_options": {
           "local_control_connect": "Try again",
           "local_control_lan": "Use the LAN helper on a computer",
@@ -838,6 +838,10 @@
     "ocf_not_reachable_core": {
       "title": "Open port {port} for local control",
       "description": "TCP {port} is not reachable on this computer. Allow incoming TCP {port} in its firewall."
+    },
+    "ocf_release": {
+      "title": "Could not confirm {name} let go of local control",
+      "description": "Home Assistant turned local control off, but {name} did not answer, so it could not confirm the TV released ownership. If it is awake and on the network, try **Configure → Local control → Remove** again. Otherwise the TV may still show as owned by this Home Assistant; remove it in the SmartThings app, or reset its network settings, before pairing it again."
     }
   },
   "selector": {

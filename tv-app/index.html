@@ -32,11 +32,14 @@
           <p class="status"><span class="dot" id="status-dot"></span><span id="status-text"></span></p>
         </div>
         <div class="watch" aria-hidden="true">
-          <svg viewBox="0 0 64 64">
-            <circle cx="32" cy="32" r="26" />
-            <circle class="lens" cx="32" cy="32" r="15" />
-            <circle cx="32" cy="32" r="6" />
-          </svg>
+          <div class="eye">
+            <svg viewBox="0 0 120 120">
+              <circle class="housing" cx="60" cy="60" r="52" />
+              <circle class="iris" cx="60" cy="60" r="33" />
+              <circle class="pupil" cx="60" cy="60" r="15" />
+              <circle class="glint" cx="50" cy="50" r="5" />
+            </svg>
+          </div>
           <p id="preview-text"></p>
         </div>
       </section>
@@ -63,21 +66,43 @@
       <div class="tv-frame" id="tv-frame" hidden></div>
       <div class="chip" id="toast" hidden></div>
       <div id="overlay" aria-live="polite" hidden></div>
-      <!-- Bottom control cluster (SmartThings-style round buttons); hints for the
-           D-pad keys, not focus targets. Fades with the top bar after a moment. -->
+      <!-- Bottom control cluster laid out as the D-pad: Up = fit (apex, with an
+           up-arrow hint), Left = previous (bottom-left), Right = next
+           (bottom-right), Down = close (the hint pill below). The round buttons
+           light up as the matching D-pad key is pressed; they are hints, not
+           focus targets. Labels are filled in the UI language by app.ts, and the
+           chevrons keep physical left/right in both languages. Fades with the top
+           bar. -->
       <div class="cam-controls" id="cam-controls" aria-hidden="true">
-        <span class="cam-btn">
-          <svg viewBox="0 0 48 48"><path d="M30 12 18 24l12 12"/></svg>
-        </span>
-        <span class="cam-btn">
-          <svg viewBox="0 0 48 48"><path d="M18 12l12 12-12 12"/></svg>
-        </span>
-        <span class="cam-btn">
-          <svg viewBox="0 0 48 48"><rect x="10" y="14" width="28" height="20" rx="3"/><path d="M18 22v4M30 22v4"/></svg>
-        </span>
-        <span class="cam-btn cam-btn-close">
-          <svg viewBox="0 0 48 48"><path d="M15 15l18 18M33 15 15 33"/></svg>
-        </span>
+        <div class="cam-pad">
+          <span class="cam-arrow-up" aria-hidden="true">
+            <svg viewBox="0 0 48 22"><path d="M10 17 24 6l14 11"/></svg>
+          </span>
+          <span class="cam-ctl cam-ctl-up" data-dir="up">
+            <span class="cam-btn">
+              <svg viewBox="0 0 48 48"><path d="M8 24h32M8 24l8-8M8 24l8 8M40 24l-8-8M40 24l-8 8"/></svg>
+            </span>
+            <span class="cam-label"></span>
+          </span>
+          <div class="cam-base">
+            <span class="cam-ctl cam-ctl-left" data-dir="left">
+              <span class="cam-btn">
+                <svg viewBox="0 0 48 48"><path d="M30 12 18 24l12 12"/></svg>
+              </span>
+              <span class="cam-label"></span>
+            </span>
+            <span class="cam-ctl cam-ctl-right" data-dir="right">
+              <span class="cam-btn">
+                <svg viewBox="0 0 48 48"><path d="M18 12l12 12-12 12"/></svg>
+              </span>
+              <span class="cam-label"></span>
+            </span>
+          </div>
+          <span class="cam-close-hint" data-dir="down">
+            <svg viewBox="0 0 24 16" aria-hidden="true"><path d="M5 5 12 12l7-7"/></svg>
+            <span class="cam-close-text"></span>
+          </span>
+        </div>
       </div>
     </section>
 

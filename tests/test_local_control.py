@@ -314,6 +314,45 @@ async def test_options_release_hands_the_tv_back(
     assert ocf_entry.options[CONF_OCF] is False
 
 
+async def test_removing_the_device_releases_the_tv_first(
+    hass: HomeAssistant, ocf_entry: MockConfigEntry
+) -> None:
+    """Deleting the device hands the TV back before the entry is gone."""
+    hass.config_entries.async_update_entry(
+        ocf_entry, data={**ocf_entry.data, CONF_OCF_OWNER_PSK: "cd" * 16}
+    )
+    with patch("custom_components.samstream.release_tv") as release:
+        assert await hass.config_entries.async_remove(ocf_entry.entry_id)
+    release.assert_called_once()
+    assert release.call_args.args[0] == HOST
+    assert release.call_args.args[2] == "cd" * 16
+
+
+async def test_removing_the_device_without_a_credential_skips_release(
+    hass: HomeAssistant, ocf_entry: MockConfigEntry
+) -> None:
+    """A device never paired for local control has nothing to release."""
+    with patch("custom_components.samstream.release_tv") as release:
+        assert await hass.config_entries.async_remove(ocf_entry.entry_id)
+    release.assert_not_called()
+
+
+async def test_removing_the_device_raises_an_issue_when_release_fails(
+    hass: HomeAssistant, ocf_entry: MockConfigEntry
+) -> None:
+    """A release that fails does not block removal, but it is not silent."""
+    hass.config_entries.async_update_entry(
+        ocf_entry, data={**ocf_entry.data, CONF_OCF_OWNER_PSK: "cd" * 16}
+    )
+    entry_id = ocf_entry.entry_id
+    with patch(
+        "custom_components.samstream.release_tv", side_effect=OcfError("no reply")
+    ):
+        assert await hass.config_entries.async_remove(entry_id)
+    issue = ir.async_get(hass).async_get_issue(DOMAIN, f"ocf_release_{entry_id}")
+    assert issue is not None
+
+
 @pytest.mark.parametrize(
     ("back", "step"),
     [(True, "local_control_reconnected"), (False, "local_control_trouble")],
@@ -823,7 +862,7 @@ async def test_first_setup_unreachable_tv_uses_the_lan_helper(
     """HA cannot find the TV: LAN helper; finishing anyway keeps local control."""
     flows = hass.config_entries.flow
     flow = await _to_local_offer(hass)
-    # Unreachable now surfaces at the PIN trigger (tried first, before discovery).
+    # Unreachable surfaces at discovery (tried first); the PIN trigger never runs.
     with (
         patch(f"{FLOW}.trigger_pin", side_effect=OcfError("no answer")),
         patch(f"{FLOW}.discover", side_effect=OcfError("no answer")),

@@ -19,6 +19,9 @@ export interface Strings {
   helpHome: string[];
   helpPlayer: string[];
   close: string;
+  camPrev: string;
+  camNext: string;
+  camFit: string;
 }
 
 const STRINGS: Record<Language, Strings> = {
@@ -47,6 +50,9 @@ const STRINGS: Record<Language, Strings> = {
       "BACK  Back to the home screen",
     ],
     close: "Close",
+    camPrev: "Previous",
+    camNext: "Next",
+    camFit: "Fit",
   },
   ar: {
     appName: "Samstream",
@@ -73,6 +79,9 @@ const STRINGS: Record<Language, Strings> = {
       "BACK  العودة إلى الشاشة الرئيسية",
     ],
     close: "إغلاق",
+    camPrev: "السابقة",
+    camNext: "التالية",
+    camFit: "الملاءمة",
   },
 };
 

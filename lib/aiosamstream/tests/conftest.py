@@ -83,7 +83,7 @@ class FakeSdbd:
         session = _Session(self, reader, writer)
         try:
             await session.run()
-        except asyncio.IncompleteReadError, ConnectionError:
+        except (asyncio.IncompleteReadError, ConnectionError):
             pass
         finally:
             writer.close()

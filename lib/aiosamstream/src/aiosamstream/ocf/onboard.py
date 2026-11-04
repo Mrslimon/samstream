@@ -527,7 +527,12 @@ def _provision_cloud(  # noqa: PLR0913, PLR0917
                 "rowneruuid": obt_uuid,
             },
         )
-        coap.post(PSTAT, {"tm": 0, "cm": 0})  # clear TAKE_OWNER so ownership holds
+        # Clear TAKE_OWNER so ownership holds. Write tm (the client-settable
+        # target mode) then cm as two separate POSTs, in that order: this TV's
+        # pstat handler can 4.00 a combined {tm,cm} write and leave finalization
+        # incomplete. This matches the proven oicseek/otm_full.py sequence.
+        coap.post(PSTAT, {"tm": 0})
+        coap.post(PSTAT, {"cm": 0})
 
         coap.post(
             CRED,
@@ -599,6 +604,17 @@ def _point_cloud(coap: _SecureCoap, cis: str, access_token: str) -> None:
     raise OcfOnboardError(msg)
 
 
+def _is_unowned(ip: str) -> bool:
+    """Whether the TV's plain-CoAP `doxm` reports `owned: false` right now.
+
+    Used to tell "the TV already has no owner" (an earlier release, a TV-side
+    reset) from a real failure to reach it, which must not be swallowed.
+    """
+    doxm = _plain_request(ip, DOXM, GET)
+    body = cbor.loads(doxm.payload) if doxm and doxm.payload else None
+    return isinstance(body, dict) and body.get("owned") is False
+
+
 def release_tv(
     ip: str,
     obt_uuid: str,
@@ -607,18 +623,29 @@ def release_tv(
 ) -> None:
     """Hand the TV back to SmartThings: as owner, `POST /oic/sec/pstat {cm:1}`.
 
-    No Smart-Hub reset; apps and settings are kept (section 7). If the owner
-    session can't be opened the TV is already unowned, which is fine.
+    No Smart-Hub reset; apps and settings are kept (section 7). An owner
+    session that cannot be opened is only treated as "already unowned" after
+    confirming that with `doxm` over plain CoAP — raising `OcfOnboardError`
+    otherwise, so a real failure (TV asleep, network drop, stale credential)
+    is never mistaken for a successful release. A silent false "released"
+    here would leave the TV still owned by this Home Assistant with no way
+    back in short of a TV-side factory/network reset.
     """
-    if secure_port is None:
-        secure_port, _ = discover(ip)
     try:
+        if secure_port is None:
+            secure_port, _ = discover(ip)
         session, coap, _ = _open(
             ip, secure_port, _uuid16(obt_uuid), bytes.fromhex(owner_psk_hex)
         )
-    except Exception as err:  # noqa: BLE001 - already unowned is acceptable
-        _LOGGER.debug("release: no owner session (already released?): %s", err)
-        return
+    except Exception as err:  # re-raised below unless confirmed unowned
+        if _is_unowned(ip):
+            _LOGGER.debug("release: %s is already unowned: %s", ip, err)
+            return
+        msg = (
+            f"could not release {ip}: {err}; it may still be owned by this "
+            "Home Assistant"
+        )
+        raise OcfOnboardError(msg) from err
     try:
         coap.post(PSTAT, {"cm": 1})
     finally:
