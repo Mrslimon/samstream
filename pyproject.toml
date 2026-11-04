@@ -25,6 +25,22 @@ dev = [
 # Home Assistant test harness; does not install on native Windows, use WSL/Linux/CI.
 ha = [
     "pytest-homeassistant-custom-component==0.13.373",
+    # voice.py imports homeassistant.components.conversation; HA installs its
+    # deps on demand (from the component's own manifest.json) rather than
+    # declaring them on the homeassistant package, so a bare install of
+    # homeassistant + pytest-homeassistant-custom-component never pulls these
+    # in - only the full HA Docker image (which scripts/ha_dev.py test uses)
+    # has them pre-installed. Pins match the conversation component's own
+    # manifest.json for the homeassistant version this pins to.
+    "gazetteer-matcher==1.1.0",
+    "hassil==3.12.1",
+    "home-assistant-intents==2026.10.6",
+    # Same story for homeassistant.components.camera (media_player.py).
+    "pyturbojpeg==1.8.3",
+    # ...and the frontend component (required by manifest.json) and go2rtc
+    # (stream_relay.py's after_dependency).
+    "home-assistant-frontend==20260930.4",
+    "go2rtc-client==0.4.0",
 ]
 
 [tool.ruff]
