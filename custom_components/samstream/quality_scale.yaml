@@ -9,10 +9,10 @@ rules:
   config-flow: done
   config-flow-test-coverage: done
   dependency-transparency: done # aiosamstream (lib/aiosamstream), published to PyPI at release.
-  docs-actions: todo # Documentation milestone (last).
-  docs-high-level-description: todo
-  docs-installation-instructions: todo
-  docs-removal-instructions: todo
+  docs-actions: done # README "Actions": every service, one line each.
+  docs-high-level-description: done # README opening paragraphs.
+  docs-installation-instructions: done # README "Installation" (HACS + manual).
+  docs-removal-instructions: done # README "Removing a TV": local control is released first.
   docs-conditions:
     status: exempt
     comment: No custom conditions.
@@ -30,8 +30,8 @@ rules:
   # Silver
   action-exceptions: done # HomeAssistantError / ServiceValidationError with translation keys.
   config-entry-unloading: done
-  docs-configuration-parameters: todo # Documentation milestone (last).
-  docs-installation-parameters: todo
+  docs-configuration-parameters: done # README "Configuration": options table, by section.
+  docs-installation-parameters: done # README "Configuration": the single user-step field (host).
   entity-unavailable: done # Diagnostic entities unavailable while the TV never answered.
   integration-owner: done
   log-when-unavailable: done # Logged once when the TV goes off or unreachable.
@@ -44,13 +44,13 @@ rules:
   diagnostics: done # Secrets, MAC and stream URLs redacted.
   discovery: done # SSDP urn:samsung.com:device:RemoteControlReceiver:1.
   discovery-update-info: done # A rediscovered TV moves its entry to the new address.
-  docs-data-update: todo # Documentation milestone (last).
-  docs-examples: todo
-  docs-known-limitations: todo
-  docs-supported-devices: todo
-  docs-supported-functions: todo
-  docs-troubleshooting: todo
-  docs-use-cases: todo
+  docs-data-update: done # README "Data updates": polling intervals vs. local-control push.
+  docs-examples: done # README "Examples": three automation YAML snippets.
+  docs-known-limitations: done # README "Known limitations".
+  docs-supported-devices: done # README "Supported devices".
+  docs-supported-functions: done # README "Entities": every platform's entities.
+  docs-troubleshooting: done # README "Troubleshooting".
+  docs-use-cases: done # README "Use cases".
   dynamic-devices:
     status: exempt
     comment: One TV per config entry; no devices appear later.

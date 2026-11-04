@@ -22,6 +22,8 @@ local-control channel that reads the TV's live state without polling.
 - [Configuration](#configuration)
 - [Entities](#entities)
 - [Actions](#actions)
+- [Use cases](#use-cases)
+- [Examples](#examples)
 - [Removing a TV](#removing-a-tv)
 - [Data updates](#data-updates)
 - [Known limitations](#known-limitations)
@@ -181,6 +183,66 @@ opens in the TV's browser. |
 thumbnail links, for a dashboard picker), show one by content id, or upload a new image. |
 | `samstream.local_control_request` | Advanced: a raw `get`/`post`/`push`/`reply` against one
 of the TV's local-control resources. Needs local control on. |
+
+## Use cases
+
+- **Doorbell / security:** pop the camera up on whatever the TV is already showing, with a
+  message overlay, then return to exactly where you were.
+- **AI-described visitors:** show the camera immediately, then update the overlay text once a
+  vision model's description arrives, without reloading the stream.
+- **Whole-home alerts:** a leak, a smoke alarm, someone left a door open — a full-screen
+  alert card with a chime or TTS, on every TV at once if you want.
+- **Frame as ambient display:** rotate curated artwork on a schedule, or drop into Art Mode
+  automatically once the room goes quiet, instead of a black screen.
+- **Voice replies with a screen:** route a voice assistant's spoken answer to also show as
+  text on the TV it was asked near.
+- **Universal remote:** drive channel, input, volume and app switching from HA scripts,
+  scenes or a dashboard, including TVs HA's core integration can't reach locally.
+
+## Examples
+
+```yaml
+automation:
+  - alias: "Show the doorbell camera on the living room TV"
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.front_door_motion
+        to: "on"
+    action:
+      - action: samstream.play_stream
+        target:
+          entity_id: media_player.living_room_tv
+        data:
+          camera: camera.front_door
+          label: "Front door"
+          message: "Someone is at the door"
+          duration: 30
+
+  - alias: "Fill in the AI description once it's ready"
+    trigger:
+      - trigger: event
+        event_type: doorbell_description_ready
+    action:
+      - action: samstream.update_message
+        target:
+          entity_id: media_player.living_room_tv
+        data:
+          message: "{{ trigger.event.data.description }}"
+
+  - alias: "Frame: Art Mode once the living room goes quiet after sunset"
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.living_room_presence
+        to: "off"
+        for: "00:10:00"
+    condition:
+      - condition: sun
+        after: sunset
+    action:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.living_room_frame_art_mode
+```
 
 ## Removing a TV
 
