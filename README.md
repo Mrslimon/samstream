@@ -30,6 +30,7 @@ local-control channel that reads the TV's live state without polling.
 - [Troubleshooting](#troubleshooting)
 - [Development](#development)
 - [Credits](#credits)
+- [License](#license)
 
 ## Features
 
@@ -373,3 +374,7 @@ It builds on the work of others:
 - [go2rtc](https://github.com/AlexxIT/go2rtc), Home Assistant's built-in camera restreamer.
 - [Readex Pro](https://fonts.google.com/specimen/Readex+Pro) (SIL Open Font License) for Arabic
   and Latin text on the TV.
+
+## License
+
+[Apache License 2.0](LICENSE).
