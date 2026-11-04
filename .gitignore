@@ -56,3 +56,4 @@ tv-app/probe/
 # .NET notifier build output (the prebuilt .tpk is bundled in the integration)
 tv-app/notifier-dotnet/bin/
 tv-app/notifier-dotnet/obj/
+.dashgen/
