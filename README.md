@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="custom_components/samstream/brand/icon@2x.png" width="128" alt="Samstream">
+</p>
+
 # Samstream
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz)
