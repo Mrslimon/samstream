@@ -56,12 +56,12 @@ def ensure_tv_secret(hass: HomeAssistant, entry: SamstreamConfigEntry) -> str:
 async def async_resolve_cameras(
     hass: HomeAssistant, entry: SamstreamConfigEntry
 ) -> list[dict[str, str]]:
-    """Pre-register the configured cameras in go2rtc; return the TV's list.
+    """Resolve and record the configured cameras; return the TV's list.
 
     Run once at setup (and on reload, e.g. after the Cameras option changes),
     not per-request: `/settings` and `/session` are polled constantly, and
-    re-registering already-registered go2rtc streams on every poll would be
-    pure overhead. The result is cached on `entry.runtime_data.cameras`.
+    re-resolving every configured camera's stream source on every poll would
+    be pure overhead. The result is cached on `entry.runtime_data.cameras`.
 
     In the configured order, so Left/Right on the TV cycles through them even
     before any `play_stream` automation has run. A camera that has gone (removed,

@@ -522,8 +522,7 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
     async def async_play_stream(  # noqa: PLR0913 - one argument per action field
         self,
         *,
-        camera: str | None = None,
-        url: str | None = None,
+        camera: str,
         label: str | None = None,
         message: str | None = None,
         duration: float | None = None,
@@ -532,25 +531,24 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
     ) -> None:
         """Open Samstream on the TV with a camera (the `play_stream` action).
 
+        Camera entities only, not a free-form URL: a raw stream URL field
+        would let any non-admin caller point Home Assistant's ffmpeg at an
+        arbitrary host, which a camera entity's own access control already
+        prevents.
+
         Remembers what was on screen (pausing that app) so `stop_stream`, or the
         end of `duration`, returns there. A second call while the camera shows
         keeps the original place to go back to.
         """
-        source = url
-        if camera:
-            source = await async_get_stream_source(self.hass, camera)
-            if not source:
-                raise ServiceValidationError(
-                    translation_domain=DOMAIN,
-                    translation_key="camera_no_stream",
-                    translation_placeholders={"camera": camera},
-                )
-            if label is None and (state := self.hass.states.get(camera)):
-                label = state.name
+        source = await async_get_stream_source(self.hass, camera)
         if not source:
             raise ServiceValidationError(
-                translation_domain=DOMAIN, translation_key="stream_source_required"
+                translation_domain=DOMAIN,
+                translation_key="camera_no_stream",
+                translation_placeholders={"camera": camera},
             )
+        if label is None and (state := self.hass.states.get(camera)):
+            label = state.name
         entry = self.coordinator.config_entry
         ensure_tv_secret(self.hass, entry)
         name = await async_publish_stream(self.hass, entry, source)
@@ -946,7 +944,7 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         The user can also pick it from Art Mode on the TV.
         """
         self._require_frame()
-        resolved = resolve_package_path(self.hass, path)
+        resolved = await resolve_package_path(self.hass, path)
         suffix = resolved.suffix.lower().lstrip(".")
         file_type = "jpg" if suffix in ("jpg", "jpeg") else "png"
         try:
@@ -970,7 +968,7 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         Without `path` the bundled app is signed with HA's certificates; a given
         package is re-signed when signing is set up, else installed as is.
         """
-        package = resolve_package_path(self.hass, path) if path else None
+        package = await resolve_package_path(self.hass, path) if path else None
         result = await async_install_package(
             self.hass, self.coordinator.config_entry, package
         )

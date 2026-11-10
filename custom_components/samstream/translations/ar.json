@@ -180,15 +180,15 @@
       },
       "import_certificates": {
         "title": "استيراد الشهادات",
-        "description": "استخدم شهادة مؤلف وشهادة موزّع من سامسونج لديك مسبقًا (من مدير الشهادات في Tizen Studio أو من Apps2Samsung). انسخ الملفين أولًا إلى مجلد إعدادات Home Assistant. يجب أن تتضمّن شهادة الموزّع هذا التلفاز.",
+        "description": "استخدم شهادة مؤلف وشهادة موزّع من سامسونج لديك مسبقًا (من مدير الشهادات في Tizen Studio أو من Apps2Samsung). انسخ الملفين أولًا إلى مجلد مُدرج ضمن allowlist_external_dirs في configuration.yaml. يجب أن تتضمّن شهادة الموزّع هذا التلفاز.",
         "data": {
           "author_p12": "شهادة المؤلف",
           "distributor_p12": "شهادة الموزّع",
           "password": "كلمة المرور"
         },
         "data_description": {
-          "author_p12": "المسار نسبةً إلى مجلد الإعدادات، مثل samstream/author.p12.",
-          "distributor_p12": "المسار نسبةً إلى مجلد الإعدادات، مثل samstream/distributor.p12.",
+          "author_p12": "مسار الملف، داخل مجلد مُدرج ضمن allowlist_external_dirs.",
+          "distributor_p12": "مسار الملف، داخل مجلد مُدرج ضمن allowlist_external_dirs.",
           "password": "كلمة مرور ملفات ‎.p12."
         }
       },
@@ -515,12 +515,6 @@
     "camera_no_stream": {
       "message": "لا يوجد بث للكاميرا {camera}."
     },
-    "stream_source_required": {
-      "message": "اختر كاميرا أو أدخل رابط بث."
-    },
-    "go2rtc_unavailable": {
-      "message": "خدمة go2rtc في Home Assistant لا تعمل؛ وهي التي تنقل بث الكاميرات إلى التلفاز."
-    },
     "no_internal_url": {
       "message": "اضبط عنوان الشبكة المحلية من الإعدادات ← النظام ← الشبكة، ليصل التلفاز إلى Home Assistant."
     },
@@ -535,9 +529,6 @@
     },
     "media_unresolvable": {
       "message": "تعذّر تشغيل عنصر الوسائط هذا: {error}"
-    },
-    "go2rtc_refused": {
-      "message": "رفض go2rtc البث: {status} {detail}"
     },
     "sdb_restart_needed": {
       "message": "وضع المطوّر مفعّل على {name} للعنوان {ha_host}، لكنه لا يقبل تثبيت التطبيقات بعد. أعد تشغيل التلفاز: اضغط مطولًا على زر التشغيل حتى يظهر شعار سامسونج، ثم حاول مرة أخرى."
@@ -585,7 +576,7 @@
       "fields": {
         "path": {
           "name": "مسار الحزمة",
-          "description": "اختياري. ملف ‎.wgt نسبةً إلى مجلد الإعدادات. اتركه فارغًا لتثبيت تطبيق Samstream المرفق مع التكامل موقّعًا بشهادات Home Assistant."
+          "description": "اختياري. ملف ‎.wgt داخل مجلد مُدرج ضمن allowlist_external_dirs في configuration.yaml. اتركه فارغًا لتثبيت تطبيق Samstream المرفق مع التكامل موقّعًا بشهادات Home Assistant."
         }
       }
     },
@@ -596,10 +587,6 @@
         "camera": {
           "name": "الكاميرا",
           "description": "كيان الكاميرا المراد عرضه."
-        },
-        "url": {
-          "name": "رابط البث",
-          "description": "رابط RTSP يُعرض بدلًا من كيان كاميرا."
         },
         "label": {
           "name": "الاسم",
@@ -773,7 +760,7 @@
       "fields": {
         "path": {
           "name": "مسار الصورة",
-          "description": "مسار ملف الصورة داخل مجلد إعدادات Home Assistant."
+          "description": "مسار ملف الصورة، داخل مجلد مُدرج ضمن allowlist_external_dirs في configuration.yaml."
         },
         "show": {
           "name": "العرض الآن",

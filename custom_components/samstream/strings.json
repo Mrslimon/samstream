@@ -180,15 +180,15 @@
       },
       "import_certificates": {
         "title": "Import certificates",
-        "description": "Use an existing Samsung author and distributor certificate (from Tizen Studio's Certificate Manager or Apps2Samsung). Copy both files into the Home Assistant config folder first. The distributor certificate must list this TV.",
+        "description": "Use an existing Samsung author and distributor certificate (from Tizen Studio's Certificate Manager or Apps2Samsung). Copy both files into a directory listed under allowlist_external_dirs in configuration.yaml first. The distributor certificate must list this TV.",
         "data": {
           "author_p12": "Author certificate",
           "distributor_p12": "Distributor certificate",
           "password": "Password"
         },
         "data_description": {
-          "author_p12": "Path relative to the config folder, for example samstream/author.p12.",
-          "distributor_p12": "Path relative to the config folder, for example samstream/distributor.p12.",
+          "author_p12": "Path to the file, in a directory listed under allowlist_external_dirs.",
+          "distributor_p12": "Path to the file, in a directory listed under allowlist_external_dirs.",
           "password": "Password of the .p12 files."
         }
       },
@@ -515,12 +515,6 @@
     "camera_no_stream": {
       "message": "{camera} has no stream to play."
     },
-    "stream_source_required": {
-      "message": "Choose a camera or enter a stream URL."
-    },
-    "go2rtc_unavailable": {
-      "message": "Home Assistant's go2rtc is not running; it relays camera streams to the TV."
-    },
     "no_internal_url": {
       "message": "Set the local network URL under Settings → System → Network, so the TV can reach Home Assistant."
     },
@@ -535,9 +529,6 @@
     },
     "media_unresolvable": {
       "message": "Cannot play this media item: {error}"
-    },
-    "go2rtc_refused": {
-      "message": "go2rtc refused the stream: {status} {detail}"
     },
     "sdb_restart_needed": {
       "message": "{name} has Developer Mode on for {ha_host}, but it does not accept app installs yet. Restart the TV: hold the power button until the Samsung logo appears, then try again."
@@ -585,7 +576,7 @@
       "fields": {
         "path": {
           "name": "Package path",
-          "description": "Optional. A .wgt relative to the config folder. Leave empty to install the Samstream app bundled with the integration, signed with Home Assistant's certificates."
+          "description": "Optional. A .wgt in a directory listed under allowlist_external_dirs in configuration.yaml. Leave empty to install the Samstream app bundled with the integration, signed with Home Assistant's certificates."
         }
       }
     },
@@ -600,10 +591,6 @@
         "camera": {
           "name": "Camera",
           "description": "Camera entity to show."
-        },
-        "url": {
-          "name": "Stream URL",
-          "description": "RTSP URL to show instead of a camera entity."
         },
         "label": {
           "name": "Label",
@@ -777,7 +764,7 @@
       "fields": {
         "path": {
           "name": "Image path",
-          "description": "Path to the image file within the Home Assistant config directory."
+          "description": "Path to the image file, in a directory listed under allowlist_external_dirs in configuration.yaml."
         },
         "show": {
           "name": "Show now",

@@ -101,17 +101,22 @@ def issue_id(entry: SamstreamConfigEntry) -> str:
     return f"developer_mode_{entry.entry_id}"
 
 
-def resolve_package_path(hass: HomeAssistant, path: str) -> Path:
-    """Resolve a file path inside the HA config dir (or another allowed dir)."""
+async def resolve_package_path(hass: HomeAssistant, path: str) -> Path:
+    """Resolve a file path, allowed only where HA itself allows reading files.
+
+    `install_app` and `upload_art` take this path from any non-admin caller.
+    Resolving it anywhere under the config directory would let that caller
+    read and push to the TV anything there, including `secrets.yaml` and
+    `.storage` (every other integration's tokens and credentials) - so
+    `hass.config.is_allowed_path` (`allowlist_external_dirs` in
+    `configuration.yaml`) is the only gate, the same one HA itself uses for
+    letting an action read an arbitrary local file.
+    """
     candidate = Path(path)
     if not candidate.is_absolute():
         candidate = Path(hass.config.path(path))
-    resolved = candidate.resolve()
-    config_dir = Path(hass.config.config_dir).resolve()
-    allowed = resolved.is_relative_to(config_dir) or hass.config.is_allowed_path(
-        str(resolved)
-    )
-    if not allowed:
+    resolved = await hass.async_add_executor_job(candidate.resolve)
+    if not hass.config.is_allowed_path(str(resolved)):
         raise ServiceValidationError(
             translation_domain=DOMAIN,
             translation_key="file_not_allowed",

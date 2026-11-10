@@ -4,7 +4,6 @@
   "after_dependencies": [
     "camera",
     "conversation",
-    "go2rtc",
     "media_source"
   ],
   "codeowners": [
@@ -26,7 +25,7 @@
     "samsungtvws"
   ],
   "requirements": [
-    "aiosamstream==0.2.2"
+    "aiosamstream==0.2.3"
   ],
   "ssdp": [
     {
@@ -34,5 +33,5 @@
       "manufacturer": "Samsung Electronics"
     }
   ],
-  "version": "0.2.2"
+  "version": "0.2.3"
 }

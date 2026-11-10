@@ -1328,13 +1328,15 @@ class SamstreamOptionsFlow(_LocalControlSteps, OptionsFlow):
     async def async_step_import_certificates(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Use existing author/distributor .p12 files stored under /config."""
+        """Use existing author/distributor .p12 files from an allowed directory."""
         errors: dict[str, str] = {}
         if user_input is not None:
             try:
                 files = (
-                    resolve_package_path(self.hass, user_input[CONF_AUTHOR_P12]),
-                    resolve_package_path(self.hass, user_input[CONF_DISTRIBUTOR_P12]),
+                    await resolve_package_path(self.hass, user_input[CONF_AUTHOR_P12]),
+                    await resolve_package_path(
+                        self.hass, user_input[CONF_DISTRIBUTOR_P12]
+                    ),
                 )
                 setup = await async_import_certificates(
                     self.hass, self.config_entry, files, user_input[CONF_PASSWORD]

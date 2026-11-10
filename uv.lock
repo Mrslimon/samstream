@@ -225,7 +225,7 @@ wheels = [
 
 [[package]]
 name = "aiosamstream"
-version = "0.2.2"
+version = "0.2.3"
 source = { editable = "lib/aiosamstream" }
 dependencies = [
     { name = "aiohttp" },

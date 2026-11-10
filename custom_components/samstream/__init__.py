@@ -80,7 +80,7 @@ class SamstreamData:
     bundled_version: str | None = None
     # Options at setup: a data-only update (e.g. the TV secret) must not reload.
     options: dict[str, Any] = field(default_factory=dict)
-    # The configured camera list, pre-registered in go2rtc; see tv_settings.py.
+    # The configured camera list, pre-resolved and recorded; see tv_settings.py.
     cameras: list[dict[str, str]] = field(default_factory=list)
 
 
@@ -117,8 +117,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         "play_stream",
         entity_domain=MEDIA_PLAYER_DOMAIN,
         schema={
-            vol.Exclusive("camera", "source"): cv.entity_id,
-            vol.Exclusive("url", "source"): cv.string,
+            vol.Required("camera"): cv.entity_id,
             vol.Optional("label"): cv.string,
             vol.Optional("message"): cv.string,
             vol.Optional("duration"): vol.All(

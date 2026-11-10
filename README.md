@@ -43,8 +43,8 @@ local-control channel that reads the TV's live state without polling.
 - 🖱️ **Touch controls.** A touchpad that drives the TV's pointer, and a keyboard that types
   straight into the TV, Arabic included.
 - 📹 **Cameras on demand.** Doorbell rings, the camera pops up on the TV in a couple of
-  seconds, with your message on top. Low latency, no transcoding (native H.264/H.265 via
-  Home Assistant's go2rtc).
+  seconds, with your message on top. Low latency, no transcoding for a TV-compatible camera
+  (native H.264/H.265).
 - 🎬 **Your own videos.** Play anything from HA's media library on the TV, or straight from
   HA's media browser.
 - 🚨 **Messages that grab attention.** Full-screen info, warning or alert cards with sound or
@@ -380,7 +380,6 @@ It builds on the work of others:
 - [Apps2Samsung](https://github.com/Apps2Samsung/Apps2Samsung) and
   [Jellyfin2Samsung](https://github.com/Jellyfin2Samsung/Samsung-Jellyfin-Installer), whose
   per-user Samsung certificate technique Samstream follows.
-- [go2rtc](https://github.com/AlexxIT/go2rtc), Home Assistant's built-in camera restreamer.
 - [Readex Pro](https://fonts.google.com/specimen/Readex+Pro) (SIL Open Font License) for Arabic
   and Latin text on the TV.
 

@@ -30,7 +30,7 @@ install_app:
   fields:
     path:
       required: false
-      example: "samstream/Samstream.wgt"
+      example: "www/samstream/Samstream.wgt"
       selector:
         text:
 
@@ -77,7 +77,7 @@ upload_art:
   fields:
     path:
       required: true
-      example: "art/sunset.jpg"
+      example: "www/art/sunset.jpg"
       selector:
         text:
     show:
@@ -93,6 +93,7 @@ play_stream:
       domain: media_player
   fields:
     camera:
+      required: true
       selector:
         entity:
           domain: camera
@@ -129,11 +130,6 @@ play_stream:
             - top_right
             - bottom_left
             - bottom_right
-    url:
-      advanced: true
-      example: "rtsp://user:pass@192.168.1.6:554/Streaming/channels/101"
-      selector:
-        text:
 
 show_message:
   target:

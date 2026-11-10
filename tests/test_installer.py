@@ -109,10 +109,15 @@ async def test_install_reports_log_and_rescans(
 
 
 @pytest.mark.usefixtures("setup_entry", "sdb")
-async def test_relative_path_is_inside_config(hass: HomeAssistant) -> None:
+async def test_relative_path_not_in_allowlist_is_rejected(hass: HomeAssistant) -> None:
+    """A relative path resolving under the config dir is not implicitly trusted.
+
+    Only `allowlist_external_dirs` grants access - otherwise any non-admin
+    caller could read files like `secrets.yaml` via a relative path.
+    """
     with pytest.raises(ServiceValidationError) as err:
         await _install(hass, "samstream/missing.wgt")
-    assert err.value.translation_key == "file_not_found"
+    assert err.value.translation_key == "file_not_allowed"
 
 
 @pytest.mark.usefixtures("setup_entry", "sdb")

@@ -28,13 +28,17 @@ TV = "media_player.65_neo_qled_8k"
 RTSP = "rtsp://user:pass@192.168.1.6:554/Streaming/channels/101"
 SLEEP = "custom_components.samstream.media_player.asyncio.sleep"
 
-pytestmark = pytest.mark.usefixtures("setup_entry", "go2rtc")
+pytestmark = pytest.mark.usefixtures("setup_entry", "stream_plumbing")
 
 
 @pytest.fixture
-def go2rtc(hass: HomeAssistant) -> None:
-    """Stream publishing is covered in test_stream; here it only has to succeed."""
+def stream_plumbing(hass: HomeAssistant) -> None:
+    """Stream publishing/resolving is covered by test_stream; this just has to work."""
     with (
+        patch(
+            "custom_components.samstream.media_player.async_get_stream_source",
+            AsyncMock(return_value=RTSP),
+        ),
         patch(
             "custom_components.samstream.media_player.async_publish_stream",
             AsyncMock(return_value="samstream_x"),
@@ -72,7 +76,10 @@ def keys(tv: MagicMock) -> list[str]:
 
 async def play(hass: HomeAssistant, **data: object) -> None:
     await hass.services.async_call(
-        DOMAIN, "play_stream", {"entity_id": TV, "url": RTSP, **data}, blocking=True
+        DOMAIN,
+        "play_stream",
+        {"entity_id": TV, "camera": "camera.gate", **data},
+        blocking=True,
     )
 
 

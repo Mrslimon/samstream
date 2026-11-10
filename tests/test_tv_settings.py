@@ -29,7 +29,7 @@ from custom_components.samstream.tv_settings import (
 )
 
 from .test_app_signing import DUID, setup_for
-from .test_stream import RTSP, FakeGo2rtc, go2rtc  # noqa: F401 - go2rtc is a fixture
+from .test_stream import RTSP
 
 INSTALL_BUTTON = "button.65_neo_qled_8k_install_samstream_app"
 
@@ -184,11 +184,8 @@ async def test_cameras_option_step_defaults_show_the_saved_order(
     assert "camera_3" not in defaults
 
 
-@pytest.mark.usefixtures("socket_enabled")
 async def test_async_resolve_cameras_registers_and_builds_the_list(
-    hass: HomeAssistant,
-    mock_entry: MockConfigEntry,
-    go2rtc: FakeGo2rtc,  # noqa: F811
+    hass: HomeAssistant, mock_entry: MockConfigEntry
 ) -> None:
     await async_process_ha_core_config(
         hass, {"internal_url": "http://192.168.1.5:8123"}
@@ -204,14 +201,10 @@ async def test_async_resolve_cameras_registers_and_builds_the_list(
     assert streams[0]["label"] == "Front door"
     assert streams[0]["type"] == "mse"
     assert streams[0]["url"].startswith("ws://192.168.1.5:8123/api/samstream/tv/")
-    assert list(go2rtc.streams.values()) == [RTSP]
 
 
-@pytest.mark.usefixtures("socket_enabled")
 async def test_async_resolve_cameras_skips_a_camera_with_no_source(
-    hass: HomeAssistant,
-    mock_entry: MockConfigEntry,
-    go2rtc: FakeGo2rtc,  # noqa: F811
+    hass: HomeAssistant, mock_entry: MockConfigEntry
 ) -> None:
     hass.states.async_set(CAMERA, "idle")
     hass.config_entries.async_update_entry(
@@ -223,14 +216,10 @@ async def test_async_resolve_cameras_skips_a_camera_with_no_source(
     ):
         streams = await async_resolve_cameras(hass, mock_entry)
     assert streams == []
-    assert go2rtc.streams == {}
 
 
-@pytest.mark.usefixtures("socket_enabled")
 async def test_async_resolve_cameras_skips_a_camera_that_errors(
-    hass: HomeAssistant,
-    mock_entry: MockConfigEntry,
-    go2rtc: FakeGo2rtc,  # noqa: F811
+    hass: HomeAssistant, mock_entry: MockConfigEntry
 ) -> None:
     """One bad camera (removed, unavailable) does not block the rest of setup."""
     hass.config_entries.async_update_entry(
