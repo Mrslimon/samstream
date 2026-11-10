@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="custom_components/samstream/brand/icon@2x.png" width="128" alt="Samstream">
+  <img src="custom_components/samstream/brand/icon@2x.png" width="220" alt="Samstream">
 </p>
 
 # Samstream
