@@ -6,6 +6,7 @@ import ipaddress
 import logging
 import time
 from dataclasses import dataclass, replace
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from aiosamstream import (
@@ -23,6 +24,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
     APP_SCAN_INTERVAL,
+    CONF_SCAN_INTERVAL,
     CONF_WOL_TARGET,
     DOMAIN,
     OCF_FRESH,
@@ -81,7 +83,11 @@ class SamstreamCoordinator(DataUpdateCoordinator[SamstreamState]):
             _LOGGER,
             config_entry=entry,
             name=DOMAIN,
-            update_interval=SCAN_INTERVAL,
+            update_interval=timedelta(
+                seconds=entry.options.get(
+                    CONF_SCAN_INTERVAL, SCAN_INTERVAL.total_seconds()
+                )
+            ),
         )
         self.tv = tv
         # Installed apps (id -> name the TV reports), refreshed while the TV is on.
@@ -190,6 +196,15 @@ class SamstreamCoordinator(DataUpdateCoordinator[SamstreamState]):
         Not `async_set_updated_data`: that resets the poll timer, and the TV
         reports every few seconds, so the power check would never run.
         """
+        reported = self.ocf_state()
+        if (
+            self.data is not None
+            and reported is not None
+            and reported.power is not None
+            and reported.power != self.data.is_on
+        ):
+            # On/off is only learned by polling; the TV just told us it changed.
+            self.hass.async_create_task(self.async_request_refresh())
         if self.data is None or not self.data.is_on:
             return
         state = self._with_ocf(self.data)

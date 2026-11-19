@@ -135,13 +135,15 @@
         }
       },
       "network": {
-        "title": "Wake-on-LAN",
-        "description": "Home Assistant wakes the TV with a Wake-on-LAN packet sent to this address. Use your network's broadcast address (for example 192.168.1.255). Inside Docker a global broadcast (255.255.255.255) does not reach the TV.",
+        "title": "Network and TV check interval",
+        "description": "Home Assistant wakes the TV with a Wake-on-LAN packet sent to this address. Use your network's broadcast address (for example 192.168.1.255). Inside Docker a global broadcast (255.255.255.255) does not reach the TV.\n\nThe TV is also checked on a timer for power and the app in front. Volume, mute, input and channel arrive instantly when local control is on, and a power change reported by the TV triggers an immediate check.",
         "data": {
-          "wol_target": "Wake-on-LAN address"
+          "wol_target": "Wake-on-LAN address",
+          "scan_interval": "TV check interval"
         },
         "data_description": {
-          "wol_target": "IPv4 broadcast address of the TV's network, or the TV's own IP."
+          "wol_target": "IPv4 broadcast address of the TV's network, or the TV's own IP.",
+          "scan_interval": "How often Home Assistant asks the TV (seconds, 3 to 300). Lower is quicker but busier; the default is 10."
         }
       },
       "init": {
@@ -149,7 +151,7 @@
         "menu_options": {
           "tv_app": "TV app: language and theme",
           "cameras": "Cameras: pick and order what Left/Right flips between",
-          "network": "Network: Wake-on-LAN and extra apps",
+          "network": "Network: Wake-on-LAN and TV check interval",
           "voice_bridge": "Voice bridge: Bixby, Alexa or the TV app to Assist",
           "local_control": "Local control: SmartThings features over your own network",
           "app_signing": "App signing: certificates for installing Samstream"

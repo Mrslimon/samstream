@@ -62,6 +62,9 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     EntitySelector,
     EntitySelectorConfig,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
@@ -89,6 +92,7 @@ from .const import (
     CONF_OCF_TOKEN,
     CONF_OCF_WELCOME,
     CONF_RESUME,
+    CONF_SCAN_INTERVAL,
     CONF_THEME,
     CONF_TOKEN,
     CONF_TV_CORNER,
@@ -105,7 +109,10 @@ from .const import (
     ISSUE_OCF_RELEASE,
     LANGUAGES,
     MAX_CONFIGURED_CAMERAS,
+    MAX_SCAN_SECONDS,
+    MIN_SCAN_SECONDS,
     OCF_ONBOARD_TIMEOUT,
+    SCAN_INTERVAL,
     THEMES,
 )
 from .coordinator import default_wol_target
@@ -929,7 +936,11 @@ class SamstreamOptionsFlow(_LocalControlSteps, OptionsFlow):
                     if key != CONF_EXTRA_APPS
                 }
                 return self.async_create_entry(
-                    data={**options, CONF_WOL_TARGET: target}
+                    data={
+                        **options,
+                        CONF_WOL_TARGET: target,
+                        CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL]),
+                    }
                 )
         current = self.config_entry.options.get(CONF_WOL_TARGET) or default_wol_target(
             self.config_entry.data[CONF_HOST]
@@ -937,7 +948,25 @@ class SamstreamOptionsFlow(_LocalControlSteps, OptionsFlow):
         return self.async_show_form(
             step_id="network",
             data_schema=vol.Schema(
-                {vol.Required(CONF_WOL_TARGET, default=current): str}
+                {
+                    vol.Required(CONF_WOL_TARGET, default=current): str,
+                    vol.Required(
+                        CONF_SCAN_INTERVAL,
+                        default=int(
+                            self.config_entry.options.get(
+                                CONF_SCAN_INTERVAL, SCAN_INTERVAL.total_seconds()
+                            )
+                        ),
+                    ): NumberSelector(
+                        NumberSelectorConfig(
+                            min=MIN_SCAN_SECONDS,
+                            max=MAX_SCAN_SECONDS,
+                            step=1,
+                            unit_of_measurement="s",
+                            mode=NumberSelectorMode.BOX,
+                        )
+                    ),
+                }
             ),
             errors=errors,
         )

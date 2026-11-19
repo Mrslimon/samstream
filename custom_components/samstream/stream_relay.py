@@ -374,7 +374,9 @@ def transcode_args(source: str) -> list[str]:
         "-level:v",
         _TRANSCODE_LEVEL,
         "-preset",
-        "veryfast",
+        "ultrafast",  # first picture in ~2.4 s instead of ~5.5 s (veryfast)
+        "-tune",
+        "zerolatency",
         "-f",
         "mp4",
         "-movflags",
@@ -400,8 +402,15 @@ async def _kill(process: asyncio.subprocess.Process) -> None:
     await process.wait()
 
 
+# Sources already found not TV-safe: go straight to the transcode next time
+# instead of opening the stream twice (saves ~1.3 s of the door-camera start).
+_NEEDS_TRANSCODE: set[str] = set()
+
+
 async def _serve(socket: web.WebSocketResponse, source: str) -> None:
-    process = await _start_ffmpeg(ffmpeg_args(source))
+    process = await _start_ffmpeg(
+        transcode_args(source) if source in _NEEDS_TRANSCODE else ffmpeg_args(source)
+    )
     stdout = process.stdout
     if stdout is None:  # pragma: no cover - PIPE always gives a reader
         return
@@ -418,6 +427,7 @@ async def _serve(socket: web.WebSocketResponse, source: str) -> None:
             codec,
         )
         await _kill(process)
+        _NEEDS_TRANSCODE.add(source)
         process = await _start_ffmpeg(transcode_args(source))
         stdout = process.stdout
         if stdout is None:  # pragma: no cover - PIPE always gives a reader

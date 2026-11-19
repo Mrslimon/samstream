@@ -70,6 +70,11 @@ SCREEN_OTHER: Final = "other"
 
 # Power state only: a TV is polled cheaply over REST, volume over UPnP when on.
 SCAN_INTERVAL: Final = timedelta(seconds=10)
+# Option: how often (seconds) Home Assistant asks the TV; power changes reported
+# over local control (OCF) trigger an immediate check regardless.
+CONF_SCAN_INTERVAL: Final = "scan_interval"
+MIN_SCAN_SECONDS: Final = 3
+MAX_SCAN_SECONDS: Final = 300
 # Installed apps rarely change; rescanning ~18 known IDs takes about 0.5 s.
 APP_SCAN_INTERVAL: Final = timedelta(minutes=30)
 # Samsung certificates last a year; warn (and renew on sign-in) this early.
