@@ -85,12 +85,18 @@ Requirements on the TV:
 
 ### HACS (recommended)
 
-Not yet in the default HACS store. Add it as a custom repository:
+Samstream is in the default HACS store:
+
+1. Open **HACS**, search for **Samstream** and select **Download**.
+2. Restart Home Assistant.
+3. **Settings → Devices & services → Add integration → Samstream.**
+
+If it doesn't show up in search yet (for example an older HACS), add it as a custom
+repository instead:
 
 1. HACS → the **⋮** menu (top right) → **Custom repositories**.
 2. Repository: `https://github.com/Mrslimon/samstream`, category **Integration**.
-3. Install **Samstream**, then restart Home Assistant.
-4. **Settings → Devices & services → Add integration → Samstream.**
+3. Install **Samstream**, then continue with the steps above from the restart.
 
 ### Manual
 
