@@ -159,6 +159,7 @@ actions:
     data:
       title: "Washing machine"
       message: "The laundry is done"
+    continue_on_error: true   # a TV that is off must not stop the automation
 ```
 
 The TV must be on, and the Samstream app must have been opened once since the TV last
