@@ -187,6 +187,22 @@ update_message:
         text:
           multiline: true
 
+show_notification:
+  target:
+    entity:
+      integration: samstream
+      domain: media_player
+  fields:
+    title:
+      example: "Washing machine"
+      selector:
+        text:
+    message:
+      required: true
+      example: "The laundry is done"
+      selector:
+        text:
+
 send_keys:
   target:
     entity:

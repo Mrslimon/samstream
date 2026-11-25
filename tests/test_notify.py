@@ -4,10 +4,12 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.samstream.media_player import SamstreamMediaPlayer
 
 NOTIFY = "notify.65_neo_qled_8k_notifications"
+PLAYER = "media_player.65_neo_qled_8k"
 
 
 @pytest.mark.usefixtures("setup_entry")
@@ -76,4 +78,50 @@ async def test_native_notifier_skips_the_notice(hass: HomeAssistant) -> None:
             {"entity_id": NOTIFY, "title": "Doorbell", "message": "Someone is here"},
             blocking=True,
         )
+    shown.assert_not_awaited()
+
+
+@pytest.mark.usefixtures("setup_entry")
+async def test_show_notification_action_is_native_only(hass: HomeAssistant) -> None:
+    """The action posts a native notification and never takes over the screen."""
+    with (
+        patch(
+            "custom_components.samstream.media_player.async_post_native",
+            AsyncMock(return_value=True),
+        ) as native,
+        patch.object(SamstreamMediaPlayer, "async_show_message", AsyncMock()) as shown,
+    ):
+        for data in ({"title": "Laundry", "message": "Done"}, {"message": "Done"}):
+            await hass.services.async_call(
+                "samstream",
+                "show_notification",
+                {"entity_id": PLAYER, **data},
+                blocking=True,
+            )
+    first, second = native.await_args_list
+    assert first.args[3:] == ("Laundry", "Done")
+    assert second.args[3:] == ("Samstream", "Done")
+    shown.assert_not_awaited()
+
+
+@pytest.mark.usefixtures("setup_entry")
+async def test_show_notification_action_fails_without_notifier(
+    hass: HomeAssistant,
+) -> None:
+    """An unreachable notifier is an error, not a silent full-screen fallback."""
+    with (
+        patch(
+            "custom_components.samstream.media_player.async_post_native",
+            AsyncMock(return_value=False),
+        ),
+        patch.object(SamstreamMediaPlayer, "async_show_message", AsyncMock()) as shown,
+        pytest.raises(HomeAssistantError) as raised,
+    ):
+        await hass.services.async_call(
+            "samstream",
+            "show_notification",
+            {"entity_id": PLAYER, "message": "Done"},
+            blocking=True,
+        )
+    assert raised.value.translation_key == "notifier_unreachable"
     shown.assert_not_awaited()

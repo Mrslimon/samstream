@@ -112,6 +112,9 @@
     "pointer": {
       "service": "mdi:cursor-default-click"
     },
+    "show_notification": {
+      "service": "mdi:bell-ring"
+    },
     "send_keys": {
       "service": "mdi:remote"
     },

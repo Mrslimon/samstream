@@ -33,7 +33,7 @@ from homeassistant.components.media_player.const import (
     MediaPlayerState,
     MediaType,
 )
-from homeassistant.const import CONF_MAC
+from homeassistant.const import CONF_HOST, CONF_MAC
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, ServiceResponse, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -61,6 +61,7 @@ from .installer import (
     resolve_package_path,
 )
 from .keys import normalize_key
+from .notifier import async_post_native
 from .stream_relay import async_publish_stream, tv_mjpeg_url, tv_stream_url
 from .tv_session import (
     current_command,
@@ -635,6 +636,22 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
             duration=duration,
             return_to_previous=return_to_previous,
         )
+
+    async def async_show_notification(self, message: str, title: str = "") -> None:
+        """Show Samsung's own corner notification (`show_notification`).
+
+        The notifier app posts it over whatever is playing, so unlike
+        `show_message` nothing is interrupted. It never takes over the screen:
+        if the notifier does not accept the post, the action fails.
+        """
+        entry = self.coordinator.config_entry
+        secret = ensure_tv_secret(self.hass, entry)
+        if not await async_post_native(
+            self.hass, entry.data[CONF_HOST], secret, title or "Samstream", message
+        ):
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="notifier_unreachable"
+            )
 
     async def _async_take_over(
         self,

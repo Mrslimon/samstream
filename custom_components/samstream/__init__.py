@@ -163,6 +163,17 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     service.async_register_platform_entity_service(
         hass,
         DOMAIN,
+        "show_notification",
+        entity_domain=MEDIA_PLAYER_DOMAIN,
+        schema={
+            vol.Required("message"): cv.string,
+            vol.Optional("title", default=""): cv.string,
+        },
+        func="async_show_notification",
+    )
+    service.async_register_platform_entity_service(
+        hass,
+        DOMAIN,
         "send_keys",
         entity_domain=MEDIA_PLAYER_DOMAIN,
         schema={

@@ -475,6 +475,9 @@
     }
   },
   "exceptions": {
+    "notifier_unreachable": {
+      "message": "The TV did not show the notification. Check that the TV is on, then open the Samstream app on it once to start its notifier. If it still fails, press Install Samstream app."
+    },
     "cannot_connect": {
       "message": "Cannot reach the TV: {error}"
     },
@@ -649,6 +652,20 @@
         "message": {
           "name": "Message",
           "description": "New text to show; empty hides the card."
+        }
+      }
+    },
+    "show_notification": {
+      "name": "Show notification on TV",
+      "description": "Shows Samsung's own notification, with its chime, in the corner of the screen over whatever is playing. Nothing is paused or closed. The TV must be on, and the Samstream app must have been opened once since the TV last restarted.",
+      "fields": {
+        "title": {
+          "name": "Title",
+          "description": "First line of the notification. Samstream when left empty."
+        },
+        "message": {
+          "name": "Message",
+          "description": "Text of the notification."
         }
       }
     },

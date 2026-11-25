@@ -1,7 +1,8 @@
 """TV notifications: `notify.send_message` shows the message on the TV screen.
 
-Uses the same path as the `show_message` action (the Samstream TV app over what
-is playing), shown for a short while, then the TV goes back to what was on.
+A native Samsung notification when the notifier takes it, otherwise the
+full-screen `show_message` notice for a short while. For native only, with no
+screen takeover, there is the `show_notification` action.
 """
 
 from __future__ import annotations
