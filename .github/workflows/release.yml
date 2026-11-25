@@ -23,7 +23,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: integration
-          path: dist/samstream.zip
+          path: |
+            dist/samstream.zip
+            dist/release-notes.md
 
   pypi:
     needs: build
@@ -53,4 +55,7 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/samstream.zip
+          # The CHANGELOG.md section (HA shows it in the update dialog), then
+          # GitHub's compare link.
+          body_path: dist/release-notes.md
           generate_release_notes: true

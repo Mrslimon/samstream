@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -16,6 +17,7 @@ from typing import Any
 _TV = "x.com.samsung.tv."
 
 CONTENT_INFO = "/sec/tv/contentinfo"
+_ICON_ID = re.compile(r"/apps_icon/all/([0-9]+)/")
 INPUT_SOURCE = "/sec/tv/inputsource"
 AUDIO = "/sec/tv/audio"
 SWITCH = "/sec/tv/switch/binary"
@@ -85,6 +87,7 @@ class OcfTvState:
     content_input: str | None = None  # "webapp", "dtv", "hdmi", ...
     content_title: str | None = None  # app name, or the programme on Live TV
     app_id: str | None = None  # Tizen app id while an app is in front
+    store_app_id: str | None = None  # the ID the REST API uses, when its icon says it
     channel_number: str | None = None
     channel_name: str | None = None
     picture_mode: str | None = None
@@ -164,7 +167,14 @@ def _content(body: dict[str, Any]) -> dict[str, Any]:
         "content_title": _text(body, f"{_TV}title"),
         # For apps the subtitle carries the Tizen app id; on Live TV it is text.
         "app_id": subtitle if content_input == "webapp" else None,
+        "store_app_id": _store_id(body) if content_input == "webapp" else None,
     }
+
+
+def _store_id(body: dict[str, Any]) -> str | None:
+    """Read the store ID out of the app's icon path (`.../all/<id>/...`)."""
+    found = _ICON_ID.search(_text(body, f"{_TV}thumbnailpath") or "")
+    return found.group(1) if found else None
 
 
 def _input_source(body: dict[str, Any]) -> dict[str, Any]:

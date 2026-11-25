@@ -93,6 +93,7 @@ class SamstreamCoordinator(DataUpdateCoordinator[SamstreamState]):
         # Installed apps (id -> name the TV reports), refreshed while the TV is on.
         self.apps: dict[str, str] = {}
         self.app_versions: dict[str, str | None] = {}
+        self._tizen_ids: dict[str, str] = {}  # Tizen package ID -> app ID (sdb)
         # App ID -> logo URL, from the user's logo folder (see logos.py).
         self.logos: dict[str, str] = {}
         # "tv" (full list over sdb) or "catalog" (known IDs probed over REST).
@@ -176,7 +177,7 @@ class SamstreamCoordinator(DataUpdateCoordinator[SamstreamState]):
             return replace(state, ocf=None) if state.ocf else state
         app_id, app_name = state.app_id, state.app_name
         if ocf.content_input == "webapp" and ocf.app_id:
-            app_id = ocf.app_id
+            app_id = self._store_app_id(ocf)
             app_name = self.apps.get(app_id) or ocf.content_title or app_id
         elif ocf.content_input:  # Live TV, an HDMI input, ...: no app in front
             app_id = app_name = None
@@ -188,6 +189,22 @@ class SamstreamCoordinator(DataUpdateCoordinator[SamstreamState]):
             volume=state.volume if state.volume is not None else ocf.volume,
             muted=state.muted if state.muted is not None else ocf.muted,
         )
+
+    def _store_app_id(self, ocf: OcfTvState) -> str:
+        """Name the app by the ID polling, `launch_app` and automations use.
+
+        Local control reports the Tizen package ID; fall back to it only when
+        neither the app's icon, the sdb app list nor its name gives the other.
+        """
+        tizen_id = ocf.app_id or ""
+        if ocf.store_app_id:
+            return ocf.store_app_id
+        if tizen_id in self.apps:
+            return tizen_id
+        if listed := self._tizen_ids.get(tizen_id):
+            return listed
+        title = ocf.content_title
+        return next((i for i, name in self.apps.items() if name == title), tizen_id)
 
     @callback
     def async_ocf_updated(self, _device: CloudDevice) -> None:
@@ -245,6 +262,7 @@ class SamstreamCoordinator(DataUpdateCoordinator[SamstreamState]):
             # left to probe and no need for a manual "extra app IDs" option.
             apps = {app.app_id: app.name for app in listed}
             versions = {app.app_id: app.version for app in listed}
+            self._tizen_ids = {app.tizen_id: app.app_id for app in listed}
             self.app_source = "tv"
             missing: list[str] = []
         else:

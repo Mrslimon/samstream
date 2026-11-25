@@ -5,10 +5,11 @@
 Writes to dist/:
   samstream.zip                   custom_components/samstream for HACS / manual install
   aiosamstream-<v>-py3-none-any.whl and .tar.gz   the library, for PyPI
+  release-notes.md  this version's CHANGELOG.md section, the GitHub release text
 
 Fails (exit 1) when versions disagree: the tag, manifest.json `version`, the
 `aiosamstream==` requirement, the library's pyproject, or when the bundled TV
-app / card are older than their sources. Nothing is published from here.
+app / card are older than their sources, or CHANGELOG.md has no section for the version. Nothing is published from here.
 """
 
 from __future__ import annotations
@@ -79,6 +80,19 @@ def check(tag: str | None) -> str:
     return found["integration"]
 
 
+def release_notes(version: str) -> str:
+    """Return the CHANGELOG.md section for `version`, without its heading."""
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    found = re.search(
+        rf"^## {re.escape(version)}(?![\w.])[^\n]*\n(.*?)(?=^## |\Z)",
+        changelog,
+        re.MULTILINE | re.DOTALL,
+    )
+    if not found or not found.group(1).strip():
+        fail(f"CHANGELOG.md has no section for {version}")
+    return found.group(1).strip() + "\n"
+
+
 def build_zip() -> Path:
     target = DIST / "samstream.zip"
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -103,8 +117,10 @@ def main() -> None:
     args = parser.parse_args()
     print("versions:")
     version = check(args.tag)
+    notes = release_notes(version)
     shutil.rmtree(DIST, ignore_errors=True)
     DIST.mkdir()
+    (DIST / "release-notes.md").write_text(notes, encoding="utf-8")
     built = [build_zip(), *build_library()]
     print(f"release {version}:")
     for path in built:

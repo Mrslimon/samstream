@@ -41,6 +41,7 @@ from custom_components.samstream.const import (
     CONF_OCF_WELCOME,
     DOMAIN,
     ISSUE_OCF_PORT,
+    OCF_FRESH,
 )
 from custom_components.samstream.diagnostics import (
     async_get_config_entry_diagnostics,
@@ -510,6 +511,63 @@ async def test_entities_follow_the_tv(
     )
     await hass.async_block_till_done()
     assert hass.states.get(_entity(hass, "sensor", "current_app")).state == "Smart Hub"
+
+
+async def test_quiet_connected_tv_stays_live(
+    hass: HomeAssistant, ocf_entry: MockConfigEntry
+) -> None:
+    coordinator = ocf_entry.runtime_data.coordinator
+    device = _report(ocf_entry, REPORT)
+    now = device.last_seen
+    assert now is not None
+    clock = "custom_components.samstream.coordinator.time.monotonic"
+    with patch(clock, return_value=now + OCF_FRESH.total_seconds() - 1):
+        assert coordinator.ocf_state() is not None
+    # Nothing at all from the TV for longer than that: fall back to polling.
+    with patch(clock, return_value=now + OCF_FRESH.total_seconds() + 1):
+        assert coordinator.ocf_state() is None
+    # The same answer again (a re-read) changes nothing but keeps it live.
+    device.last_seen = now - OCF_FRESH.total_seconds() - 1
+    _report(ocf_entry, {ocf_state.AUDIO: REPORT[ocf_state.AUDIO]})
+    assert coordinator.ocf_state() is not None
+
+
+@pytest.mark.parametrize(
+    ("content", "sdb_ids", "expected"),
+    [
+        # The icon path names the ID polling and `launch_app` use.
+        (
+            {"thumbnailpath": "/x/apps_icon/all/111299001912/304x304.png"},
+            {},
+            "111299001912",
+        ),
+        # No icon: the sdb app list maps the Tizen ID.
+        ({"title": "?"}, {"9Ur5IzDKqV.TizenYouTube": "111299001912"}, "111299001912"),
+        # Nor that: an installed app of the same name.
+        ({"title": "YouTube"}, {}, "111299001912"),
+        # An app nothing else knows keeps its Tizen ID.
+        ({"title": "Smart Hub"}, {}, "9Ur5IzDKqV.TizenYouTube"),
+    ],
+)
+async def test_app_id_is_the_one_automations_use(
+    hass: HomeAssistant,
+    ocf_entry: MockConfigEntry,
+    content: dict[str, str],
+    sdb_ids: dict[str, str],
+    expected: str,
+) -> None:
+    coordinator = ocf_entry.runtime_data.coordinator
+    coordinator.apps = {"111299001912": "YouTube"}
+    coordinator._tizen_ids = sdb_ids  # noqa: SLF001 - what an sdb app scan stores
+    body = {
+        f"{TV}input": "webapp",
+        f"{TV}subtitle": "9Ur5IzDKqV.TizenYouTube",
+        **{f"{TV}{key}": value for key, value in content.items()},
+    }
+    _report(ocf_entry, {ocf_state.CONTENT_INFO: body})
+    await hass.async_block_till_done()
+    state = hass.states.get(_entity(hass, "media_player", "media_player"))
+    assert state.attributes["app_id"] == expected
 
 
 async def test_select_sends_the_id(

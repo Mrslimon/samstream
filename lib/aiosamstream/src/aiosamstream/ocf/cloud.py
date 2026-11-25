@@ -56,6 +56,7 @@ from .coap_tcp import (
 )
 from .state import (
     AUDIO,
+    CONTENT_INFO,
     DEVICE_COMMAND,
     INPUT_SOURCE,
     LAUNCH_APP,
@@ -83,7 +84,8 @@ KEEP_ALIVE = "/oic/ping"
 
 AUTH_DEADLINE = 15.0  # a connection must sign in within this, or it is closed
 IDLE_PING = 20.0  # send a ping after this much silence; the TV never closes for it
-READ_INTERVAL = 5.0  # re-read the state at most this often across reconnects
+READ_INTERVAL = 5.0  # register for the state at most this often across reconnects
+REFRESH_INTERVAL = 20.0  # re-read what the TV does not push, and prove it is there
 REQUEST_TIMEOUT = 10.0
 MAX_CONNECTIONS = 8
 MAX_PENDING = 64
@@ -274,12 +276,11 @@ class CloudDevice:
             self.state = state
             self._notify(self)
 
-    def _should_read(self) -> bool:
-        now = time.monotonic()
-        if now - self._last_read < READ_INTERVAL:
-            return False
-        self._last_read = now
-        return True
+    async def _wait_to_read(self) -> None:
+        """Space out registrations when the TV re-dials in quick succession."""
+        wait = self._last_read + READ_INTERVAL - time.monotonic()
+        await asyncio.sleep(max(0.0, wait))
+        self._last_read = time.monotonic()
 
     async def request(
         self,
@@ -513,6 +514,10 @@ class _Session:
         self._frames = FrameReader()
         self._pending: dict[bytes, asyncio.Future[Message]] = {}
         self._observed: dict[bytes, str] = {}
+        # Resources the TV answered without agreeing to push their changes.
+        self._unpushed: set[str] = set()
+        self._reads: dict[str, bytes] = {}  # the token each of them is re-read with
+        self._keeper: asyncio.Task[None] | None = None
         # The TV's own OBSERVE requests to us, by path (e.g. /service/observe).
         self.subscriptions: dict[str, bytes] = {}
         self._observe_seq = 1
@@ -521,6 +526,11 @@ class _Session:
 
     def close(self) -> None:
         self._writer.close()
+
+    def _stop_keeper(self) -> None:
+        if self._keeper is not None:
+            self._keeper.cancel()
+            self._keeper = None
 
     def _send(self, message: Message) -> None:
         _LOGGER.debug(
@@ -579,6 +589,30 @@ class _Session:
             self._observed[token] = href
             options = [(OBSERVE, b""), *path_options(href)]
             self._send(Message(GET, token, tuple(options)))
+
+    async def _keep_current(self, device: CloudDevice) -> None:
+        """Subscribe to the state on this connection, then keep it current.
+
+        Subscriptions live on one connection, so every signed-in one registers
+        its own. The TV pushes only some resources (not volume, channel or the
+        picture and sound modes), so those are read again every so often. So is
+        the content info: its answers show the TV is still there while nothing
+        changes, as it does not answer CoAP pings.
+        """
+        await device._wait_to_read()  # noqa: SLF001
+        self._observe_state()
+        while not self._writer.is_closing():
+            await asyncio.sleep(REFRESH_INTERVAL)
+            for href in STATE_RESOURCES:
+                if href == CONTENT_INFO or href in self._unpushed:
+                    self._read_again(href)
+
+    def _read_again(self, href: str) -> None:
+        token = self._reads.get(href)
+        if token is None:
+            token = self._reads[href] = os.urandom(4)
+            self._observed[token] = href
+        self._send(Message(GET, token, tuple(path_options(href))))
 
     def _authorise(self, request: Message, body: Any, token_key: str) -> bool:
         device = self._cloud.match(_field(body, "di"), _field(body, token_key))
@@ -642,8 +676,9 @@ class _Session:
             if self._authorise(request, body, "accesstoken") and self.device:
                 self._reply(request, CHANGED, {"expiresin": _TOKEN_EXPIRY})
                 self.device._attach(self)  # noqa: SLF001
-                if self.device.observe_state and self.device._should_read():  # noqa: SLF001
-                    self._observe_state()
+                if self.device.observe_state:
+                    self._stop_keeper()
+                    self._keeper = asyncio.create_task(self._keep_current(self.device))
         elif self._authorise(request, body, "refreshtoken"):  # token refresh
             token = _field(body, "refreshtoken")
             self._reply(
@@ -665,6 +700,8 @@ class _Session:
             return
         href = self._observed.get(message.token)
         if href and self.device and is_success(message.code):
+            if not message.has(OBSERVE):
+                self._unpushed.add(href)
             self.device._update(href, _decode(message.payload))  # noqa: SLF001
 
     def _dispatch(self, message: Message) -> None:
@@ -715,6 +752,7 @@ class _Session:
         except (ConnectionError, OSError) as err:
             _LOGGER.debug("OCF cloud: %s went away: %s", self.peer, err)
         finally:
+            self._stop_keeper()
             _LOGGER.debug(
                 "OCF cloud: %s connection ended after %.1f s",
                 self.peer,

@@ -45,6 +45,7 @@
 - [Data updates](#data-updates)
 - [Known limitations](#known-limitations)
 - [Troubleshooting](#troubleshooting)
+- [Changelog](#changelog)
 - [Development](#development)
 - [Credits](#credits)
 - [License](#license)
@@ -73,8 +74,8 @@ README or docs page, checked November 2026. Something out of date? Please open a
 ### The local part
 
 SmartThings controls Samsung TVs over **OCF**. We reverse engineered the TV's side of it so
-that **Home Assistant itself is the endpoint the TV connects to**: input, channel, app, picture
-and sound mode are pushed the moment they change, without Samsung's cloud.
+that **Home Assistant itself is the endpoint the TV connects to**: the app on screen, the input
+and power changes are pushed the moment they happen, without Samsung's cloud.
 
 It is optional, and it has one trade-off: while it is on, the SmartThings app cannot control
 that TV. One click releases the TV back to SmartThings. Everything else in Samstream works
@@ -447,8 +448,9 @@ control → Remove**, without deleting the device.
   current app); change this from 3 to 300 seconds under **Configure → Network**. The app list
   refreshes every 6 hours, or on demand.
 - With **local control** paired, the TV connects to Home Assistant's local OCF endpoint and
-  pushes changes as they happen (power, input, channel, app, picture/sound mode and the
-  diagnostic sensors). Volume and mute still follow the check interval while the TV answers it.
+  pushes changes as they happen (power, input, app on screen and most diagnostic sensors).
+  What it does not push (channel, picture and sound mode) is re-read every 20 seconds. Volume
+  and mute still follow the check interval while the TV answers it.
 - Camera streams, messages and notifications are sent when an automation calls them.
 
 ## Known limitations
@@ -525,6 +527,10 @@ Samsung's TVs set some hard limits. Samstream works around what it can; these re
 - **A full diagnostics download** (Settings → Devices & services → Samstream → the TV → ⋮ →
   Download diagnostics) has secrets removed and is the fastest way to attach useful detail to
   a bug report.
+
+## Changelog
+
+What changed in each release: [CHANGELOG.md](CHANGELOG.md).
 
 ## Development
 

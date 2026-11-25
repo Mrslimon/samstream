@@ -152,7 +152,7 @@ class LocalControlSensor(SamstreamEntity, BinarySensorEntity):
 
     @property
     def is_on(self) -> bool:
-        """The TV reported within the last minute (it re-dials every few s)."""
+        """The TV answered over local control within the last minute."""
         return self.coordinator.ocf_state() is not None
 
 

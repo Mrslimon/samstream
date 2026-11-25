@@ -50,7 +50,8 @@ ISSUE_OCF_PORT: Final = "ocf_port"
 ISSUE_OCF_RELEASE: Final = "ocf_release"
 # How long onboarding waits for the TV to dial the cloud after it is pointed at us.
 OCF_ONBOARD_TIMEOUT: Final = 90
-# OCF state counts as live this long after the TV last reported (it re-dials ~2 s).
+# OCF state counts as live this long after the TV last answered. A connected TV is
+# re-read every 20 s (aiosamstream), and one that re-dials is back within seconds.
 OCF_FRESH: Final = timedelta(seconds=60)
 
 # TV app UI: "auto" follows the TV's own language.

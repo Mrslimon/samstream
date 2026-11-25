@@ -133,6 +133,11 @@ def test_state_from_bodies() -> None:
     assert (state.channel_number, state.channel_name) == ("154", "Al-Majd3")
     assert state.sound_modes == (("modeStandard", "عادي"),)
     assert (state.wifi_rssi, state.wifi_channel) == (3, 36)
+    # The app's icon path carries the ID the REST API uses.
+    assert state.store_app_id is None
+    icon = "/opt/share/webappservice/apps_icon/all/111299001912/304x304.png"
+    app = {**BODIES[CONTENT_INFO], f"{TV}thumbnailpath": icon}
+    assert apply(state, CONTENT_INFO, app).store_app_id == "111299001912"
     # Live TV: the subtitle is programme text, not an app id.
     live = apply(state, CONTENT_INFO, {f"{TV}input": "dtv", f"{TV}subtitle": "News"})
     assert live.app_id is None
@@ -167,6 +172,7 @@ class FakeTV:
         self.sign_up: dict[str, Any] = {}
         self.closed = asyncio.Event()
         self.reply_to_posts = True
+        self.pushes: set[str] = set()  # reads it agrees to push changes of
 
     async def connect(self) -> None:
         context = ssl.create_default_context(cadata=IDENTITY.ca_der)
@@ -196,7 +202,9 @@ class FakeTV:
             if body is None:
                 self.send(Message(0x84, message.token))  # 4.04
             else:
-                self.send(Message(CONTENT, message.token, (), cbor.dumps(body)))
+                pushed = message.has(OBSERVE) and message.path in self.pushes
+                options = ((OBSERVE, b""),) if pushed else ()
+                self.send(Message(CONTENT, message.token, options, cbor.dumps(body)))
         elif message.code == POST:
             self.commands.append((message.path, cbor.loads(message.payload)))
             if self.reply_to_posts:
@@ -414,6 +422,51 @@ async def test_session_extras(
     server.forget("entry")
     await asyncio.wait_for(second.closed.wait(), 5)
     assert "entry" not in server.devices
+
+
+async def test_every_connection_subscribes_after_a_quick_redial(
+    ocf_cloud: tuple[OcfCloud, CloudDevice, list[CloudDevice]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    server, _, _ = ocf_cloud
+    assert server.port
+    monkeypatch.setattr(cloud, "READ_INTERVAL", 0.3)
+    first = FakeTV(server.port)
+    await first.connect()
+    await first.sign_in()
+    await _until(lambda: set(first.observed) == set(cloud.STATE_RESOURCES))
+    second = FakeTV(server.port)
+    await second.connect()
+    await second.sign_in()  # within READ_INTERVAL: delayed, never skipped
+    await _until(lambda: set(second.observed) == set(cloud.STATE_RESOURCES))
+    await second.close()
+
+
+async def test_unpushed_state_is_read_again(
+    ocf_cloud: tuple[OcfCloud, CloudDevice, list[CloudDevice]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    server, device, _ = ocf_cloud
+    assert server.port
+    monkeypatch.setattr(cloud, "REFRESH_INTERVAL", 0.02)
+    tv = FakeTV(server.port)
+    tv.pushes = {CONTENT_INFO, INPUT_SOURCE}
+    await tv.connect()
+    await tv.sign_in()
+    await _until(lambda: tv.observed.count(AUDIO) >= 3)
+    # Content info is read again even though it is pushed: it shows the TV is there.
+    assert tv.observed.count(CONTENT_INFO) >= 2
+    assert tv.observed.count(INPUT_SOURCE) == 1
+    seen = device.last_seen
+    assert seen is not None
+    await _until(lambda: (device.last_seen or 0) > seen)  # same state, still there
+    # Re-reads reuse one token per resource.
+    count = len(_observed(server))
+    reads = tv.observed.count(AUDIO)
+    await _until(lambda: tv.observed.count(AUDIO) >= reads + 3)
+    assert len(_observed(server)) == count
+    await tv.close()
+    await _until(lambda: not device.connected)
 
 
 def _observed(server: OcfCloud) -> dict[bytes, str]:
