@@ -290,20 +290,21 @@ actions:
 
 ## Installation
 
-### HACS (recommended)
+### Marketplace / HACS (recommended)
 
-Samstream is in the default HACS store:
+Samstream is in the default store:
 
-[![Open Samstream in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Mrslimon&repository=samstream&category=integration)
+[![Open Samstream in the store](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Mrslimon&repository=samstream&category=integration)
 
-1. Open **HACS**, search for **Samstream** and select **Download**.
-2. Restart Home Assistant.
-3. **Settings → Devices & services → Add integration → Samstream.**
+1. Open **Settings → Marketplace** (Home Assistant 2026.11 or newer), or **HACS** on older
+   versions.
+2. Search for **Samstream** and select **Download**.
+3. Restart Home Assistant.
+4. **Settings → Devices & services → Add integration → Samstream.**
 
-If it doesn't show up in search yet (for example an older HACS), add it as a custom
-repository instead:
+If it doesn't show up in search, add it as a custom repository instead:
 
-1. HACS → the **⋮** menu (top right) → **Custom repositories**.
+1. Open the store's **⋮** menu (top right) → **Custom repositories**.
 2. Repository: `https://github.com/Mrslimon/samstream`, category **Integration**.
 3. Install **Samstream**, then continue with the steps above from the restart.
 
