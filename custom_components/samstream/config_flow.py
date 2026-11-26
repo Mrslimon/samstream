@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import logging
+import re
 from collections.abc import Mapping
 from functools import partial
 from typing import Any
@@ -142,6 +143,9 @@ MIN_OCF_TOKEN = 16
 # PIN onboarding tries a few times: the TV's secure port rotates, so a handshake
 # can land on a just-rotated port. Each attempt re-discovers the live port.
 _ONBOARD_ATTEMPTS = 3
+# What the TV shows: 8 digits on most, 4 reported on a 2026 model. ASCII only,
+# because the pairing key is derived from these bytes.
+TV_PIN = re.compile(r"[0-9]{4,8}")
 # Reconnect (Configure): wait for the TV before the restart, then for it to
 # come back once the viewer allowed it on screen.
 RECONNECT_WAIT = 30
@@ -289,9 +293,9 @@ class _LocalControlSteps(ConfigEntryBaseFlow):
     async def async_step_local_control_pin(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """PIN mode: take the 8 digits, then onboard and wait."""
-        pin = str((user_input or {}).get("pin", "")).strip()
-        if not (pin.isdigit() and len(pin) == 8):  # noqa: PLR2004
+        """PIN mode: take the TV's PIN, then onboard and wait."""
+        pin = "".join(str((user_input or {}).get("pin", "")).split())
+        if not TV_PIN.fullmatch(pin):
             return self._lc_pin_form({"pin": "invalid_pin"})
         self._ocf_pin = pin
         self._onboard_task = None

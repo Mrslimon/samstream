@@ -2,6 +2,20 @@
 
 Every release's section below is what Home Assistant shows in the update dialog.
 
+## 0.2.8 (2026-11-26)
+
+### 🔢 Local control accepts shorter TV PINs (please test)
+
+- **Fixed:** local control setup rejected any PIN that was not 8 digits. A 2026 S90H shows
+  **4 digits**, and setup now accepts 4 to 8.
+
+Not yet confirmed: whether pairing then succeeds on a TV with a short PIN. If your TV shows one,
+please [report how it goes](https://github.com/Mrslimon/samstream/issues/1), including the error
+shown if it fails. TVs with an 8-digit PIN work as before.
+
+Also: the README now shows how to [play a camera only when the TV is already
+on](https://github.com/Mrslimon/samstream#-any-home-assistant-camera-on-your-tv).
+
 ## 0.2.7 (2026-11-26)
 
 ### ↩️ Back to your HDMI input after the camera

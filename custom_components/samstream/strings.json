@@ -47,17 +47,17 @@
       },
       "local_control_pin": {
         "title": "Enter the PIN from the TV",
-        "description": "![Connecting the TV](/samstream_files/animations/pairing.svg)\n\nLook at {name}: it is showing an 8-digit PIN.\n\nType it below. If no PIN appeared, make sure the TV is on, then try again.",
+        "description": "![Connecting the TV](/samstream_files/animations/pairing.svg)\n\nLook at {name}: it is showing a PIN.\n\nType it below. If no PIN appeared, make sure the TV is on, then try again.",
         "data": {
           "pin": "PIN"
         },
         "data_description": {
-          "pin": "The 8 digits shown on the TV screen."
+          "pin": "The PIN shown on the TV screen, 4 to 8 digits."
         }
       },
       "local_control_connect_lan": {
         "title": "Use the LAN helper",
-        "description": "![Local SmartThings](/samstream_files/animations/connect.svg)\n\nHome Assistant couldn't find {name}'s local SmartThings service at {tv_ip}, so it can't set the TV up by itself. Use the LAN helper instead: a small tool you run once on a computer on the same network as the TV. Your settings are already built into it.\n\n1. Download **[{tool}]({tool_url})**. On Windows also download **[{launcher}]({launcher_url})** into the same folder.\n2. Run it: on Windows double-click `{launcher}`; on macOS or Linux run `{command}` in a terminal. It needs Python 3.11 or newer and the `cryptography` package (the Windows launcher installs it).\n3. When the TV shows an 8-digit PIN, type it into the tool.\n4. The tool prints a credential. Paste it below so Home Assistant can hand the TV back to SmartThings later (optional), then select Submit.\n\nThe download links work for one hour. The next screen waits for the TV to connect.",
+        "description": "![Local SmartThings](/samstream_files/animations/connect.svg)\n\nHome Assistant couldn't find {name}'s local SmartThings service at {tv_ip}, so it can't set the TV up by itself. Use the LAN helper instead: a small tool you run once on a computer on the same network as the TV. Your settings are already built into it.\n\n1. Download **[{tool}]({tool_url})**. On Windows also download **[{launcher}]({launcher_url})** into the same folder.\n2. Run it: on Windows double-click `{launcher}`; on macOS or Linux run `{command}` in a terminal. It needs Python 3.11 or newer and the `cryptography` package (the Windows launcher installs it).\n3. When the TV shows a PIN, type it into the tool.\n4. The tool prints a credential. Paste it below so Home Assistant can hand the TV back to SmartThings later (optional), then select Submit.\n\nThe download links work for one hour. The next screen waits for the TV to connect.",
         "data": {
           "credential": "Credential from the helper (optional)"
         },
@@ -105,7 +105,7 @@
       "pairing_denied": "The TV refused the connection. If you chose Deny by mistake, try again and choose Allow.",
       "pairing_timeout": "Nobody accepted the request on the TV in time.",
       "unknown": "Unexpected error, see the Home Assistant log.",
-      "invalid_pin": "Enter the 8 digits shown on the TV.",
+      "invalid_pin": "Enter the PIN shown on the TV: 4 to 8 digits.",
       "invalid_credential": "That does not look like the credential the helper printed. Copy the whole line."
     },
     "abort": {
@@ -262,7 +262,7 @@
       },
       "local_control_connect_lan": {
         "title": "Use the LAN helper",
-        "description": "![Local SmartThings](/samstream_files/animations/connect.svg)\n\nHome Assistant couldn't find {name}'s local SmartThings service at {tv_ip}, so it can't set the TV up by itself. Use the LAN helper instead: a small tool you run once on a computer on the same network as the TV. Your settings are already built into it.\n\n1. Download **[{tool}]({tool_url})**. On Windows also download **[{launcher}]({launcher_url})** into the same folder.\n2. Run it: on Windows double-click `{launcher}`; on macOS or Linux run `{command}` in a terminal. It needs Python 3.11 or newer and the `cryptography` package (the Windows launcher installs it).\n3. When the TV shows an 8-digit PIN, type it into the tool.\n4. The tool prints a credential. Paste it below so Home Assistant can hand the TV back to SmartThings later (optional), then select Submit.\n\nThe download links work for one hour. The next screen waits for the TV to connect.",
+        "description": "![Local SmartThings](/samstream_files/animations/connect.svg)\n\nHome Assistant couldn't find {name}'s local SmartThings service at {tv_ip}, so it can't set the TV up by itself. Use the LAN helper instead: a small tool you run once on a computer on the same network as the TV. Your settings are already built into it.\n\n1. Download **[{tool}]({tool_url})**. On Windows also download **[{launcher}]({launcher_url})** into the same folder.\n2. Run it: on Windows double-click `{launcher}`; on macOS or Linux run `{command}` in a terminal. It needs Python 3.11 or newer and the `cryptography` package (the Windows launcher installs it).\n3. When the TV shows a PIN, type it into the tool.\n4. The tool prints a credential. Paste it below so Home Assistant can hand the TV back to SmartThings later (optional), then select Submit.\n\nThe download links work for one hour. The next screen waits for the TV to connect.",
         "data": {
           "credential": "Credential from the helper (optional)"
         },
@@ -272,12 +272,12 @@
       },
       "local_control_pin": {
         "title": "Enter the PIN from the TV",
-        "description": "![Connecting the TV](/samstream_files/animations/pairing.svg)\n\nLook at {name}: it is showing an 8-digit PIN.\n\nType it below. If no PIN appeared, make sure the TV is on, then try again.",
+        "description": "![Connecting the TV](/samstream_files/animations/pairing.svg)\n\nLook at {name}: it is showing a PIN.\n\nType it below. If no PIN appeared, make sure the TV is on, then try again.",
         "data": {
           "pin": "PIN"
         },
         "data_description": {
-          "pin": "The 8 digits shown on the TV screen."
+          "pin": "The PIN shown on the TV screen, 4 to 8 digits."
         }
       },
       "local_control_done": {
@@ -337,7 +337,7 @@
       "unknown": "Unexpected error, see the Home Assistant log.",
       "invalid_cloud_identity": "The CA certificate, key and cloud ID do not belong together, or one is not valid.",
       "token_too_short": "Use at least 16 characters.",
-      "invalid_pin": "Enter the 8 digits shown on the TV.",
+      "invalid_pin": "Enter the PIN shown on the TV: 4 to 8 digits.",
       "invalid_credential": "That does not look like the credential the helper printed. Copy the whole line.",
       "no_address": "Home Assistant does not know its own address on your network yet. Set it in Settings → System → Network, then try again."
     },

@@ -109,6 +109,27 @@ automation:
           duration: 30
 ```
 
+Only want it when the TV is already on? Wrap the action in a condition. Anything else in the
+automation, such as a phone notification, still runs:
+
+```yaml
+    actions:
+      - if:
+          - condition: state
+            entity_id: media_player.living_room_tv
+            state: "on"
+        then:
+          - action: samstream.play_stream
+            target:
+              entity_id: media_player.living_room_tv
+            data:
+              camera: camera.front_door
+              duration: 30
+```
+
+A Frame counts as on while it shows art. With local control, you can also require its Art Mode
+switch to be `off`.
+
 ### 🚨 Full-screen messages you can rewrite while they are showing
 
 Info, warning, alert or success cards, with a chime or text-to-speech. Change the text as often

@@ -25,7 +25,7 @@
     "samsungtvws"
   ],
   "requirements": [
-    "aiosamstream==0.2.7"
+    "aiosamstream==0.2.8"
   ],
   "ssdp": [
     {
@@ -33,5 +33,5 @@
       "manufacturer": "Samsung Electronics"
     }
   ],
-  "version": "0.2.7"
+  "version": "0.2.8"
 }

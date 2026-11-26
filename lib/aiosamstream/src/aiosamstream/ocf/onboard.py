@@ -9,7 +9,7 @@ One blocking driver, `onboard_tv`, does what the `oicseek/` spike split across
 4. install the local cloud's CA and a cloud-UUID ACL entry, then point the TV's
    cloud address at us so it dials the HA cloud server.
 
-`trigger_pin` makes the TV show its 8 digits; `release_tv` hands it back to
+`trigger_pin` makes the TV show its PIN; `release_tv` hands it back to
 SmartThings (`pstat cm=1`). CoAP quirks handled (separate CON responses, Block2
 token reuse, application/cbor) follow docs/ocf-local-protocol.md sections 4-5
 and 14.7. Run these in an executor; they block.
@@ -364,7 +364,7 @@ def _discover_multicast(ip: str) -> int | None:
 
 
 def trigger_pin(ip: str) -> None:
-    """Ask the TV to show its 8-digit Random-PIN (plain CoAP `oxmsel=1`).
+    """Ask the TV to show its Random-PIN (plain CoAP `oxmsel=1`).
 
     Retries the request: a single dropped UDP datagram should not look like an
     unreachable TV (which would wrongly send setup to the LAN helper). Raises

@@ -53,7 +53,7 @@ def _onboard(args: argparse.Namespace) -> int:
 
     print("[*] asking the TV to show its PIN ...")
     trigger_pin(args.tv)
-    pin = args.pin or input("    Enter the 8-digit PIN shown on the TV: ").strip()
+    pin = args.pin or input("    Enter the PIN shown on the TV: ").strip()
 
     print("[*] taking ownership and pointing the TV at Home Assistant ...")
     result = onboard_tv(

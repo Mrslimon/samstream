@@ -207,10 +207,12 @@ async def test_options_guided_onboarding(
     assert result["step_id"] == "local_control_pin"
     assert setup_entry.options[CONF_OCF] is True
 
-    result = await options.async_configure(flow, {"pin": "nope"})
-    assert result["errors"] == {"pin": "invalid_pin"}
+    # Not digits, too short, too long, or digits the pairing key cannot use.
+    for wrong in ("nope", "123", "123456789", "\u0661\u0662\u0663\u0664"):
+        result = await options.async_configure(flow, {"pin": wrong})
+        assert result["errors"] == {"pin": "invalid_pin"}
 
-    # The 8 digits: HA onboards (mocked) and the TV "dials in" -> paired -> created.
+    # Some TVs show 4 digits: HA onboards (mocked), the TV "dials in" -> created.
     progress = (FlowResultType.SHOW_PROGRESS, FlowResultType.SHOW_PROGRESS_DONE)
     with (
         patch(
@@ -221,7 +223,7 @@ async def test_options_guided_onboarding(
             SamstreamOptionsFlow, "_await_dial_in", new=AsyncMock(return_value=True)
         ),
     ):
-        result = await options.async_configure(flow, {"pin": "12345678"})
+        result = await options.async_configure(flow, {"pin": " 35 71 "})
         while result["type"] in progress:
             await hass.async_block_till_done()
             result = await options.async_configure(flow)
@@ -229,6 +231,7 @@ async def test_options_guided_onboarding(
             assert result["step_id"] == "local_control_done"
             result = await options.async_configure(flow, {})
     onboard.assert_called_once()
+    assert onboard.call_args.args[1] == "3571"
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
     assert setup_entry.data[CONF_OCF_TOKEN] == TOKEN

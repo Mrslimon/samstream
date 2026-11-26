@@ -54,7 +54,7 @@ See `oicseek/discover.py`.
 ## 3. DTLS-PSK transport
 
 - **Cipher:** `TLS-ECDHE-PSK-WITH-AES-128-CBC-SHA256`, DTLS 1.2.
-- **PIN session (onboarding):** PSK identity = ASCII string `"oic.sec.doxm.rdp"`; PSK = `PBKDF2-HMAC-SHA256(PIN_ascii, salt=UUID(di).bytes, iters=1000, dklen=16)`. PIN is the 8 digits the TV shows.
+- **PIN session (onboarding):** PSK identity = ASCII string `"oic.sec.doxm.rdp"`; PSK = `PBKDF2-HMAC-SHA256(PIN_ascii, salt=UUID(di).bytes, iters=1000, dklen=16)`. PIN is the digits the TV shows: 8 on a 2023 QN800C; 4 reported on a 2026 S90H (pairing with 4 not yet confirmed).
 - **Operational session (after ownership):** PSK identity = the controller (owner) UUID as **raw 16 bytes** (not the string form); PSK = the derived **owner PSK** (§5). Many libraries can't send a binary PSK identity — that is one reason for the C helper.
 - **Owner-PSK derivation** (IoTivity RDP, done in `dtls_tunnel.c` from the PIN handshake's exported TLS1.2 master secret + randoms):
   1. `key_block = TLS12-PRF(master_secret, "key expansion", server_random + client_random, 96 bytes)`
@@ -80,7 +80,7 @@ timeout / end marker). Build: `gcc dtls_tunnel.c -o dtls_tunnel -lmbedtls -lmbed
 ## 5. Ownership transfer (Random-PIN OTM) — the working sequence
 
 Trigger the PIN first: plain-CoAP `POST /oic/sec/doxm {"oxmsel":1}` (CBOR, Content-Format 10000) → 2.04; the TV
-shows 8 digits. PIN + ports rotate when the TV idles — wake it first. Then, **matching every reply to its own
+shows the PIN. PIN + ports rotate when the TV idles — wake it first. Then, **matching every reply to its own
 request token** (the `otm_full.py` bug was reading one reply batch per request, so slow separate responses
 landed on the next step and `owned=true` never took effect — use `oicseek/otm_onboard.py` instead):
 
