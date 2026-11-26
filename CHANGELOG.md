@@ -4,14 +4,12 @@ Every release's section below is what Home Assistant shows in the update dialog.
 
 ## 0.2.8 (2026-11-26)
 
-### 🔢 Local control accepts shorter TV PINs (please test)
+### 🔢 Local control accepts shorter TV PINs
 
 - **Fixed:** local control setup rejected any PIN that was not 8 digits. A 2026 S90H shows
   **4 digits**, and setup now accepts 4 to 8.
 
-Not yet confirmed: whether pairing then succeeds on a TV with a short PIN. If your TV shows one,
-please [report how it goes](https://github.com/Mrslimon/samstream/issues/1), including the error
-shown if it fails. TVs with an 8-digit PIN work as before.
+Confirmed by a user: local control sets up on that S90H. TVs with an 8-digit PIN work as before.
 
 Also: the README now shows how to [play a camera only when the TV is already
 on](https://github.com/Mrslimon/samstream#-any-home-assistant-camera-on-your-tv).
@@ -28,8 +26,7 @@ For TVs with local control on (the *Local control connected* sensor is on):
 - **Fixed:** *TV picture in a corner* is no longer turned off because the TV still listed the
   last app as visible while an input was on screen.
 
-Covered by automated tests, but not yet tried with an HDMI device on a real TV. If you watch
-over HDMI, please [report how it goes](https://github.com/Mrslimon/samstream/issues).
+Confirmed by a user on an S90H: returning to the previous screen works as expected.
 
 Without local control nothing changes: Samsung does not tell Home Assistant which input is on.
 
