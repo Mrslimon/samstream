@@ -282,7 +282,8 @@ actions:
 ### And more
 
 - ↩️ **Seamless takeover.** Samstream pauses what you were watching, shows the camera or
-  message, then reopens the app and resumes it, or switches the TV off again if it was off.
+  message, then reopens the app and resumes it, switches back to HDMI or Live TV (with
+  local control), or switches the TV off again if it was off.
 - 🗣️ **Voice bridge.** Each TV can have a webhook; whatever calls it is routed through Assist
   and the answer is shown or spoken.
 - 📦 **Easy install and updates.** Home Assistant installs the TV app, signed with your own
@@ -472,7 +473,8 @@ Samsung's TVs set some hard limits. Samstream works around what it can; these re
   *Resume playback afterwards* if that resumes apps you had paused.
 - **Live TV and HDMI look like "the last app"** without local control. The TV keeps reporting
   the last app as visible after you switch to Live TV or an input, so going back can reopen
-  that app instead of staying on Live TV.
+  that app instead of staying on Live TV. With local control, Samstream switches back to the
+  input.
 - **Typing needs the TV's own keyboard.** *Type on TV* works in the browser and sign-in
   fields; apps with their own on-screen keyboard (YouTube) ignore it.
 - **The pointer needs an app that shows one** (the web browser). Elsewhere a click opens the

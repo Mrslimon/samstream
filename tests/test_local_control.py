@@ -11,7 +11,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
-from aiosamstream import OcfError, OcfTvOwnedError
+from aiosamstream import SAMSTREAM_APP_ID, AppStatus, OcfError, OcfTvOwnedError
 from aiosamstream.ocf import (
     CloudDevice,
     OnboardResult,
@@ -26,6 +26,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.samstream.config_flow import (
@@ -53,6 +54,7 @@ from custom_components.samstream.onboard_tool import (
     async_offer,
     build_tool,
 )
+from custom_components.samstream.tv_session import session_answer, signal_closed
 
 from .conftest import HOST, TV_INFO, UUID
 
@@ -626,6 +628,87 @@ async def test_media_player_uses_what_the_tv_reports(
         {f"{TV}currentMode": "HDMI1"},
     )
     tv.send_keys.assert_not_called()
+
+
+@pytest.mark.parametrize("leave", ["stop_stream", "back"])
+@pytest.mark.parametrize("corner", ["off", "on"])
+@pytest.mark.parametrize("on_screen", ["HDMI1", "webapp"])
+async def test_returns_to_the_input_the_tv_reported(  # noqa: PLR0913, PLR0917 - fixtures and cases
+    hass: HomeAssistant,
+    ocf_entry: MockConfigEntry,
+    mock_tv: MagicMock,
+    leave: str,
+    corner: str,
+    on_screen: str,
+) -> None:
+    """HDMI under the camera: switch back to it, not to the last app.
+
+    Home reports "webapp" while the input resource keeps the last input chosen,
+    so nothing is switched there.
+    """
+    on_input = on_screen != "webapp"
+    player = _entity(hass, "media_player", "media_player")
+    _report(
+        ocf_entry,
+        {
+            **REPORT,
+            ocf_state.CONTENT_INFO: {
+                f"{TV}input": on_screen,
+                f"{TV}title": "Smart Hub",
+            },
+            ocf_state.INPUT_SOURCE: {
+                **REPORT[ocf_state.INPUT_SOURCE],
+                f"{TV}currentMode": "HDMI1",
+            },
+        },
+    )
+    await hass.async_block_till_done()
+    # REST still calls the last app visible after switching to an input; on Home
+    # no app is. `app_status` also answers for Samstream when returning.
+    last_app = AppStatus(
+        "111299001912", "YouTube", running=True, visible=True, version="1"
+    )
+    mock_tv.foreground_app = AsyncMock(return_value=last_app if on_input else None)
+    mock_tv.app_status = AsyncMock(return_value=last_app)
+    media_player = "custom_components.samstream.media_player"
+
+    with (
+        patch(
+            f"{media_player}.async_get_stream_source",
+            AsyncMock(return_value="rtsp://192.168.1.6/101"),
+        ),
+        patch(f"{media_player}.async_publish_stream", AsyncMock(return_value="x")),
+        patch(f"{media_player}.tv_stream_url", return_value="ws://127.0.0.1/x"),
+        patch(f"{media_player}.asyncio.sleep", AsyncMock()),
+        patch.object(CloudDevice, "post", AsyncMock(return_value=0x80)) as sent,
+    ):
+        await hass.services.async_call(
+            DOMAIN,
+            "play_stream",
+            {"entity_id": player, "camera": "camera.gate", "tv_corner": corner},
+            blocking=True,
+        )
+        command = session_answer(hass, ocf_entry, 0)
+        expected = "top_right" if corner == "on" else None
+        assert command["command"]["tv_corner"] == expected
+        if leave == "back":
+            async_dispatcher_send(
+                hass, signal_closed(ocf_entry.entry_id), command["seq"]
+            )
+        else:
+            await hass.services.async_call(
+                DOMAIN, "stop_stream", {"entity_id": player}, blocking=True
+            )
+        await hass.async_block_till_done()
+
+    if on_input:
+        sent.assert_awaited_once_with(
+            ocf_state.INPUT_SOURCE, {f"{TV}currentMode": "HDMI1"}
+        )
+    else:
+        sent.assert_not_awaited()
+    mock_tv.send_keys.assert_not_called()  # No Pause, no input key.
+    mock_tv.launch_app.assert_awaited_once_with(SAMSTREAM_APP_ID)
 
 
 async def test_local_control_request_reads_and_writes(

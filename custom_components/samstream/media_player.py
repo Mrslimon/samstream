@@ -87,6 +87,8 @@ LAUNCH_ATTEMPTS = 5
 LAUNCH_RETRY_SECONDS = 2
 # After reopening the previous app, wait before pressing Play to resume it.
 RESUME_DELAY_SECONDS = 3
+# After Samstream closes: let the TV finish leaving it before switching input.
+INPUT_DELAY_SECONDS = 2
 # `duration` counts from the first frame; if the app never reports one (a
 # stream error, an old app), the return still comes this much later.
 FIRST_FRAME_WAIT_SECONDS = 30
@@ -109,6 +111,8 @@ class _Interruption:
     resume: bool = True
     # The input under Samstream, as the TV app reported it ("TV1", "HDMI2").
     tv_source: str | None = None
+    # The same from local control, as an id `select_input` takes ("dtv", "HDMI1").
+    ocf_input: str | None = None
 
 
 FEATURES = (
@@ -592,7 +596,7 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         )
         if self._interruption is not None:
             previous = self._interruption.previous_app
-        elif not self.coordinator.data.is_on:
+        elif not self.coordinator.data.is_on or self._ocf_on_input() is not None:
             return corner
         else:
             try:
@@ -760,19 +764,48 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
                 with contextlib.suppress(SamstreamError):
                     await self.coordinator.tv.send_keys(["KEY_PLAY"])
         else:
-            # Home or Live TV was underneath: closing the app returns to Home,
-            # so press the input's key when the TV app reported it.
+            # Home or an input was underneath: closing the app returns to Home,
+            # so switch back to the input if it is known.
             await self.async_close_app(SAMSTREAM_APP_ID)
-            if key := source_key(interruption.tv_source):
-                with contextlib.suppress(SamstreamError):
-                    await self.coordinator.tv.send_keys([key])
+            await self._async_return_to_input(interruption)
         await self.coordinator.async_request_refresh()
+
+    async def _async_return_to_input(self, interruption: _Interruption) -> None:
+        """Switch to the input that was under Samstream, if one is known."""
+        device = self.coordinator.ocf_device
+        if interruption.ocf_input and device is not None:
+            await asyncio.sleep(INPUT_DELAY_SECONDS)
+            try:
+                await device.select_input(interruption.ocf_input)
+            except SamstreamError as err:
+                _LOGGER.debug("Could not select the input over local control: %s", err)
+            else:
+                return
+        if key := source_key(interruption.tv_source or interruption.ocf_input):
+            with contextlib.suppress(SamstreamError):
+                await self.coordinator.tv.send_keys([key])
+
+    def _ocf_on_input(self) -> OcfTvState | None:
+        """Return the TV's report if it has an input on screen (Live TV, HDMI)."""
+        ocf = self.coordinator.ocf_state()
+        if ocf is None or ocf.content_input in (None, "webapp"):
+            return None
+        return ocf
 
     async def _async_remember_screen(self, *, pause: bool) -> _Interruption:
         """Note what is on screen now and pause it (if it is an app)."""
         if not self.coordinator.data.is_on:
             return _Interruption(
                 was_on=False, previous_app=None, return_to_previous=pause
+            )
+        if (ocf := self._ocf_on_input()) is not None:
+            # No app to pause or reopen (the REST `visible` flag would still name
+            # the last one): only the input to switch back to.
+            return _Interruption(
+                was_on=True,
+                previous_app=None,
+                return_to_previous=pause,
+                ocf_input=ocf.input_source,
             )
         try:
             previous = await self.coordinator.async_current_app()
@@ -837,8 +870,11 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         interruption, self._interruption = self._interruption, None
         self._cancel_timed_return()
         self._play_seq, self._stream_url, self._frame_seen = None, None, False
-        if interruption.previous_app and interruption.resume:
-            self.hass.async_create_task(self._async_resume_after_back())
+        if interruption.previous_app:
+            if interruption.resume:
+                self.hass.async_create_task(self._async_resume_after_back())
+        elif interruption.was_on and interruption.return_to_previous:
+            self.hass.async_create_task(self._async_return_to_input(interruption))
 
     async def _async_resume_after_back(self) -> None:
         await asyncio.sleep(RESUME_DELAY_SECONDS)

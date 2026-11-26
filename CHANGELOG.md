@@ -2,6 +2,26 @@
 
 Every release's section below is what Home Assistant shows in the update dialog.
 
+## 0.2.7 (2026-11-26)
+
+### ↩️ Back to your HDMI input after the camera
+
+For TVs with local control on (the *Local control connected* sensor is on):
+
+- **Fixed:** after a camera, message or video over **HDMI or Live TV**, the TV now switches back
+  to that input, both when Home Assistant ends it and when you press Back. Before, it could
+  reopen the last app or stay on an empty screen.
+- **Fixed:** *TV picture in a corner* is no longer turned off because the TV still listed the
+  last app as visible while an input was on screen.
+
+Covered by automated tests, but not yet tried with an HDMI device on a real TV. If you watch
+over HDMI, please [report how it goes](https://github.com/Mrslimon/samstream/issues).
+
+Without local control nothing changes: Samsung does not tell Home Assistant which input is on.
+
+Also: the `npx samstream-signin` sign-in helper is now on npm (the command used to fail with
+a 404).
+
 ## 0.2.6 (2026-11-26)
 
 ### ⚡ Local control is instant now, even after the TV sits quiet
