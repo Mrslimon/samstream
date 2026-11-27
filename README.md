@@ -631,12 +631,20 @@ Built with help of [Claude](https://claude.ai).
 
 It builds on the work of others:
 
+- [Tizen Notifier](https://github.com/busycursor/tizen-notifier) by busycursor (MIT), which
+  inspired the corner camera. Samstream's overlay window follows its approach
+  ([license notice](custom_components/samstream/bundled/THIRD-PARTY-NOTICES.md)).
 - [samsungtvws](https://github.com/xchwarze/samsung-tv-ws-api) for the TV's WebSocket and REST APIs.
 - [Apps2Samsung](https://github.com/Apps2Samsung/Apps2Samsung) and
   [Jellyfin2Samsung](https://github.com/Jellyfin2Samsung/Samsung-Jellyfin-Installer), whose
   per-user Samsung certificate technique Samstream follows.
 - [Readex Pro](https://fonts.google.com/specimen/Readex+Pro) (SIL Open Font License) for Arabic
   and Latin text on the TV.
+
+### Contributors
+
+- [ssander96](https://github.com/ssander96) asked for the corner camera
+  ([#4](https://github.com/Mrslimon/samstream/issues/4)) and pointed to Tizen Notifier.
 
 ## License
 

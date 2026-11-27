@@ -19,6 +19,10 @@ namespace Notifier
     // Pictures come from Home Assistant as MJPEG and are drawn as images, because
     // the TV's video decoder belongs to the app underneath.
     // Every method here runs on the main thread, except Fetch.
+    // The window handling (transparent Notification window, 1x1 while idle,
+    // shrink then grow once it is up) is adapted from busycursor/tizen-notifier,
+    // MIT, Copyright (c) 2026 busycursor: see
+    // custom_components/samstream/bundled/THIRD-PARTY-NOTICES.md.
     internal sealed class CornerCamera
     {
         private const string Tag = "SAMSTREAM_NOTI";
