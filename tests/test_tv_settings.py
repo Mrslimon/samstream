@@ -51,7 +51,6 @@ async def test_options_step_defaults_and_save(
     assert defaults == {
         CONF_LANGUAGE: "auto",
         CONF_THEME: "light",
-        "tv_corner": "top_right",
         "resume_playback": True,
         "auto_update": True,
     }
@@ -164,6 +163,36 @@ async def test_cameras_option_step_saves_in_field_order(
     await hass.async_block_till_done()
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert setup_entry.options[CONF_CAMERAS] == ["camera.b", "camera.a"]
+    # How cameras appear is saved with them, corner on unless turned off.
+    assert setup_entry.options["corner_view"] is True
+    assert setup_entry.options["tv_corner"] == "top_right"
+    assert setup_entry.options["corner_size"] == "medium"
+    assert setup_entry.options["corner_seconds"] == 30
+    assert setup_entry.options["text_position"] == "bottom"
+    assert setup_entry.options["text_size"] == "normal"
+
+
+async def test_cameras_option_step_saves_the_view_settings(
+    hass: HomeAssistant, setup_entry: MockConfigEntry
+) -> None:
+    result = await _async_options_cameras(hass, setup_entry)
+    await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "corner_view": False,
+            "tv_corner": "bottom_left",
+            "corner_size": "large",
+            "corner_seconds": 120,
+            "text_position": "top",
+            "text_size": "extra_large",
+        },
+    )
+    await hass.async_block_till_done()
+    options = setup_entry.options
+    assert options["corner_view"] is False
+    assert (options["tv_corner"], options["corner_size"]) == ("bottom_left", "large")
+    assert options["corner_seconds"] == 120
+    assert (options["text_position"], options["text_size"]) == ("top", "extra_large")
 
 
 async def test_cameras_option_step_defaults_show_the_saved_order(

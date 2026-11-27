@@ -258,8 +258,8 @@ export class SamstreamCard extends LitElement {
           >
         </div>
         <label class="check">
-          <input id="camera-tv-corner" type="checkbox" />
-          <span>${t.tvCorner}</span>
+          <input id="camera-full-screen" type="checkbox" />
+          <span>${t.fullScreen}</span>
         </label>
         <div class="actions">
           <button class="primary" @click=${() => this.playCamera(selected)}>
@@ -609,14 +609,14 @@ export class SamstreamCard extends LitElement {
   private playCamera(camera: string): void {
     const message = this.value("camera-message");
     const duration = this.duration("camera-duration");
-    const corner = this.renderRoot.querySelector<HTMLInputElement>("#camera-tv-corner")?.checked;
+    const fullScreen = this.renderRoot.querySelector<HTMLInputElement>("#camera-full-screen")?.checked;
     this.call("samstream", "play_stream", {
       entity_id: this.config.entity,
       camera,
       ...(message ? { message } : {}),
       ...(duration ? { duration } : {}),
-      // The corner from the TV app settings; HA skips it over a streaming app.
-      ...(corner ? { tv_corner: "on" } : {}),
+      // Unticked: the Cameras setting decides (a corner over what is playing).
+      ...(fullScreen ? { corner: false } : {}),
     });
   }
 

@@ -18,8 +18,10 @@
   <privileges>
     <privilege>http://tizen.org/privilege/notification</privilege>
     <privilege>http://tizen.org/privilege/internet</privilege>
-    <!-- To raise Samstream back to the front after we are launched, so we never
-         cover the app the user is watching. -->
+    <!-- To raise Samstream back to the front after Samstream launches us. -->
     <privilege>http://tizen.org/privilege/application.launch</privilege>
+    <!-- To draw the corner camera in a notification window, above the app the
+         user is watching. -->
+    <privilege>http://tizen.org/privilege/window.priority.set</privilege>
   </privileges>
 </manifest>

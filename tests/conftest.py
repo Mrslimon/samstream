@@ -44,6 +44,28 @@ def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
     """Allow loading custom_components in every test."""
 
 
+@pytest.fixture(autouse=True)
+def no_notifier() -> Generator[dict[str, AsyncMock]]:
+    """No notifier answers: a camera opens full screen unless a test says more."""
+    calls = {
+        "show": "async_show_camera",
+        "message": "async_camera_message",
+        "close": "async_close_camera",
+        "alive": "async_notifier_alive",
+        "start": "async_start_notifier",
+    }
+    mocks = {key: AsyncMock(return_value=False) for key in calls}
+    patches = [
+        patch(f"custom_components.samstream.media_player.{name}", mocks[key])
+        for key, name in calls.items()
+    ]
+    for each in patches:
+        each.start()
+    yield mocks
+    for each in patches:
+        each.stop()
+
+
 @pytest.fixture
 def mock_tv() -> Generator[MagicMock]:
     """The library client used by the integration (not the config flow)."""

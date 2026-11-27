@@ -33,8 +33,20 @@ namespace Notifier
     // signature, so no one can tamper with them on a valid request.
     // GET /health answers "ok" without auth, so HA can see the app is resident.
     //
-    // The HTTP thread only enqueues; a main-loop timer dequeues and posts, so
-    // NotificationManager.Post always runs on the app's main thread.
+    // The same listener drives the corner camera (CornerCamera.cs), signed the
+    // same way, over these fields:
+    //   POST /camera?corner=&size=&seconds=&url=&title=&message=&text_position=
+    //        &text_size=&ts=&nonce=&sig=
+    //        ts, nonce, "camera", corner, size, seconds, url, title, message,
+    //        text_position, text_size
+    //   POST /camera/message?message=..   ts, nonce, "camera/message", message
+    //   POST /camera/close?..             ts, nonce, "camera/close"
+    //
+    // The HTTP thread only enqueues; a main-loop timer dequeues and acts, so
+    // NotificationManager.Post and all drawing run on the app's main thread.
+    //
+    // The app's window is always transparent and never takes the remote: it is
+    // invisible until a camera is shown.
     internal sealed class Program : NUIApplication
     {
         private const string Tag = "SAMSTREAM_NOTI";
@@ -53,65 +65,51 @@ namespace Notifier
         private readonly Dictionary<string, long> _seen = new Dictionary<string, long>();
         private readonly object _seenLock = new object();
         private byte[] _key;
-        private TextLabel _status;
         private Tizen.NUI.Timer _drainTimer;
+        private readonly CornerCamera _camera = new CornerCamera();
+        private readonly ConcurrentQueue<Action> _actions = new ConcurrentQueue<Action>();
 
         protected override void OnCreate()
         {
             base.OnCreate();
             _key = LoadKey();
-            var window = Window.Instance;
-            // Brand navy (#0B1420), never pure black — this window is meant to sit
-            // in the background, but if it ever flashes it should read as Samstream,
-            // not a dead screen.
-            window.BackgroundColor = new Color(0.043f, 0.078f, 0.125f, 1.0f);
-            // Don't take input focus from the app in front (e.g. Samstream).
-            try { window.SetAcceptFocus(false); } catch { /* older NUI */ }
-            _status = new TextLabel("Samstream\nnotifications active")
-            {
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                TextColor = new Color(0.6f, 0.7f, 0.82f, 1.0f),
-                PointSize = 9.0f,
-                MultiLine = true,
-                WidthResizePolicy = ResizePolicyType.FillToParent,
-                HeightResizePolicy = ResizePolicyType.FillToParent,
-            };
-            window.GetDefaultLayer().Add(_status);
+            CornerCamera.PrepareWindow();
 
             StartServer();
 
-            // Drain the queue on the main loop so Post() runs on the main thread.
+            // Drain the queues on the main loop (Post and NUI need that thread).
             // The Timer MUST be a retained field: a local gets GC'd and silently
             // stops ticking (proven — "HTTP 200 but no notification").
-            _drainTimer = new Tizen.NUI.Timer(400);
+            _drainTimer = new Tizen.NUI.Timer(200);
             _drainTimer.Tick += (s, e) =>
             {
                 while (_queue.TryDequeue(out var item))
                 {
                     Post(item.title, item.content, item.icon, item.image);
                 }
+                while (_actions.TryDequeue(out var action))
+                {
+                    try { action(); }
+                    catch (Exception ex)
+                    {
+                        Log.Error(Tag, "ACTION_FAIL " + ex.GetType().Name + ": " + ex.Message);
+                    }
+                }
                 return true;
             };
             _drainTimer.Start();
 
-            // Drop behind whatever launched us (Samstream), so the app the user is
-            // watching stays in front and a posted notification OVERLAYS it. The
-            // app keeps running backgrounded, which is where Post() works.
-            SendToBackground();
         }
 
-        // We are only ever launched by Samstream (the web app) as it starts, which
-        // briefly brings our window to the front. Raise Samstream straight back so
-        // it stays the app on screen; we drop to the background, which is exactly
-        // where NotificationManager.Post overlays whatever is playing. This does
-        // not loop: Samstream starts us only from its own first boot, and its
-        // re-launch handler does not start us again.
+        // Samstream (the web app) launches us as it starts, which brings this app
+        // to the front: raise Samstream straight back so it stays the app on
+        // screen. Home Assistant can also start us (no secret in the launch), and
+        // then whatever is on screen is left alone. This does not loop: Samstream
+        // starts us only from its own first boot.
         private const string SamstreamAppId = "SmStrm0001.Samstream";
 
-        private void SendToBackground()
+        private void RaiseSamstream()
         {
-            try { Window.Instance.Lower(); } catch { /* best effort */ }
             try
             {
                 var raise = new AppControl
@@ -163,8 +161,6 @@ namespace Notifier
                     http.Prefixes.Add("http://*:" + Port + "/");
                     http.Start();
                     Log.Error(Tag, "LISTENING " + Port);
-                    SetStatus("LISTENING on :" + Port +
-                        (_key == null ? "\n\nNO KEY — posts refused." : "\n\nReady."));
                     while (true)
                     {
                         HttpListenerContext ctx = http.GetContext();
@@ -182,7 +178,6 @@ namespace Notifier
                 catch (Exception ex)
                 {
                     Log.Error(Tag, "SRV_FAIL " + ex.GetType().FullName + ": " + ex.Message);
-                    SetStatus("LISTENER FAILED:\n" + ex.GetType().Name + "\n" + ex.Message);
                 }
             }) { IsBackground = true };
             thread.Start();
@@ -199,6 +194,11 @@ namespace Notifier
             }
 
             var q = ctx.Request.QueryString;
+            if (path.StartsWith("/camera", StringComparison.Ordinal))
+            {
+                HandleCamera(ctx, path);
+                return;
+            }
             string title = q["title"] ?? "Samstream";
             string content = q["content"] ?? string.Empty;
             string icon = q["icon"] ?? string.Empty;
@@ -207,7 +207,7 @@ namespace Notifier
             string nonce = q["nonce"];
             string sig = q["sig"];
 
-            if (!Authorized(title, content, icon, image, ts, nonce, sig))
+            if (!Authorized(ts, nonce, sig, title, content, icon, image))
             {
                 Log.Error(Tag, "UNAUTHORIZED");
                 TryRespond(ctx, 401, "unauthorized");
@@ -222,10 +222,73 @@ namespace Notifier
             TryRespond(ctx, 200, "{\"ok\":true}");
         }
 
-        // True only for a fresh, correctly signed request from HA.
-        private bool Authorized(
-            string title, string content, string icon, string image,
-            string ts, string nonce, string sig)
+        // Corner camera requests: state changes, so POST only.
+        private void HandleCamera(HttpListenerContext ctx, string path)
+        {
+            if (ctx.Request.HttpMethod != "POST")
+            {
+                TryRespond(ctx, 405, "method not allowed");
+                return;
+            }
+            var q = ctx.Request.QueryString;
+            string corner = q["corner"] ?? string.Empty;
+            string size = q["size"] ?? string.Empty;
+            string seconds = q["seconds"] ?? string.Empty;
+            string url = q["url"] ?? string.Empty;
+            string title = q["title"] ?? string.Empty;
+            string message = q["message"] ?? string.Empty;
+            string textPosition = q["text_position"] ?? string.Empty;
+            string textSize = q["text_size"] ?? string.Empty;
+            string[] fields =
+                path == "/camera" ? new[]
+                {
+                    "camera", corner, size, seconds, url, title, message, textPosition, textSize,
+                }
+                : path == "/camera/message" ? new[] { "camera/message", message }
+                : path == "/camera/close" ? new[] { "camera/close" }
+                : null;
+            if (fields == null)
+            {
+                TryRespond(ctx, 404, "not found");
+                return;
+            }
+            if (!Authorized(q["ts"], q["nonce"], q["sig"], fields))
+            {
+                Log.Error(Tag, "UNAUTHORIZED");
+                TryRespond(ctx, 401, "unauthorized");
+                return;
+            }
+            if (path == "/camera")
+            {
+                if (!CornerCamera.KnownCorner(corner) || !CornerCamera.KnownSize(size) ||
+                    !int.TryParse(seconds, out int hold) || hold < 1 || hold > 3600 ||
+                    !CornerCamera.KnownTextPosition(textPosition) ||
+                    !CornerCamera.KnownTextSize(textSize) || !IsHttp(url))
+                {
+                    TryRespond(ctx, 400, "bad request");
+                    return;
+                }
+                _actions.Enqueue(() => _camera.Show(
+                    corner, size, hold, url, title, message, textPosition, textSize));
+            }
+            else if (path == "/camera/message")
+            {
+                _actions.Enqueue(() => _camera.SetMessage(message));
+            }
+            else
+            {
+                _actions.Enqueue(() => _camera.Close());
+            }
+            TryRespond(ctx, 200, "{\"ok\":true}");
+        }
+
+        private static bool IsHttp(string url) =>
+            url.StartsWith("http://", StringComparison.Ordinal) ||
+            url.StartsWith("https://", StringComparison.Ordinal);
+
+        // True only for a fresh, correctly signed request from HA. The signature
+        // covers ts, nonce and then `fields`, joined by newlines.
+        private bool Authorized(string ts, string nonce, string sig, params string[] fields)
         {
             if (_key == null)
             {
@@ -246,8 +309,7 @@ namespace Notifier
                 return false; // stale or future-dated
             }
 
-            string message = ts + "\n" + nonce + "\n" + title + "\n" + content +
-                "\n" + icon + "\n" + image;
+            string message = ts + "\n" + nonce + "\n" + string.Join("\n", fields);
             byte[] expected;
             using (var mac = new HMACSHA256(_key))
             {
@@ -347,12 +409,6 @@ namespace Notifier
             }
         }
 
-        private void SetStatus(string msg)
-        {
-            try { if (_status != null) _status.Text = "SAMSTREAM NOTIFIER\n\n" + msg; }
-            catch { /* off-thread text set is best-effort */ }
-        }
-
         // The Samstream web app (the UI half of the same hybrid package) talks to
         // the notifier over local app-control — not a LAN surface, so it carries no
         // signature. It does two things:
@@ -371,16 +427,16 @@ namespace Notifier
             if (extra.TryGet("samstream_secret", out string s) && !string.IsNullOrEmpty(s))
             {
                 _key = Encoding.UTF8.GetBytes(s.Trim());
-                SetStatus("LISTENING on :" + Port + "\n\nReady (key from Samstream).");
             }
             if (extra.TryGet("title", out string t) && !string.IsNullOrEmpty(t))
             {
                 extra.TryGet("content", out string c);
                 _queue.Enqueue((t, c ?? string.Empty, string.Empty, string.Empty));
             }
-            // A re-launch (e.g. Samstream opened again) brings us to the front;
-            // drop straight back so we never cover the app in front.
-            SendToBackground();
+            if (!string.IsNullOrEmpty(s))
+            {
+                RaiseSamstream();
+            }
         }
 
         private static void Post(string title, string content, string icon, string image)

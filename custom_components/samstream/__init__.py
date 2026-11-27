@@ -37,6 +37,8 @@ from .const import (
     CONF_OCF_OWNER_PSK,
     CONF_OCF_SECURE_PORT,
     CONF_TOKEN,
+    CORNER_SIZES,
+    CORNERS,
     DOMAIN,
     ISSUE_OCF_RELEASE,
     TV_CORNERS,
@@ -124,7 +126,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 vol.Coerce(float), vol.Range(min=1, max=86400)
             ),
             vol.Optional("return_to_previous", default=True): cv.boolean,
-            vol.Optional("tv_corner", default="off"): vol.In(TV_CORNERS),
+            vol.Optional("corner"): cv.boolean,
+            vol.Optional("corner_position"): vol.In(CORNERS),
+            vol.Optional("corner_size"): vol.In(CORNER_SIZES),
+            # The former field: "off" means corner false, a corner its position.
+            vol.Optional("tv_corner"): vol.In(TV_CORNERS),
         },
         func="async_play_stream",
     )

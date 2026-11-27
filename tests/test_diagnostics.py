@@ -46,13 +46,13 @@ async def test_diagnostics_redact_secrets(
     assert DOMAIN == "samstream"
 
 
-async def test_diagnostics_redact_mjpeg_url_and_voice_webhook(
+async def test_diagnostics_redact_stream_url_and_voice_webhook(
     hass: HomeAssistant,
     hass_client: ClientSessionGenerator,
     setup_entry: MockConfigEntry,
     mock_tv: MagicMock,
 ) -> None:
-    """A camera played in a TV corner, and the voice webhook, must not leak."""
+    """The played camera's URL, and the voice webhook, must not leak."""
     hass.config_entries.async_update_entry(
         setup_entry, options={**setup_entry.options, CONF_VOICE_WEBHOOK: "webhook-xyz"}
     )
@@ -65,11 +65,7 @@ async def test_diagnostics_redact_mjpeg_url_and_voice_webhook(
         await hass.services.async_call(
             DOMAIN,
             "play_stream",
-            {
-                "entity_id": "media_player.65_neo_qled_8k",
-                "camera": "camera.gate",
-                "tv_corner": "on",
-            },
+            {"entity_id": "media_player.65_neo_qled_8k", "camera": "camera.gate"},
             blocking=True,
         )
     diagnostics = await get_diagnostics_for_config_entry(hass, hass_client, setup_entry)
@@ -79,4 +75,4 @@ async def test_diagnostics_redact_mjpeg_url_and_voice_webhook(
     assert secret not in text
     assert "webhook-xyz" not in text
     assert "pass" not in text
-    assert "mjpeg_url" in diagnostics["samstream_app"]["last_command"]["stream"]
+    assert "url" in diagnostics["samstream_app"]["last_command"]["stream"]

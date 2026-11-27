@@ -118,18 +118,27 @@ play_stream:
       default: true
       selector:
         boolean:
-    tv_corner:
-      default: "off"
+    corner:
+      default: true
+      selector:
+        boolean:
+    corner_position:
       selector:
         select:
           translation_key: tv_corner
           options:
-            - "off"
-            - "on"
             - top_left
             - top_right
             - bottom_left
             - bottom_right
+    corner_size:
+      selector:
+        select:
+          translation_key: corner_size
+          options:
+            - small
+            - medium
+            - large
 
 show_message:
   target:

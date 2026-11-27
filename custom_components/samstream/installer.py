@@ -396,6 +396,25 @@ async def _async_install_notifier(
     _LOGGER.info("Installed %s on %s", NOTIFIER_APP_ID, entry.title)
 
 
+async def async_start_notifier(
+    hass: HomeAssistant, entry: SamstreamConfigEntry
+) -> bool:
+    """Start the installed notifier over sdb, e.g. after the TV was unplugged.
+
+    Needs Developer Mode, like installing it did; quiet when that is not set up.
+    """
+    if await async_load_signing(hass) is None:
+        return False
+    key = await async_get_sdb_key(hass)
+    try:
+        async with SdbClient(entry.data[CONF_HOST], key) as sdb:
+            await sdb.shell(f"0 execute {NOTIFIER_APP_ID}")
+    except (SdbError, SdbConnectionError, OSError) as err:
+        _LOGGER.debug("Could not start the notifier on %s: %s", entry.title, err)
+        return False
+    return True
+
+
 async def _install_notifier_replacing_other_author(
     sdb: SdbClient, tpk: bytes, entry: SamstreamConfigEntry
 ) -> InstallResult:

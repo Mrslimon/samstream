@@ -2,19 +2,10 @@ import { FIT_LABELS, loadFit, nextFit, saveFit } from "./fit";
 import { FocusRow } from "./focus";
 import { renderHelp } from "./help";
 import { applyLanguage, strings, type Language, type Strings } from "./i18n";
-import { MjpegPlayer } from "./mjpeg";
 import { MsePlayer } from "./mse";
 import { scrollWhenLong, showOverlay } from "./overlay";
-import {
-  cornerRect,
-  hideTvWindow,
-  holeClipPath,
-  showTvWindow,
-  tvSource,
-  type Corner,
-} from "./pip";
 import { Player, type PlayerCallbacks, type StreamPlayer } from "./player";
-import type { LaunchPayload } from "./launch";
+import type { LaunchPayload, TextPosition, TextSize } from "./launch";
 import type { MediaItem, Notice } from "./notice";
 import {
   MediaScreen,
@@ -47,8 +38,6 @@ export interface AppElements {
   controls: HTMLElement;
   noticeClock: HTMLElement;
   toast: HTMLElement;
-  tvFrame: HTMLElement;
-  mjpeg: HTMLImageElement;
   help: HTMLElement;
   debug: HTMLElement;
   video: HTMLVideoElement;
@@ -87,7 +76,6 @@ export class App {
   private readonly focusRow: FocusRow;
   private readonly native: Player | undefined;
   private readonly mse: MsePlayer;
-  private readonly mjpeg: MjpegPlayer;
   private active: StreamPlayer | undefined;
   private playing = false;
   private current = 0;
@@ -96,6 +84,7 @@ export class App {
   private helpTimer: ReturnType<typeof setTimeout> | undefined;
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
   private hudTimer: ReturnType<typeof setTimeout> | undefined;
+  private keysTimer: ReturnType<typeof setTimeout> | undefined;
   // Opened by HA for a camera: Back and HA's stop close the app, so the TV
   // returns to what was on before. Opened from the TV's app list: Back goes home.
   private fromHa = false;
@@ -105,14 +94,15 @@ export class App {
   onEnded: (() => void) | undefined;
   /** Called before Back closes the app HA opened; resolves when HA has heard. */
   onClosing: (() => Promise<void>) | undefined;
-  /** The input in the corner ("TV1", "HDMI2"), reported to HA with the first frame. */
-  tvSourceShown: string | undefined;
   private readonly noticeScreen: NoticeScreen;
   private readonly mediaScreen: MediaScreen;
   // A notice or a media file on screen instead of home / camera.
   private screen: "notice" | "media" | undefined;
   // Text from Home Assistant shown over the video until the next stream.
   private message = "";
+  // Where that text sits and how big it is (Configure -> Cameras).
+  private textPosition: TextPosition = "bottom";
+  private textSize: TextSize = "normal";
 
   constructor(
     private readonly el: AppElements,
@@ -143,7 +133,6 @@ export class App {
     const avplay = globalThis.webapis?.avplay;
     this.native = avplay ? new Player(avplay, callbacks) : undefined;
     this.mse = new MsePlayer(el.video, callbacks);
-    this.mjpeg = new MjpegPlayer(el.mjpeg, callbacks);
     this.noticeScreen = new NoticeScreen(el.notice, el.sound);
     this.mediaScreen = new MediaScreen(el.media, {
       onStart: () => {
@@ -204,6 +193,8 @@ export class App {
   playPayload(payload: LaunchPayload): void {
     this.fromHa = true;
     this.message = payload.message;
+    this.textPosition = payload.textPosition ?? "bottom";
+    this.textSize = payload.textSize ?? "normal";
     if (
       this.playing &&
       this.streams[this.current]?.url === payload.stream.url
@@ -318,6 +309,7 @@ export class App {
     // The D-pad drives the triangle: Up = fit, Left = previous, Right = next,
     // Down = close; the matching control lights up so the press is visible.
     this.showHud(this.streamLabel());
+    this.liftMessage();
     if (key === KEY_RIGHT) {
       this.pressControl("right");
       this.play(this.current + 1);
@@ -389,7 +381,6 @@ export class App {
 
   /** Show a notice or media screen; the camera and home make way. */
   private enterScreen(screen: "notice" | "media"): void {
-    this.setTvCorner(undefined);
     this.active?.stop();
     this.active = undefined;
     this.playing = false;
@@ -415,14 +406,7 @@ export class App {
     if (!this.playing) this.clearControls();
     this.current = (index + this.streams.length) % this.streams.length;
     const stream = this.streams[this.current];
-    // Corner mode: pictures, since a playing video would take the TV's layer.
-    const corner =
-      stream.tvCorner && stream.mjpegUrl ? stream.tvCorner : undefined;
-    const player = corner
-      ? this.mjpeg
-      : stream.type === "mse"
-        ? this.mse
-        : this.native;
+    const player = stream.type === "mse" ? this.mse : this.native;
     this.active?.stop();
     this.leaveScreen();
     this.playing = true;
@@ -439,68 +423,10 @@ export class App {
     );
     this.showMessage();
     this.showHud(stream.label ?? "");
-    this.setTvCorner(corner);
-    player.play(
-      corner ? (stream.mjpegUrl as string) : stream.url,
-      stream.lowLatency === true,
-      stream.audio === true,
-    );
-  }
-
-  /**
-   * The TV's picture in `corner` (undefined: none). The camera video gets a hole
-   * there, the frame outlines it, and the pill and message move out of its way.
-   */
-  private setTvCorner(corner: Corner | undefined): void {
-    const video = this.el.video;
-    const frame = this.el.tvFrame;
-    // The full control cluster belongs to the full-screen camera, not the corner.
-    this.el.controls.hidden = Boolean(corner);
-    const clear = () => {
-      document.documentElement.classList.remove("tv-corner");
-      video.style.clipPath = "";
-      this.el.mjpeg.style.clipPath = "";
-      frame.hidden = true;
-      this.el.hud.style.top = "";
-      this.el.overlay.style.bottom = "";
-    };
-    if (!corner) {
-      if (!frame.hidden) hideTvWindow();
-      clear();
-      return;
-    }
-    const rect = cornerRect(corner);
-    // The TV window draws behind the whole page: nothing opaque may cover it.
-    document.documentElement.classList.add("tv-corner");
-    video.style.clipPath = holeClipPath(rect);
-    this.el.mjpeg.style.clipPath = holeClipPath(rect);
-    frame.style.left = `${rect.left}px`;
-    frame.style.top = `${rect.top}px`;
-    frame.style.width = `${rect.width}px`;
-    frame.style.height = `${rect.height}px`;
-    frame.hidden = false;
-    const hudSide = this.rtl ? "right" : "left";
-    if (corner === `top_${hudSide}`)
-      this.el.hud.style.top = `${rect.top + rect.height + 24}px`;
-    if (corner.startsWith("bottom"))
-      this.el.overlay.style.bottom = `${1080 - rect.top + 24}px`;
-    void showTvWindow(rect, (line) => this.log(line)).then((shown) => {
-      this.log(
-        shown
-          ? `tv corner: ${corner}`
-          : "tv corner: not available, camera only",
-      );
-      if (!shown) {
-        clear();
-        return;
-      }
-      this.tvSourceShown = tvSource();
-      this.log(`tv corner source: ${this.tvSourceShown ?? "?"}`);
-    });
+    player.play(stream.url, stream.lowLatency === true, stream.audio === true);
   }
 
   private showHome(): void {
-    this.setTvCorner(undefined);
     this.active?.stop();
     this.leaveScreen();
     this.active = undefined;
@@ -559,11 +485,22 @@ export class App {
   private showMessage(): void {
     if (this.message) {
       const card = showOverlay(this.el.overlay, this.message);
+      this.el.overlay.className = `${this.textPosition} ${this.textSize}`;
       this.el.overlay.hidden = false;
       scrollWhenLong(card);
     } else {
       this.el.overlay.hidden = true;
     }
+  }
+
+  /** The remote is in use: a message at the bottom makes room for the controls. */
+  private liftMessage(): void {
+    this.el.player.classList.add("keys");
+    clearTimeout(this.keysTimer);
+    this.keysTimer = setTimeout(
+      () => this.el.player.classList.remove("keys"),
+      HUD_FULL_MS,
+    );
   }
 
   private log(line: string): void {
@@ -578,9 +515,7 @@ export class App {
   }
 
   private players(): StreamPlayer[] {
-    return this.native
-      ? [this.native, this.mse, this.mjpeg]
-      : [this.mse, this.mjpeg];
+    return this.native ? [this.native, this.mse] : [this.mse];
   }
 
   /**
@@ -616,7 +551,6 @@ export class App {
   }
 
   private exit(): void {
-    this.setTvCorner(undefined);
     this.active?.stop();
     this.leaveScreen();
     globalThis.tizen?.application.getCurrentApplication().exit();

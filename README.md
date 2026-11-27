@@ -130,6 +130,43 @@ automation, such as a phone notification, still runs:
 A Frame counts as on while it shows art. With local control, you can also require its Art Mode
 switch to be `off`.
 
+### 🪟 In a corner, over what you are watching
+
+When something is already playing, the camera appears in a bordered box in a corner. The video
+underneath keeps playing, the remote keeps controlling it, and the box goes away by itself.
+
+<p align="center"><img src="https://raw.githubusercontent.com/Mrslimon/samstream/main/docs/media/corner-camera.jpg" width="600" alt="A photo of a TV playing a video, with the door camera and a caption in a box at the top right"></p>
+
+This is the default. Choose the corner, the box size, where the text sits, how big it is and how
+long the box stays under **Configure → Cameras**. An action can override the first part:
+
+```yaml
+actions:
+  - action: samstream.play_stream
+    target:
+      entity_id: media_player.living_room_tv
+    data:
+      camera: camera.front_door
+      message: "Someone is at the door"
+      corner: true                 # false: always full screen
+      corner_position: top_left    # top_left, top_right, bottom_left, bottom_right
+      corner_size: large           # small, medium, large
+      duration: 30
+```
+
+With the TV off, the camera opens full screen. So does the Home screen when local control can
+tell it apart; without it, the corner is used there too. If the TV refuses the corner box (an
+older TV app, say), the camera opens full screen instead.
+
+Good to know:
+
+- The box shows fast pictures (about 8 a second), not video, and has no sound.
+- The TV remote cannot close it. It ends after `duration` (or the configured time, 30 seconds by
+  default), or with `samstream.stop_stream`.
+- Tried on a QN800C over YouTube, Live TV and HDMI. Netflix, The Frame and other models have
+  not been tried yet: reports are welcome. If nothing appears on your TV, set `corner: false`
+  or turn the option off.
+
 ### 🚨 Full-screen messages you can rewrite while they are showing
 
 Info, warning, alert or success cards, with a chime or text-to-speech. Change the text as often
@@ -172,6 +209,8 @@ The same `update_message` changes the text over a camera too.
 
 Samsung's own corner popup, with its chime, drawn **over whatever is playing**. Nothing pauses,
 nothing closes.
+
+<p align="center"><img src="https://raw.githubusercontent.com/Mrslimon/samstream/main/docs/media/native-notification.jpg" width="600" alt="A photo of a TV with Samsung's notification popup at the top right reading Movement at the door"></p>
 
 ```yaml
 actions:
@@ -383,6 +422,7 @@ Everything is set up through the UI; there is no YAML configuration.
 | Local control | pair / reconnect / release; port and advertised host, for unusual networks |
 | Voice bridge | turn the per-TV webhook on/off, show the reply on the TV |
 | Playback | resume playback after a takeover; what "off" means on a Frame (fully off or Art Mode) |
+| Cameras | the cameras in the TV app; corner view on or off, corner, box size, time on screen; text position and size |
 
 ## Entities
 
@@ -412,8 +452,8 @@ All target a `media_player.*` entity. The full field reference is in Developer T
 | `samstream.show_notification` | Samsung's own corner notification with a chime, over whatever is playing. |
 | `samstream.show_message` | Full-screen info/warning/alert/success card, with a sound (media library chime or TTS) and a duration. |
 | `samstream.update_message` | Changes the text shown over a camera or message, without reloading. |
-| `samstream.play_stream` | Opens Samstream and plays a camera (turning the TV on first if needed), with an optional message, picture-in-picture corner and duration. |
-| `samstream.stop_stream` | Returns to what was on before (reopens and resumes the app, or powers off again). |
+| `samstream.play_stream` | Opens Samstream and plays a camera (turning the TV on first if needed), with an optional message and duration. With something already playing it appears in a corner over it, unless `corner: false`. |
+| `samstream.stop_stream` | Removes the corner camera, or returns to what was on before (reopens and resumes the app, or powers off again). |
 | `samstream.launch_app` | Opens an app, or brings it to the front. |
 | `samstream.close_app` | Closes an app; the TV returns to what was on screen before. |
 | `samstream.open_url` | Opens a link: YouTube links play in the YouTube app, anything else opens in the TV's browser. |
@@ -482,12 +522,14 @@ Samsung's TVs set some hard limits. Samstream works around what it can; these re
 **On the TV**
 
 - **Native notifications need a running notifier.** It starts with the Samstream app, so open
-  the app once after the TV restarts. Notifications show only while the screen is on.
-- **Picture-in-picture only with Live TV and HDMI.** Over Live TV, an HDMI input or Home,
-  the camera can play with the TV's own picture kept in a corner (*TV picture in a corner*);
-  the camera then shows as fast pictures rather than video, since the TV has one video layer.
-  A sideloaded app cannot draw its own windows over Netflix or YouTube, and Samsung's Multi
-  View has no API, so over streaming apps Samstream takes the full screen, then hands it back.
+  the app once after the TV restarts. A corner camera also starts it when needed (Developer Mode
+  and app signing set up in Home Assistant). Notifications show only while the screen is on.
+- **The corner camera is pictures, not video.** The TV's video decoder belongs to the app
+  underneath, so the box shows about 8 pictures a second without sound, and the remote cannot
+  close it. The text sits at its top or bottom (*Middle* counts as bottom).
+- **No exact volume over an optical soundbar.** The cable carries sound one way and the TV
+  reports volume 0, so with local control the volume slider is hidden while the output is
+  optical; volume up and down remain. Whether they move the soundbar depends on your setup.
 - **Playback state is invisible.** The TV does not report whether the app underneath was
   playing or paused. Samstream pauses it and presses Play afterwards; a pause made through
   Home Assistant is remembered, but one made with the TV's own remote is not. Turn off

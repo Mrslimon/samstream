@@ -5,7 +5,7 @@ export interface Strings {
   home: string;
   liveTv: string;
   inputList: string;
-  tvCorner: string;
+  fullScreen: string;
   power: string;
   cameras: string;
   showCamera: string;
@@ -70,7 +70,7 @@ const STRINGS: Record<Language, Strings> = {
     home: "Home",
     liveTv: "Live TV",
     inputList: "Inputs",
-    tvCorner: "Keep Live TV / HDMI in a corner",
+    fullScreen: "Full screen",
     power: "Power",
     cameras: "Cameras",
     showCamera: "Show on TV",
@@ -133,7 +133,7 @@ const STRINGS: Record<Language, Strings> = {
     home: "الرئيسية",
     liveTv: "البث المباشر",
     inputList: "المدخلات",
-    tvCorner: "إبقاء البث المباشر / HDMI في الزاوية",
+    fullScreen: "ملء الشاشة",
     power: "التشغيل",
     cameras: "الكاميرات",
     showCamera: "اعرض على التلفاز",

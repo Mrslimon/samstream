@@ -80,6 +80,9 @@ from .const import (
     CONF_AUTHOR_P12,
     CONF_AUTO_UPDATE,
     CONF_CAMERAS,
+    CONF_CORNER,
+    CONF_CORNER_SECONDS,
+    CONF_CORNER_SIZE,
     CONF_DISTRIBUTOR_P12,
     CONF_EXTRA_APPS,
     CONF_FRAME_POWER,
@@ -94,6 +97,8 @@ from .const import (
     CONF_OCF_WELCOME,
     CONF_RESUME,
     CONF_SCAN_INTERVAL,
+    CONF_TEXT_POSITION,
+    CONF_TEXT_SIZE,
     CONF_THEME,
     CONF_TOKEN,
     CONF_TV_CORNER,
@@ -101,8 +106,13 @@ from .const import (
     CONF_VOICE_SHOW,
     CONF_VOICE_WEBHOOK,
     CONF_WOL_TARGET,
+    CORNER_SIZES,
     CORNERS,
+    DEFAULT_CORNER_SECONDS,
+    DEFAULT_CORNER_SIZE,
     DEFAULT_LANGUAGE,
+    DEFAULT_TEXT_POSITION,
+    DEFAULT_TEXT_SIZE,
     DEFAULT_THEME,
     DEFAULT_TV_CORNER,
     DOMAIN,
@@ -110,10 +120,14 @@ from .const import (
     ISSUE_OCF_RELEASE,
     LANGUAGES,
     MAX_CONFIGURED_CAMERAS,
+    MAX_CORNER_SECONDS,
     MAX_SCAN_SECONDS,
+    MIN_CORNER_SECONDS,
     MIN_SCAN_SECONDS,
     OCF_ONBOARD_TIMEOUT,
     SCAN_INTERVAL,
+    TEXT_POSITIONS,
+    TEXT_SIZES,
     THEMES,
 )
 from .coordinator import default_wol_target
@@ -829,7 +843,7 @@ class SamstreamOptionsFlow(_LocalControlSteps, OptionsFlow):
     async def async_step_cameras(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Pick and order the cameras Left/Right flips between on the TV.
+        """Pick the cameras Left/Right flips between, and how they appear.
 
         Numbered rather than a single multi-select: HA's entity picker has no
         drag-to-reorder, so the field order is the only way to let a plain
@@ -842,7 +856,15 @@ class SamstreamOptionsFlow(_LocalControlSteps, OptionsFlow):
                 for i in range(1, MAX_CONFIGURED_CAMERAS + 1)
                 if (key := f"camera_{i}") in user_input
             ]
-            return self.async_create_entry(data={**options, CONF_CAMERAS: cameras})
+            view = {
+                key: value
+                for key, value in user_input.items()
+                if not key.startswith("camera_")
+            }
+            view[CONF_CORNER_SECONDS] = int(view[CONF_CORNER_SECONDS])
+            return self.async_create_entry(
+                data={**options, **view, CONF_CAMERAS: cameras}
+            )
         current = options.get(CONF_CAMERAS, [])
         schema: dict[Any, Any] = {}
         for i in range(1, MAX_CONFIGURED_CAMERAS + 1):
@@ -853,6 +875,35 @@ class SamstreamOptionsFlow(_LocalControlSteps, OptionsFlow):
                 else vol.Optional(f"camera_{i}")
             )
             schema[field] = EntitySelector(EntitySelectorConfig(domain="camera"))
+        schema[vol.Required(CONF_CORNER, default=options.get(CONF_CORNER, True))] = bool
+        for key, choices, fallback in (
+            (CONF_TV_CORNER, CORNERS, DEFAULT_TV_CORNER),
+            (CONF_CORNER_SIZE, CORNER_SIZES, DEFAULT_CORNER_SIZE),
+            (CONF_TEXT_POSITION, TEXT_POSITIONS, DEFAULT_TEXT_POSITION),
+            (CONF_TEXT_SIZE, TEXT_SIZES, DEFAULT_TEXT_SIZE),
+        ):
+            schema[vol.Required(key, default=options.get(key, fallback))] = (
+                SelectSelector(
+                    SelectSelectorConfig(
+                        options=list(choices),
+                        translation_key=key,
+                        mode=SelectSelectorMode.DROPDOWN,
+                    )
+                )
+            )
+        schema[
+            vol.Required(
+                CONF_CORNER_SECONDS,
+                default=options.get(CONF_CORNER_SECONDS, DEFAULT_CORNER_SECONDS),
+            )
+        ] = NumberSelector(
+            NumberSelectorConfig(
+                min=MIN_CORNER_SECONDS,
+                max=MAX_CORNER_SECONDS,
+                unit_of_measurement="s",
+                mode=NumberSelectorMode.BOX,
+            )
+        )
         return self.async_show_form(step_id="cameras", data_schema=vol.Schema(schema))
 
     async def async_step_tv_app(
@@ -899,16 +950,6 @@ class SamstreamOptionsFlow(_LocalControlSteps, OptionsFlow):
                             options=list(THEMES),
                             translation_key=CONF_THEME,
                             mode=SelectSelectorMode.LIST,
-                        )
-                    ),
-                    vol.Required(
-                        CONF_TV_CORNER,
-                        default=options.get(CONF_TV_CORNER, DEFAULT_TV_CORNER),
-                    ): SelectSelector(
-                        SelectSelectorConfig(
-                            options=list(CORNERS),
-                            translation_key=CONF_TV_CORNER,
-                            mode=SelectSelectorMode.DROPDOWN,
                         )
                     ),
                     vol.Required(

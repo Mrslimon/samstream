@@ -3,16 +3,31 @@
 import hashlib
 import hmac
 import io
+import re
 import zipfile
+from pathlib import Path
 
 import aiohttp
+import pytest
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
+from custom_components.samstream.const import (
+    CORNER_SIZES,
+    CORNERS,
+    MAX_CORNER_SECONDS,
+    TEXT_POSITIONS,
+    TEXT_SIZES,
+)
 from custom_components.samstream.notifier import (
+    CAMERA_FIELDS,
     NOTIFIER_KEY_FILE,
+    async_camera_message,
+    async_close_camera,
     async_notifier_alive,
     async_post_native,
+    async_show_camera,
+    signed_camera_url,
     signed_notify_url,
     stamp_notifier_key,
 )
@@ -101,3 +116,75 @@ async def test_post_native_unreachable(
         f"http://{HOST}:8181/notify", exc=aiohttp.ClientConnectionError()
     )
     assert await async_post_native(hass, HOST, SECRET, "Hi", "There") is False
+
+
+VIEW = {
+    "corner": "top_right",
+    "size": "medium",
+    "seconds": "30",
+    "url": "http://192.168.1.5:8123/api/samstream/tv/s/mjpeg/n?size=medium",
+    "title": "الباب",
+    "message": "A parcel & a courier + more",
+    "text_position": "bottom",
+    "text_size": "normal",
+}
+
+
+def test_camera_url_signs_every_field() -> None:
+    """The signature covers each field, in the order the notifier rebuilds them."""
+    url = signed_camera_url(HOST, SECRET, VIEW, now=1000)
+    q = url.query
+    assert url.path == "/camera"
+    # The values arrive as sent, also after the URL's own encoding.
+    assert {key: q[key] for key in VIEW} == VIEW
+    fields = [q["ts"], q["nonce"], "camera", *VIEW.values()]
+    expected = hmac.new(
+        SECRET.encode(), "\n".join(fields).encode(), hashlib.sha256
+    ).hexdigest()
+    assert q["sig"] == expected
+
+
+def test_camera_url_bounds_long_text() -> None:
+    url = signed_camera_url(HOST, SECRET, {**VIEW, "message": "x" * 5000})
+    assert len(url.query["message"]) == 300
+
+
+async def test_camera_requests_are_posts(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    for path in ("camera", "camera/message", "camera/close"):
+        aioclient_mock.post(f"http://{HOST}:8181/{path}")
+    assert await async_show_camera(hass, HOST, SECRET, VIEW)
+    assert await async_camera_message(hass, HOST, SECRET, "new")
+    assert await async_close_camera(hass, HOST, SECRET)
+    assert [call[0] for call in aioclient_mock.mock_calls] == ["POST"] * 3
+
+
+@pytest.mark.parametrize(
+    "answer", [{"status": 401}, {"exc": aiohttp.ClientConnectionError()}]
+)
+async def test_camera_miss_is_soft(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, answer: dict
+) -> None:
+    aioclient_mock.post(f"http://{HOST}:8181/camera", **answer)
+    assert not await async_show_camera(hass, HOST, SECRET, VIEW)
+
+
+def test_notifier_accepts_what_home_assistant_sends() -> None:
+    """The C# side cannot run here: its literals must still match this side's."""
+    folder = Path(__file__).parent.parent / "tv-app" / "notifier-dotnet"
+    camera = (folder / "CornerCamera.cs").read_text(encoding="utf-8")
+    program = (folder / "Program.cs").read_text(encoding="utf-8")
+
+    def keys(table: str) -> tuple[str, ...]:
+        body = re.search(rf"> {table} = new .*?\n        \}};", camera, re.DOTALL)
+        assert body
+        return tuple(re.findall(r'\{ "(\w+)",', body[0]))
+
+    assert keys("Sizes") == CORNER_SIZES
+    assert keys("TextSizes") == TEXT_SIZES
+    for value in (*CORNERS, *TEXT_POSITIONS):
+        assert f'"{value}"' in camera
+    for name in CAMERA_FIELDS:
+        assert f'q["{name}"]' in program
+    assert f"hold > {MAX_CORNER_SECONDS}" in program

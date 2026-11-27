@@ -19,7 +19,6 @@ from custom_components.samstream.tv_session import (
     session_answer,
     signal_closed,
     signal_playing,
-    signal_source,
 )
 
 from .conftest import YOUTUBE
@@ -409,65 +408,11 @@ async def test_return_button(hass: HomeAssistant, watching_youtube: MagicMock) -
     assert keys(tv) == ["KEY_PAUSE", "KEY_PLAY"]
 
 
-@pytest.mark.parametrize(("source", "key"), [("TV1", "KEY_TV"), ("HDMI2", "KEY_HDMI2")])
-async def test_return_to_the_input_the_tv_app_reported(
-    hass: HomeAssistant, mock_tv: MagicMock, source: str, key: str
-) -> None:
-    """Over Live TV / HDMI, closing Samstream lands on Home: press the input."""
-    mock_tv.app_status = AsyncMock(return_value=SimpleNamespace(visible=True))
-    await play(hass, tv_corner="on")
-    entry = hass.config_entries.async_entries(DOMAIN)[0]
-    seq = session_answer(hass, entry, 0)["seq"]
-    async_dispatcher_send(hass, signal_source(entry.entry_id), seq, source)
-    await stop(hass)
-
-    mock_tv.close_app.assert_awaited_once_with(SAMSTREAM_APP_ID)
-    assert keys(mock_tv) == [key]
-
-
 def test_source_key() -> None:
     assert source_key("TV1") == "KEY_TV"
     assert source_key("HDMI3") == "KEY_HDMI3"
     assert source_key("AV1") is None
     assert source_key(None) is None
-
-
-@pytest.mark.parametrize(
-    ("options", "requested", "expected"),
-    [
-        ({}, "on", "top_right"),  # The default corner.
-        ({"tv_corner": "bottom_left"}, "on", "bottom_left"),  # The configured one.
-        ({"tv_corner": "bottom_left"}, "top_left", "top_left"),  # Asked explicitly.
-        ({}, "off", None),
-    ],
-)
-async def test_corner_over_live_tv_or_home(
-    hass: HomeAssistant,
-    mock_tv: MagicMock,
-    options: dict,
-    requested: str,
-    expected: str | None,
-) -> None:
-    entry = hass.config_entries.async_entries(DOMAIN)[0]
-    hass.config_entries.async_update_entry(entry, options=options)
-    await hass.async_block_till_done()
-    await play(hass, tv_corner=requested)
-    assert command_sent(hass)["tv_corner"] == expected
-    assert ("mjpeg_url" in command_sent(hass)["stream"]) is (expected is not None)
-
-
-async def test_no_corner_over_a_streaming_app(
-    hass: HomeAssistant, watching_youtube: MagicMock
-) -> None:
-    """Over YouTube the TV window would replace it with Live TV: normal camera."""
-    await play(hass, tv_corner="on")
-    assert command_sent(hass)["tv_corner"] is None
-    assert "mjpeg_url" not in command_sent(hass)["stream"]
-
-
-def command_sent(hass: HomeAssistant) -> dict:
-    entry = hass.config_entries.async_entries(DOMAIN)[0]
-    return session_answer(hass, entry, 0)["command"]
 
 
 def _frame(hass: HomeAssistant, tv: MagicMock | None = None) -> None:

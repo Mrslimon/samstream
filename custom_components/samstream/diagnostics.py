@@ -39,7 +39,6 @@ TO_REDACT = {
     "url",
     "sound",
     "voice_webhook_id",
-    "mjpeg_url",
     # Raw OCF resources (read_all): network and device identifiers.
     "ssid",
     "bssid",

@@ -20,6 +20,7 @@ from aiosamstream.ocf import (
 )
 from aiosamstream.ocf import state as ocf_state
 from homeassistant import config_entries
+from homeassistant.components.media_player.const import MediaPlayerEntityFeature
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
@@ -634,14 +635,12 @@ async def test_media_player_uses_what_the_tv_reports(
 
 
 @pytest.mark.parametrize("leave", ["stop_stream", "back"])
-@pytest.mark.parametrize("corner", ["off", "on"])
 @pytest.mark.parametrize("on_screen", ["HDMI1", "webapp"])
-async def test_returns_to_the_input_the_tv_reported(  # noqa: PLR0913, PLR0917 - fixtures and cases
+async def test_returns_to_the_input_the_tv_reported(
     hass: HomeAssistant,
     ocf_entry: MockConfigEntry,
     mock_tv: MagicMock,
     leave: str,
-    corner: str,
     on_screen: str,
 ) -> None:
     """HDMI under the camera: switch back to it, not to the last app.
@@ -688,12 +687,10 @@ async def test_returns_to_the_input_the_tv_reported(  # noqa: PLR0913, PLR0917 -
         await hass.services.async_call(
             DOMAIN,
             "play_stream",
-            {"entity_id": player, "camera": "camera.gate", "tv_corner": corner},
+            {"entity_id": player, "camera": "camera.gate", "corner": False},
             blocking=True,
         )
         command = session_answer(hass, ocf_entry, 0)
-        expected = "top_right" if corner == "on" else None
-        assert command["command"]["tv_corner"] == expected
         if leave == "back":
             async_dispatcher_send(
                 hass, signal_closed(ocf_entry.entry_id), command["seq"]
@@ -1117,3 +1114,36 @@ async def test_helper_download(
     assert LAUNCHER_FILE in launcher.headers["Content-Disposition"]
     missing = await client.get(f"/api/samstream/onboard/nope/{TOOL_FILE}")
     assert missing.status == 404
+
+
+@pytest.mark.parametrize(
+    ("current", "optical"), [("optical", True), ("internal", False)]
+)
+async def test_optical_soundbar_has_no_volume_level(
+    hass: HomeAssistant,
+    ocf_entry: MockConfigEntry,
+    current: str,
+    optical: bool,  # noqa: FBT001
+) -> None:
+    """Over the optical cable the TV reports volume 0: offer up and down only."""
+    outputs = [
+        {"id": "internal", "name": "TV-Lautsprecher", "type": "DEFAULT"},
+        {"id": "optical", "name": "Soundbar (Optisch)", "type": "OPTICAL"},
+    ]
+    player = _entity(hass, "media_player", "media_player")
+    _report(
+        ocf_entry,
+        {
+            **REPORT,
+            ocf_state.AUDIO: {"volume": 0, "mute": False},
+            ocf_state.MEDIA_OUTPUT: {"curMediaOutput": current, "outputList": outputs},
+        },
+    )
+    await hass.async_block_till_done()
+    state = hass.states.get(player)
+    assert state.attributes["sound_output"] == current
+    assert state.attributes["sound_output_type"] == outputs[optical]["type"]
+    features = MediaPlayerEntityFeature(state.attributes["supported_features"])
+    assert bool(features & MediaPlayerEntityFeature.VOLUME_SET) is not optical
+    assert features & MediaPlayerEntityFeature.VOLUME_STEP
+    assert (state.attributes.get("volume_level") is None) is optical

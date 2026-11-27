@@ -3,17 +3,25 @@
  *
  * HA launches the app with a DEEP_LINK whose metaTag is JSON:
  *   {"v":1,"stream":{"label":"Front door","url":"ws://ha:8123/api/samstream/…","type":"mse"},
- *    "message":"Someone is at the door"}
+ *    "message":"Someone is at the door","text_position":"bottom","text_size":"normal"}
  * Tizen hands it over in the app control data, usually as key PAYLOAD with value
  * '{"values":"<metaTag>"}'; both that and the raw JSON are accepted.
  */
 
-import { CORNERS, type Corner } from "./pip";
 import type { CameraStream } from "./streams";
+
+export type TextPosition = "bottom" | "middle" | "top";
+export type TextSize = "normal" | "large" | "extra_large";
+
+const TEXT_POSITIONS: readonly TextPosition[] = ["bottom", "middle", "top"];
+const TEXT_SIZES: readonly TextSize[] = ["normal", "large", "extra_large"];
 
 export interface LaunchPayload {
   stream: CameraStream;
   message: string;
+  /** Where the message sits over the camera; bottom when not said. */
+  textPosition?: TextPosition;
+  textSize?: TextSize;
 }
 
 /** `{action:"open", youtube|url}`: open another app from inside Samstream. */
@@ -57,38 +65,32 @@ export function parsePayload(raw: unknown, haUrl?: string): LaunchPayload | unde
   if (typeof raw !== "object" || raw === null) {
     return undefined;
   }
-  const { stream, message, tv_corner } = raw as {
+  const { stream, message, text_position, text_size, textPosition, textSize } = raw as {
     stream?: unknown;
     message?: unknown;
-    tv_corner?: unknown;
+    text_position?: unknown;
+    text_size?: unknown;
+    // The saved last camera (localStorage) keeps the parsed names.
+    textPosition?: unknown;
+    textSize?: unknown;
   };
   if (typeof stream !== "object" || stream === null) {
     return undefined;
   }
-  const { url, label, mjpeg_url } = stream as {
-    url?: unknown;
-    label?: unknown;
-    mjpeg_url?: unknown;
-  };
+  const { url, label } = stream as { url?: unknown; label?: unknown };
   if (typeof url !== "string" || !/^wss?:\/\//.test(url)) {
     return undefined;
   }
   if (haUrl && hostOf(url) !== hostOf(haUrl)) {
     return undefined;
   }
+  const position = (text_position ?? textPosition) as TextPosition;
+  const size = (text_size ?? textSize) as TextSize;
   return {
-    stream: {
-      label: typeof label === "string" ? label : "",
-      url,
-      type: "mse",
-      ...(CORNERS.includes(tv_corner as Corner) ? { tvCorner: tv_corner as Corner } : {}),
-      ...(typeof mjpeg_url === "string" &&
-      /^https?:\/\//.test(mjpeg_url) &&
-      (!haUrl || hostOf(mjpeg_url) === hostOf(haUrl))
-        ? { mjpegUrl: mjpeg_url }
-        : {}),
-    },
+    stream: { label: typeof label === "string" ? label : "", url, type: "mse" },
     message: typeof message === "string" ? message : "",
+    ...(TEXT_POSITIONS.includes(position) ? { textPosition: position } : {}),
+    ...(TEXT_SIZES.includes(size) ? { textSize: size } : {}),
   };
 }
 

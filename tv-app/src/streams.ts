@@ -1,7 +1,5 @@
 /** Camera streams the app can play, and helpers for showing them safely. */
 
-import type { Corner } from "./pip";
-
 export interface CameraStream {
   label: string;
   url: string;
@@ -10,10 +8,6 @@ export interface CameraStream {
   lowLatency?: boolean;
   /** MSE only: also ask go2rtc for audio (this TV cannot decode FLAC; needs AAC). */
   audio?: boolean;
-  /** Keep the TV's own picture (Live TV / HDMI) in this corner. */
-  tvCorner?: Corner;
-  /** Corner mode: the same camera as a picture stream (no video layer). */
-  mjpegUrl?: string;
 }
 
 /** Keep only well-formed entries (anything else dropped, not the whole list). */

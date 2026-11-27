@@ -31,6 +31,7 @@ from custom_components.samstream.installer import (
     LRI,
     PDI,
     async_get_sdb_key,
+    async_start_notifier,
     developer_problem,
     ha_lan_host,
     ip_boxes,
@@ -436,3 +437,19 @@ async def test_uninstall_requires_sdb(hass: HomeAssistant, sdb: MagicMock) -> No
     sdb.connect = AsyncMock(side_effect=SdbConnectionError("refused"))
     with pytest.raises(HomeAssistantError):
         await _uninstall(hass)
+
+
+async def test_start_notifier(
+    hass: HomeAssistant, setup_entry: MockConfigEntry
+) -> None:
+    """Started over sdb, only where HA installed it (signing set up); quiet if not."""
+    client = MagicMock()
+    shell = AsyncMock()
+    client.return_value.__aenter__.return_value.shell = shell
+    with patch("custom_components.samstream.installer.SdbClient", client):
+        assert not await async_start_notifier(hass, setup_entry)
+        await async_save_signing(hass, setup_for(["EXCBZZZZGFIFJSY"]))
+        assert await async_start_notifier(hass, setup_entry)
+        shell.assert_awaited_once_with(f"0 execute {NOTIFIER_APP_ID}")
+        shell.side_effect = SdbError("refused")
+        assert not await async_start_notifier(hass, setup_entry)

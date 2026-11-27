@@ -157,10 +157,13 @@ def tv_stream_url(hass: HomeAssistant, entry: SamstreamConfigEntry, name: str) -
     return f"{scheme}://{parsed.netloc}/api/samstream/tv/{secret}/stream/{name}"
 
 
-def tv_mjpeg_url(hass: HomeAssistant, entry: SamstreamConfigEntry, name: str) -> str:
-    """HTTP URL of the picture stream (MJPEG) the TV app shows in corner mode."""
+def tv_mjpeg_url(
+    hass: HomeAssistant, entry: SamstreamConfigEntry, name: str, size: str
+) -> str:
+    """HTTP URL of the picture stream (MJPEG) the corner camera on the TV shows."""
     ws = tv_stream_url(hass, entry, name)
-    return ws.replace("ws", "http", 1).replace("/stream/", "/mjpeg/", 1)
+    url = ws.replace("ws", "http", 1).replace("/stream/", "/mjpeg/", 1)
+    return f"{url}?size={size}"
 
 
 class SamstreamStreamView(HomeAssistantView):
@@ -232,11 +235,11 @@ async def _wait_for_request(socket: web.WebSocketResponse) -> bool:
 
 
 class SamstreamMjpegView(HomeAssistantView):
-    """Serve a published stream as MJPEG, for the TV's corner mode.
+    """Serve a published stream as MJPEG, for the corner camera.
 
-    A <video> on the TV takes the hardware video layer the TV window needs; an
-    image stream does not. This transcodes (unlike the MSE view), so it only
-    runs while a TV shows a camera with its own picture in a corner.
+    The corner camera is drawn over another app, which holds the TV's video
+    decoder, so it is sent as pictures. This transcodes (unlike the MSE view),
+    so it only runs while a TV shows a camera in a corner.
     """
 
     url = "/api/samstream/tv/{secret}/mjpeg/{name}"
@@ -254,8 +257,9 @@ class SamstreamMjpegView(HomeAssistantView):
         source = hass.data.get(_SOURCES, {}).get(name)
         if not source:
             return web.Response(status=HTTPStatus.NOT_FOUND)
+        size = request.query.get("size", "")
         process = await asyncio.create_subprocess_exec(
-            *mjpeg_args(source),
+            *mjpeg_args(source, PICTURE_SIZES.get(size, PICTURE_SIZES["medium"])),
             stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
@@ -285,8 +289,20 @@ class SamstreamMjpegView(HomeAssistantView):
 MJPEG_BOUNDARY = "ffmpeg"  # ffmpeg's mpjpeg muxer default
 
 
-def mjpeg_args(source: str) -> list[str]:
-    """Decode the restream to 10 JPEG frames a second at 720p (multipart)."""
+# Corner camera picture sizes, as drawn on the TV (see CornerCamera.cs).
+PICTURE_SIZES = {"small": (480, 270), "medium": (640, 360), "large": (880, 496)}
+
+
+def mjpeg_args(source: str, size: tuple[int, int]) -> list[str]:
+    """Decode the restream to 8 JPEG frames a second at `size` (multipart).
+
+    Other shapes than 16:9 are letterboxed, never stretched.
+    """
+    width, height = size
+    picture = (
+        f"fps=8,scale={width}:{height}:force_original_aspect_ratio=decrease,"
+        f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
+    )
     return [
         _FFMPEG,
         "-hide_banner",
@@ -304,7 +320,7 @@ def mjpeg_args(source: str) -> list[str]:
         source,
         "-an",
         "-vf",
-        "fps=10,scale=-2:720",
+        picture,
         "-q:v",
         "6",
         "-f",

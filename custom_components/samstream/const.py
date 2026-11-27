@@ -84,13 +84,29 @@ CERT_CHECK_INTERVAL: Final = timedelta(hours=12)
 
 # First media player source: presses the remote's Home key.
 SOURCE_HOME: Final = "Home"
-# Where play_stream can keep the TV's own picture (Live TV / HDMI).
+# The corner camera: drawn by the notifier over whatever is playing.
 CORNERS: Final = ("top_left", "top_right", "bottom_left", "bottom_right")
-# play_stream tv_corner: off, on (the corner from the options) or a corner.
+CORNER_SIZES: Final = ("small", "medium", "large")
+# The former play_stream `tv_corner` field, still accepted from automations.
 TV_CORNERS: Final = ("off", "on", *CORNERS)
-# Options: which corner "on" uses.
-CONF_TV_CORNER: Final = "tv_corner"
+# Text over a camera, in the corner and full screen.
+TEXT_POSITIONS: Final = ("bottom", "middle", "top")
+TEXT_SIZES: Final = ("normal", "large", "extra_large")
+# Options (Configure -> Cameras).
+CONF_CORNER: Final = "corner_view"
+CONF_TV_CORNER: Final = "tv_corner"  # which corner
+CONF_CORNER_SIZE: Final = "corner_size"
+CONF_CORNER_SECONDS: Final = "corner_seconds"
+CONF_TEXT_POSITION: Final = "text_position"
+CONF_TEXT_SIZE: Final = "text_size"
 DEFAULT_TV_CORNER: Final = "top_right"
+DEFAULT_CORNER_SIZE: Final = "medium"
+# A corner camera cannot be closed with the remote, so it always has an end.
+DEFAULT_CORNER_SECONDS: Final = 30
+MIN_CORNER_SECONDS: Final = 5
+MAX_CORNER_SECONDS: Final = 3600
+DEFAULT_TEXT_POSITION: Final = "bottom"
+DEFAULT_TEXT_SIZE: Final = "normal"
 # Sources before the apps, and the remote key each one presses. The TV keeps
 # its own names for inputs; these keys work whatever the input is called.
 SOURCE_INPUTS: Final = "Input list"

@@ -96,6 +96,9 @@ class OcfTvState:
     sound_modes: Choices = ()
     sound_output: str | None = None
     sound_outputs: Choices = ()
+    # The current output's kind ("DEFAULT", "OPTICAL", ...): the same on every
+    # TV, whatever language it names its outputs in.
+    sound_output_type: str | None = None
     wifi_rssi: int | None = None
     wifi_channel: int | None = None
     wifi_dbm: int | None = None  # from the device log, real dBm
@@ -151,6 +154,15 @@ def _choices(items: Any, id_key: str, name_key: str) -> Choices:
             if isinstance(ident, str) and ident:
                 out.append((ident, name if isinstance(name, str) and name else ident))
     return tuple(out)
+
+
+def _output_type(body: dict[str, Any]) -> str | None:
+    """Read the kind of the current sound output from the TV's output list."""
+    current, outputs = body.get("curMediaOutput"), body.get("outputList")
+    for item in outputs if isinstance(outputs, list) else ():
+        if isinstance(item, dict) and current and item.get("id") == current:
+            return _text(item, "type")
+    return None
 
 
 def _modes(body: dict[str, Any]) -> tuple[str | None, Choices]:
@@ -305,6 +317,7 @@ _PARSERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
     MEDIA_OUTPUT: lambda b: {
         "sound_output": _text(b, "curMediaOutput"),
         "sound_outputs": _choices(b.get("outputList"), "id", "name"),
+        "sound_output_type": _output_type(b),
     },
     NETWORK: lambda b: {"wifi_rssi": _int(b, "rssi"), "wifi_channel": _int(b, "ch")},
     CONNECTION_INFO: _connection,

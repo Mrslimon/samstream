@@ -121,7 +121,7 @@
     "step": {
       "cameras": {
         "title": "Cameras",
-        "description": "Pick up to 9 cameras Left/Right flips between on the TV, in order — ready to show even before an automation has played one. Leave a slot empty to use fewer.",
+        "description": "Pick up to 9 cameras Left/Right flips between on the TV, in order — ready to show even before an automation has played one. Leave a slot empty to use fewer. The settings below say how a camera appears when it is played.",
         "data": {
           "camera_1": "Camera 1",
           "camera_2": "Camera 2",
@@ -131,7 +131,19 @@
           "camera_6": "Camera 6",
           "camera_7": "Camera 7",
           "camera_8": "Camera 8",
-          "camera_9": "Camera 9"
+          "camera_9": "Camera 9",
+          "corner_view": "Show cameras in a corner",
+          "tv_corner": "Corner",
+          "corner_size": "Corner camera size",
+          "text_position": "Text position",
+          "text_size": "Text size",
+          "corner_seconds": "Corner camera stays for"
+        },
+        "data_description": {
+          "corner_view": "With something playing, the camera appears in a corner over it and nothing pauses. With the TV off it opens full screen, and so does Home when local control can tell it apart. Turn off to always open full screen. An action can override this.",
+          "tv_corner": "Where the corner camera appears.",
+          "text_position": "Where the message sits over the camera. The corner camera has it at the top or the bottom (Middle counts as bottom there).",
+          "corner_seconds": "Used when the action gives no duration. The TV remote cannot close the corner camera; the Stop stream action can."
         }
       },
       "network": {
@@ -201,7 +213,6 @@
           "frame_power": "Turning the Frame off",
           "language": "Language",
           "theme": "Theme",
-          "tv_corner": "Corner for the TV picture",
           "resume_playback": "Resume playback afterwards",
           "auto_update": "Install TV app updates automatically"
         },
@@ -210,7 +221,6 @@
           "theme": "Colors of the home screen; video always plays on black.",
           "auto_update": "When Home Assistant has a newer Samstream TV app (after an integration update), install it by itself the next time the TV is on and Samstream is not on screen.",
           "resume_playback": "When Samstream goes back to the app it interrupted, press Play so it continues. Home Assistant cannot see whether you had paused it with the TV's own remote; turn this off if that leaves apps playing that you had paused. Pauses made through Home Assistant are always kept.",
-          "tv_corner": "Where Live TV or the HDMI input stays visible when a camera plays with the TV picture in a corner.",
           "frame_power": "The Frame's Power key switches to Art Mode. Choose Fully off to make 'turn off' (and the camera's return) switch it off completely, like a long press on its remote."
         }
       },
@@ -591,7 +601,7 @@
     },
     "play_stream": {
       "name": "Play camera on TV",
-      "description": "Opens Samstream on the TV and plays a camera (turns the TV on first if needed).",
+      "description": "Shows a camera on the TV: in a corner over what is playing, or full screen in Samstream (turning the TV on first if needed).",
       "fields": {
         "camera": {
           "name": "Camera",
@@ -607,15 +617,23 @@
         },
         "duration": {
           "name": "Duration",
-          "description": "Go back to what was on the TV after this many seconds. Leave empty to stay until Stop stream."
+          "description": "Remove the camera after this many seconds. Full screen: then go back to what was on; leave empty to stay until Stop stream. Corner: leave empty to use the Cameras setting."
         },
         "return_to_previous": {
           "name": "Return to previous",
-          "description": "When the camera ends, reopen the app that was playing and resume it (or turn the TV off again if it was off)."
+          "description": "Full screen only: when the camera ends, reopen the app that was playing and resume it (or turn the TV off again if it was off)."
         },
-        "tv_corner": {
-          "name": "TV picture in a corner",
-          "description": "Keep Live TV, an HDMI input or Home visible in a corner while the camera plays: On uses the corner from the TV app settings. Over a streaming app (YouTube, Netflix) the camera plays normally instead."
+        "corner": {
+          "name": "Corner",
+          "description": "On: with something playing, show the camera in a corner over it (otherwise full screen). Off: always full screen. Leave unset to use the Cameras setting."
+        },
+        "corner_position": {
+          "name": "Which corner",
+          "description": "Defaults to the Cameras setting."
+        },
+        "corner_size": {
+          "name": "Corner size",
+          "description": "Defaults to the Cameras setting."
         }
       }
     },
@@ -896,8 +914,6 @@
     },
     "tv_corner": {
       "options": {
-        "off": "Off",
-        "on": "On (corner from settings)",
         "top_left": "Top left",
         "top_right": "Top right",
         "bottom_left": "Bottom left",
@@ -908,6 +924,27 @@
       "options": {
         "art": "Art Mode",
         "off": "Fully off"
+      }
+    },
+    "corner_size": {
+      "options": {
+        "small": "Small",
+        "medium": "Medium",
+        "large": "Large"
+      }
+    },
+    "text_position": {
+      "options": {
+        "bottom": "Bottom",
+        "middle": "Middle",
+        "top": "Top"
+      }
+    },
+    "text_size": {
+      "options": {
+        "normal": "Normal",
+        "large": "Large",
+        "extra_large": "Extra large"
       }
     }
   }

@@ -2,6 +2,43 @@
 
 Every release's section below is what Home Assistant shows in the update dialog.
 
+## 0.3.0 (2026-11-27)
+
+### 🪟 The camera in a corner, over what you are watching
+
+**This changes what `play_stream` does by default.** When something is already playing, the camera
+now appears in a bordered box in a corner. Nothing pauses or closes, the remote keeps working, and
+the box goes away after `duration`, or after 30 seconds.
+
+- **To keep the full-screen camera:** turn off *Show cameras in a corner* under
+  **Configure → Cameras**, or add `corner: false` to the action. The dashboard card has a
+  *Full screen* tick box.
+- **Settings** (Configure → Cameras): corner, box size, time on screen, text position and text
+  size. An action can set `corner`, `corner_position` and `corner_size`.
+- **Update the TV app** after updating: accept the *Samstream TV app* update (0.14.0), or press
+  **Install Samstream app**. Until then the camera opens full screen.
+- The old *TV picture in a corner* mode (Live TV and HDMI only) is replaced. Automations that
+  still send `tv_corner` keep working: `off` means full screen, a corner name picks the corner.
+- With the TV off the camera opens full screen, and so does the Home screen when local control
+  can tell it apart.
+
+The box shows about 8 pictures a second without sound, and the TV remote cannot close it. Tried on
+a QN800C over YouTube, Live TV and HDMI; **Netflix, The Frame and other models are untried**. If
+nothing appears on your TV, use `corner: false` and please open an issue.
+
+### 💬 Text over cameras
+
+- Messages over a camera now sit at the **bottom** of the screen instead of the middle. Position
+  (bottom, middle, top) and size (normal, large, extra large) are settings. In the corner box the
+  text is at the top or the bottom.
+
+### 🔊 Optical soundbars (a test for issue #5)
+
+With local control on and the sound going to the **optical** output, the volume slider is now hidden
+and only volume up and down are offered, because the TV reports volume 0 there. The media player
+also has `sound_output` and `sound_output_type` attributes. **Not yet confirmed on a real optical
+soundbar.**
+
 ## 0.2.8 (2026-11-26)
 
 ### 🔢 Local control accepts shorter TV PINs

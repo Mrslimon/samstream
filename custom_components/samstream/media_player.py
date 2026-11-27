@@ -45,11 +45,22 @@ from . import SamstreamConfigEntry
 from .art_gallery import CONTENT_ID, upload_url
 from .art_gallery import describe as describe_art
 from .const import (
+    CONF_CORNER,
+    CONF_CORNER_SECONDS,
+    CONF_CORNER_SIZE,
     CONF_FRAME_POWER,
     CONF_RESUME,
+    CONF_TEXT_POSITION,
+    CONF_TEXT_SIZE,
     CONF_TV_CORNER,
+    CORNERS,
+    DEFAULT_CORNER_SECONDS,
+    DEFAULT_CORNER_SIZE,
+    DEFAULT_TEXT_POSITION,
+    DEFAULT_TEXT_SIZE,
     DEFAULT_TV_CORNER,
     DOMAIN,
+    MAX_CORNER_SECONDS,
     SOURCE_HOME,
     SOURCE_KEYS,
 )
@@ -57,11 +68,18 @@ from .coordinator import SamstreamCoordinator
 from .entity import SamstreamEntity
 from .installer import (
     async_install_package,
+    async_start_notifier,
     async_uninstall_package,
     resolve_package_path,
 )
 from .keys import normalize_key
-from .notifier import async_post_native
+from .notifier import (
+    async_camera_message,
+    async_close_camera,
+    async_notifier_alive,
+    async_post_native,
+    async_show_camera,
+)
 from .stream_relay import async_publish_stream, tv_mjpeg_url, tv_stream_url
 from .tv_session import (
     current_command,
@@ -69,7 +87,6 @@ from .tv_session import (
     signal_closed,
     signal_ended,
     signal_playing,
-    signal_source,
 )
 from .tv_settings import ensure_tv_secret
 
@@ -89,6 +106,8 @@ LAUNCH_RETRY_SECONDS = 2
 RESUME_DELAY_SECONDS = 3
 # After Samstream closes: let the TV finish leaving it before switching input.
 INPUT_DELAY_SECONDS = 2
+# Starting the notifier over sdb: this many health checks, half a second apart.
+NOTIFIER_START_CHECKS = 10
 # `duration` counts from the first frame; if the app never reports one (a
 # stream error, an old app), the return still comes this much later.
 FIRST_FRAME_WAIT_SECONDS = 30
@@ -109,9 +128,8 @@ class _Interruption:
     return_to_previous: bool
     # Press Play when going back: False when the app was already paused.
     resume: bool = True
-    # The input under Samstream, as the TV app reported it ("TV1", "HDMI2").
-    tv_source: str | None = None
-    # The same from local control, as an id `select_input` takes ("dtv", "HDMI1").
+    # The input under Samstream from local control, as an id `select_input`
+    # takes ("dtv", "HDMI1").
     ocf_input: str | None = None
 
 
@@ -156,7 +174,6 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
 
     _attr_name = None
     _attr_device_class = MediaPlayerDeviceClass.TV
-    _attr_supported_features = FEATURES
 
     def __init__(self, coordinator: SamstreamCoordinator) -> None:
         """Create the media player for the coordinator's TV."""
@@ -170,6 +187,8 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         self._stream_url: str | None = None
         self._frame_seen = False
         self._duration: float | None = None
+        # Set while the last camera went to the corner: when the TV removes it.
+        self._corner_until: float | None = None
 
     async def async_added_to_hass(self) -> None:
         """Listen for the TV app reporting its first frame."""
@@ -186,11 +205,6 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass, signal_closed(entry_id), self._on_closed
-            )
-        )
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass, signal_source(entry_id), self._on_tv_source
             )
         )
 
@@ -270,8 +284,27 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         return [*SOURCE_KEYS, *apps]
 
     @property
+    def supported_features(self) -> MediaPlayerEntityFeature:
+        """No exact volume while the sound goes to an optical soundbar."""
+        if self._optical_output:
+            return FEATURES & ~MediaPlayerEntityFeature.VOLUME_SET
+        return FEATURES
+
+    @property
+    def _optical_output(self) -> bool:
+        """The sound leaves on the optical cable (known with local control).
+
+        The cable carries sound one way: the TV does not learn the soundbar's
+        volume (it reports 0), so only volume up and down are offered.
+        """
+        ocf = self.coordinator.data.ocf
+        return ocf is not None and ocf.sound_output_type == "OPTICAL"
+
+    @property
     def volume_level(self) -> float | None:
         """Volume as 0..1."""
+        if self._optical_output:
+            return None
         volume = self.coordinator.data.volume
         return None if volume is None else volume / 100
 
@@ -292,8 +325,18 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Mark Frames, so the card offers its Art section."""
-        return {"frame_tv": True} if self._frame else None
+        """Mark Frames (the card's Art section) and name the sound output.
+
+        `sound_output` and `sound_output_type` (local control) are the TV's own
+        codes, the same in every TV language, so automations can rely on them.
+        """
+        attributes: dict[str, Any] = {"frame_tv": True} if self._frame else {}
+        ocf = self.coordinator.data.ocf
+        if ocf is not None and ocf.sound_output:
+            attributes["sound_output"] = ocf.sound_output
+            if ocf.sound_output_type:
+                attributes["sound_output_type"] = ocf.sound_output_type
+        return attributes or None
 
     @property
     def _frame(self) -> bool:
@@ -532,9 +575,17 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         message: str | None = None,
         duration: float | None = None,
         return_to_previous: bool = True,
-        tv_corner: str = "off",
+        corner: bool | None = None,
+        corner_position: str | None = None,
+        corner_size: str | None = None,
+        tv_corner: str | None = None,
     ) -> None:
-        """Open Samstream on the TV with a camera (the `play_stream` action).
+        """Show a camera on the TV (the `play_stream` action).
+
+        With something playing it appears in a corner over it, drawn by the
+        notifier: nothing pauses and nothing is taken over. Otherwise (TV off,
+        Home, Samstream already showing), with `corner` false, or when the
+        notifier cannot be reached, Samstream opens it full screen.
 
         Camera entities only, not a free-form URL: a raw stream URL field
         would let any non-admin caller point Home Assistant's ffmpeg at an
@@ -555,60 +606,116 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         if label is None and (state := self.hass.states.get(camera)):
             label = state.name
         entry = self.coordinator.config_entry
+        options = entry.options
         ensure_tv_secret(self.hass, entry)
         name = await async_publish_stream(self.hass, entry, source)
-        stream_url = tv_stream_url(self.hass, entry, name)
-        stream: dict[str, Any] = {
-            "label": label or "",
-            "url": stream_url,
-            "type": "mse",
+        if corner is None:
+            corner = (
+                options.get(CONF_CORNER, True)
+                if tv_corner is None
+                else tv_corner != "off"
+            )
+        if corner_position is None:
+            corner_position = (
+                tv_corner
+                if tv_corner in CORNERS
+                else options.get(CONF_TV_CORNER, DEFAULT_TV_CORNER)
+            )
+        text = {
+            "text_position": options.get(CONF_TEXT_POSITION, DEFAULT_TEXT_POSITION),
+            "text_size": options.get(CONF_TEXT_SIZE, DEFAULT_TEXT_SIZE),
         }
-        corner = await self._async_corner(tv_corner)
-        if corner is not None:
-            # Pictures, not video: the TV's picture needs the video layer.
-            stream["mjpeg_url"] = tv_mjpeg_url(self.hass, entry, name)
+        if corner and await self._async_something_playing():
+            size = corner_size or options.get(CONF_CORNER_SIZE, DEFAULT_CORNER_SIZE)
+            seconds = duration or options.get(
+                CONF_CORNER_SECONDS, DEFAULT_CORNER_SECONDS
+            )
+            view = {
+                "corner": corner_position,
+                "size": size,
+                "seconds": str(max(1, min(MAX_CORNER_SECONDS, round(seconds)))),
+                "url": tv_mjpeg_url(self.hass, entry, name, size),
+                "title": label or "",
+                "message": message or "",
+                **text,
+            }
+            if await self._async_show_corner(view):
+                return
+        stream_url = tv_stream_url(self.hass, entry, name)
         await self._async_take_over(
             {
                 "action": "play",
-                "stream": stream,
+                "stream": {"label": label or "", "url": stream_url, "type": "mse"},
                 "message": message or "",
-                # Live TV / HDMI keeps playing in this corner (TV Window API).
-                "tv_corner": corner,
+                **text,
             },
             duration=duration,
             return_to_previous=return_to_previous,
             stream_url=stream_url,
         )
 
-    async def _async_corner(self, requested: str) -> str | None:
-        """Corner for the TV's own picture, or None for the normal camera.
+    async def _async_something_playing(self) -> bool:
+        """Tell whether the TV shows something a camera should not replace.
 
-        Only over Live TV, an HDMI input or Home (no app in front), or a TV that
-        is off: the TV window shows the TV's input, so over an app it would
-        replace that app with Live TV.
+        An app (playing or paused: the TV does not say), Live TV or an HDMI
+        input. Without local control the TV cannot tell Home from an input, so
+        "no app" counts too: the corner never interrupts anyone.
         """
-        if requested == "off":
-            return None
-        corner = (
-            self.coordinator.config_entry.options.get(CONF_TV_CORNER, DEFAULT_TV_CORNER)
-            if requested == "on"
-            else requested
-        )
-        if self._interruption is not None:
-            previous = self._interruption.previous_app
-        elif not self.coordinator.data.is_on or self._ocf_on_input() is not None:
-            return corner
-        else:
-            try:
-                previous = await self.coordinator.async_current_app()
-            except SamstreamError:
-                return None  # Unknown: the normal camera is always safe.
-        if previous not in (None, SAMSTREAM_APP_ID):
-            _LOGGER.debug(
-                "%s shows %s: camera without the corner", self.entity_id, previous
+        if not self.coordinator.data.is_on or self._interruption is not None:
+            return False
+        ocf = self.coordinator.ocf_state()
+        if ocf is not None and ocf.art_mode:
+            return False
+        if self._ocf_on_input() is not None:
+            return True
+        try:
+            app = await self.coordinator.async_current_app()
+        except SamstreamError:
+            return True  # Unknown: do not take the screen over.
+        if app is None:
+            return ocf is None
+        return app != SAMSTREAM_APP_ID
+
+    async def _async_show_corner(self, view: dict[str, str]) -> bool:
+        """Put the camera in a corner; False when the notifier cannot do it."""
+        entry = self.coordinator.config_entry
+        host = entry.data[CONF_HOST]
+        secret = ensure_tv_secret(self.hass, entry)
+        shown = await async_show_camera(self.hass, host, secret, view)
+        if (
+            not shown
+            and not await async_notifier_alive(self.hass, host)
+            and await async_start_notifier(self.hass, entry)
+        ):
+            for _ in range(NOTIFIER_START_CHECKS):
+                await asyncio.sleep(0.5)
+                if await async_notifier_alive(self.hass, host):
+                    shown = await async_show_camera(self.hass, host, secret, view)
+                    break
+        if not shown:
+            _LOGGER.warning(
+                "No corner camera on %s, showing it full screen. Update the "
+                "Samstream app on the TV, or open Samstream there once",
+                entry.title,
             )
-            return None
-        return corner
+            return False
+        self._corner_until = self.hass.loop.time() + int(view["seconds"])
+        return True
+
+    def _corner_showing(self) -> bool:
+        return (
+            self._corner_until is not None
+            and self.hass.loop.time() < self._corner_until
+        )
+
+    async def _async_close_corner(self) -> None:
+        showing = self._corner_showing()
+        self._corner_until = None
+        if showing:
+            entry = self.coordinator.config_entry
+            await async_close_camera(
+                self.hass, entry.data[CONF_HOST], ensure_tv_secret(self.hass, entry)
+            )
 
     async def async_show_message(  # noqa: PLR0913 - one argument per action field
         self,
@@ -672,6 +779,8 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         """
         entry = self.coordinator.config_entry
         ensure_tv_secret(self.hass, entry)
+        # Samstream is about to fill the screen: the corner camera goes.
+        await self._async_close_corner()
         # The app pulls this when it starts (or within ~2 s if already open):
         # Samsung TVs ignore launch data for sideloaded apps.
         seq = set_command(self.hass, entry, command)
@@ -727,6 +836,16 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         The camera keeps playing. Without a camera on the TV nothing happens, so
         a slow automation (an AI description) cannot reopen a closed camera.
         """
+        if self._corner_until is not None:
+            if self._corner_showing():
+                entry = self.coordinator.config_entry
+                await async_camera_message(
+                    self.hass,
+                    entry.data[CONF_HOST],
+                    ensure_tv_secret(self.hass, entry),
+                    message,
+                )
+            return
         command = current_command(self.hass, self.coordinator.config_entry)
         if command is None or command.get("action") not in {"play", "notice"}:
             _LOGGER.debug("No camera on %s; message not shown", self.entity_id)
@@ -738,6 +857,10 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
 
     async def async_stop_stream(self) -> None:
         """Leave the camera (the `stop_stream` action): back to what was before."""
+        if self._corner_until is not None and self._interruption is None:
+            # A corner camera took nothing over: there is only the box to remove.
+            await self._async_close_corner()
+            return
         self._cancel_timed_return()
         self._play_seq, self._stream_url, self._frame_seen = None, None, False
         interruption, self._interruption = self._interruption, None
@@ -781,7 +904,7 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
                 _LOGGER.debug("Could not select the input over local control: %s", err)
             else:
                 return
-        if key := source_key(interruption.tv_source or interruption.ocf_input):
+        if key := source_key(interruption.ocf_input):
             with contextlib.suppress(SamstreamError):
                 await self.coordinator.tv.send_keys([key])
 
@@ -855,12 +978,6 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
             return
         self._cancel_timed_return()
         self.hass.async_create_task(self._async_timed_return(None))
-
-    @callback
-    def _on_tv_source(self, seq: int, source: str) -> None:
-        """Remember the input under Samstream (corner mode) to return to it."""
-        if seq == self._play_seq and self._interruption is not None:
-            self._interruption.tv_source = source
 
     @callback
     def _on_closed(self, seq: int) -> None:

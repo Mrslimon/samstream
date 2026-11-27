@@ -12,8 +12,6 @@
     <object id="av-player" type="application/avplayer"></object>
     <!-- go2rtc MSE streams render here instead of the AVPlay plane -->
     <video id="mse-video" muted playsinline></video>
-    <!-- Corner mode: the camera as pictures, leaving the video layer to the TV -->
-    <img id="mjpeg-image" alt="" />
 
     <main id="home">
       <header class="brand">
@@ -62,8 +60,6 @@
           <span class="hud-clock" id="hud-clock"></span>
         </span>
       </div>
-      <!-- Outline of the TV's own picture (Live TV / HDMI) shown in a corner -->
-      <div class="tv-frame" id="tv-frame" hidden></div>
       <div class="chip" id="toast" hidden></div>
       <div id="overlay" aria-live="polite" hidden></div>
       <!-- Bottom control cluster laid out as the D-pad: Up = fit (apex, with an

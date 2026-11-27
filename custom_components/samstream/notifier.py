@@ -1,8 +1,9 @@
 """Talk to the native .NET notifier app running on the TV (`:8181`).
 
 The notifier posts a real Samsung notification (title + text, with a chime) over
-whatever is playing, which the web-app notice cannot do. HA reaches it with a
-plain HTTP GET on the TV's LAN address. Only HA may post: every request is signed
+whatever is playing, which the web-app notice cannot do, and draws the corner
+camera there. HA reaches it with plain HTTP on the TV's LAN address (GET for a
+notification, POST for the camera). Only HA may use it: every request is signed
 with HMAC-SHA256 over its fields, using the TV's per-TV secret, and carries a
 timestamp and a single-use nonce so a captured request cannot be replayed. The
 notifier refuses anything missing, stale, replayed or wrongly signed.
@@ -41,13 +42,26 @@ NOTIFIER_KEY_FILE = "res/shared.key"
 _SKEW_SECONDS = 30
 _TIMEOUT = aiohttp.ClientTimeout(total=5)
 _HEALTH_TIMEOUT = aiohttp.ClientTimeout(total=3)
+# The corner camera request's fields, in the order the notifier signs them.
+CAMERA_FIELDS = (
+    "corner",
+    "size",
+    "seconds",
+    "url",
+    "title",
+    "message",
+    "text_position",
+    "text_size",
+)
+# The caption has room for two lines; longer text would only bloat the URL.
+_MAX_TEXT = 300
 
 
 def _signature(secret: str, parts: list[str]) -> str:
-    """Return the hex HMAC-SHA256 the notifier recomputes to authorize a post.
+    """Return the hex HMAC-SHA256 the notifier recomputes to authorize a request.
 
     `parts` are joined with newlines, in the order the notifier rebuilds them:
-    ts, nonce, title, content, icon, image.
+    ts, nonce, then the request's own fields.
     """
     message = "\n".join(parts).encode()
     return hmac.new(secret.encode(), message, hashlib.sha256).hexdigest()
@@ -69,24 +83,90 @@ def signed_notify_url(  # noqa: PLR0913 - one argument per notification field
     `image` is an http(s) URL the notifier downloads and shows (e.g. a camera
     snapshot). Both are covered by the signature, so they can't be tampered with.
     """
+    return _signed_url(
+        host,
+        secret,
+        "/notify",
+        [title, content, icon, image],
+        {"title": title, "content": content, "icon": icon, "image": image},
+        now=now,
+    )
+
+
+def _signed_url(  # noqa: PLR0913 - the parts of one signed request
+    host: str,
+    secret: str,
+    path: str,
+    fields: list[str],
+    query: dict[str, str],
+    *,
+    now: float | None = None,
+) -> URL:
     ts = str(int(now if now is not None else time.time()))
     nonce = secrets.token_hex(8)
-    sig = _signature(secret, [ts, nonce, title, content, icon, image])
+    sig = _signature(secret, [ts, nonce, *fields])
     return URL.build(
         scheme="http",
         host=host,
         port=NOTIFIER_PORT,
-        path="/notify",
-        query={
-            "title": title,
-            "content": content,
-            "icon": icon,
-            "image": image,
-            "ts": ts,
-            "nonce": nonce,
-            "sig": sig,
-        },
+        path=path,
+        query={**query, "ts": ts, "nonce": nonce, "sig": sig},
     )
+
+
+def signed_camera_url(
+    host: str, secret: str, view: dict[str, str], *, now: float | None = None
+) -> URL:
+    """Build the signed POST URL that shows the corner camera (`CAMERA_FIELDS`)."""
+    query = {key: view[key] for key in CAMERA_FIELDS}
+    query["title"] = query["title"][:_MAX_TEXT]
+    query["message"] = query["message"][:_MAX_TEXT]
+    return _signed_url(
+        host, secret, "/camera", ["camera", *query.values()], query, now=now
+    )
+
+
+async def _async_camera_post(hass: HomeAssistant, host: str, url: URL) -> bool:
+    session = async_get_clientsession(hass)
+    try:
+        async with session.post(url, timeout=_TIMEOUT) as resp:
+            if resp.status == HTTPStatus.OK:
+                return True
+            _LOGGER.debug(
+                "Notifier on %s refused %s: HTTP %s", host, url.path, resp.status
+            )
+            return False
+    except (aiohttp.ClientError, TimeoutError) as err:
+        _LOGGER.debug("Could not reach the notifier on %s: %s", host, err)
+        return False
+
+
+async def async_show_camera(
+    hass: HomeAssistant, host: str, secret: str, view: dict[str, str]
+) -> bool:
+    """Show a camera in a corner of the TV; True when the notifier accepted it."""
+    return await _async_camera_post(hass, host, signed_camera_url(host, secret, view))
+
+
+async def async_camera_message(
+    hass: HomeAssistant, host: str, secret: str, message: str
+) -> bool:
+    """Change the text on the corner camera, if one is showing."""
+    message = message[:_MAX_TEXT]
+    url = _signed_url(
+        host,
+        secret,
+        "/camera/message",
+        ["camera/message", message],
+        {"message": message},
+    )
+    return await _async_camera_post(hass, host, url)
+
+
+async def async_close_camera(hass: HomeAssistant, host: str, secret: str) -> bool:
+    """Remove the corner camera from the TV."""
+    url = _signed_url(host, secret, "/camera/close", ["camera/close"], {})
+    return await _async_camera_post(hass, host, url)
 
 
 async def async_notifier_alive(hass: HomeAssistant, host: str) -> bool:

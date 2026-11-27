@@ -143,7 +143,8 @@ async def test_play_camera(
             "type": "mse",
         },
         "message": "شخص عند الباب",
-        "tv_corner": None,
+        "text_position": "bottom",
+        "text_size": "normal",
     }
     # No credentials in what the TV receives.
     assert "pass" not in json.dumps(payload)
@@ -526,33 +527,14 @@ async def test_one_camera_on_two_tvs(hass: HomeAssistant) -> None:
     assert not _allowed(hass, name, "secret-other")
 
 
-@pytest.mark.usefixtures("setup_entry")
-async def test_tv_corner(hass: HomeAssistant, mock_tv: MagicMock) -> None:
-    with patch(
-        "custom_components.samstream.media_player.async_get_stream_source",
-        AsyncMock(return_value=RTSP),
-    ):
-        await hass.services.async_call(
-            DOMAIN,
-            "play_stream",
-            {"entity_id": TV, "camera": "camera.gate", "tv_corner": "bottom_right"},
-            blocking=True,
-        )
-    payload = launched_payload(hass, mock_tv)
-    assert payload["tv_corner"] == "bottom_right"
-    # Pictures, not video, in corner mode (the TV window needs the video layer).
-    secret = hass.config_entries.async_entries(DOMAIN)[0].data[CONF_TV_SECRET]
-    assert payload["stream"]["mjpeg_url"] == (
-        f"http://192.168.1.5:8123/api/samstream/tv/{secret}/mjpeg/{stream_name(RTSP)}"
-    )
-
-
 async def test_mjpeg_relay(
     hass: HomeAssistant,
     setup_entry: MockConfigEntry,
     mock_tv: MagicMock,
     hass_client_no_auth: ClientSessionGenerator,
+    no_notifier: dict[str, AsyncMock],
 ) -> None:
+    no_notifier["show"].return_value = True
     with patch(
         "custom_components.samstream.media_player.async_get_stream_source",
         AsyncMock(return_value=RTSP),
@@ -560,10 +542,11 @@ async def test_mjpeg_relay(
         await hass.services.async_call(
             DOMAIN,
             "play_stream",
-            {"entity_id": TV, "camera": "camera.gate", "tv_corner": "on"},
+            {"entity_id": TV, "camera": "camera.gate", "corner_size": "small"},
             blocking=True,
         )
-    url = launched_payload(hass, mock_tv)["stream"]["mjpeg_url"]
+    mock_tv.launch_app.assert_not_called()
+    url = no_notifier["show"].await_args.args[3]["url"]
     path = url.split("8123", 1)[1]
     client = await hass_client_no_auth()
     frames = b"--ffmpeg\r\nContent-type: image/jpeg\r\nContent-length: 3\r\n\r\nJPG\r\n"
@@ -578,6 +561,7 @@ async def test_mjpeg_relay(
         response.close()
         await asyncio.wait_for(ffmpeg.killed.wait(), 5)
     assert "-q:v" in ffmpeg.args  # pictures: the one path that transcodes
+    assert any("scale=480:270" in arg for arg in ffmpeg.args)
 
     wrong = await client.get(path.replace(setup_entry.data[CONF_TV_SECRET], "nope"))
     assert wrong.status == 404

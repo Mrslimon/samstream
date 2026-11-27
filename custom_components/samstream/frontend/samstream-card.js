@@ -563,7 +563,7 @@ var G = {
 		home: "Home",
 		liveTv: "Live TV",
 		inputList: "Inputs",
-		tvCorner: "Keep Live TV / HDMI in a corner",
+		fullScreen: "Full screen",
 		power: "Power",
 		cameras: "Cameras",
 		showCamera: "Show on TV",
@@ -626,7 +626,7 @@ var G = {
 		home: "الرئيسية",
 		liveTv: "البث المباشر",
 		inputList: "المدخلات",
-		tvCorner: "إبقاء البث المباشر / HDMI في الزاوية",
+		fullScreen: "ملء الشاشة",
 		power: "التشغيل",
 		cameras: "الكاميرات",
 		showCamera: "اعرض على التلفاز",
@@ -1397,8 +1397,8 @@ var Z, Ke = [
           >
         </div>
         <label class="check">
-          <input id="camera-tv-corner" type="checkbox" />
-          <span>${e.tvCorner}</span>
+          <input id="camera-full-screen" type="checkbox" />
+          <span>${e.fullScreen}</span>
         </label>
         <div class="actions">
           <button class="primary" @click=${() => this.playCamera(n)}>
@@ -1685,13 +1685,13 @@ var Z, Ke = [
 		return t > 0 ? t : void 0;
 	}
 	playCamera(e) {
-		let t = this.value("camera-message"), n = this.duration("camera-duration"), r = this.renderRoot.querySelector("#camera-tv-corner")?.checked;
+		let t = this.value("camera-message"), n = this.duration("camera-duration"), r = this.renderRoot.querySelector("#camera-full-screen")?.checked;
 		this.call("samstream", "play_stream", {
 			entity_id: this.config.entity,
 			camera: e,
 			...t ? { message: t } : {},
 			...n ? { duration: n } : {},
-			...r ? { tv_corner: "on" } : {}
+			...r ? { corner: !1 } : {}
 		});
 	}
 	showNotice() {
