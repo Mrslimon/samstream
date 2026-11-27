@@ -2,7 +2,7 @@
 
 Every release's section below is what Home Assistant shows in the update dialog.
 
-## 0.3.0 (2026-11-27)
+## 0.3.0 (2026-11-28)
 
 ### 🪟 The camera in a corner, over what you are watching
 
@@ -16,8 +16,9 @@ the box goes away after `duration`, or after 30 seconds.
 - **Settings** (Configure → Cameras): corner, box size, time on screen, text position and text
   size. The defaults are top right, a large box and large text. An action can set `corner`,
   `corner_position` and `corner_size`.
-- **Update the TV app** after updating: accept the *Samstream TV app* update (0.14.0), or press
-  **Install Samstream app**. Until then the camera opens full screen.
+- **The TV app must update too** (0.14.0). With *auto-update* on it installs by itself; otherwise
+  accept the *Samstream TV app* update, or press **Install Samstream app**. Until then the camera
+  opens full screen.
 - The old *TV picture in a corner* mode (Live TV and HDMI only) is replaced. Automations that
   still send `tv_corner` keep working: `off` means full screen, a corner name picks the corner.
 - With the TV off the camera opens full screen, and so does the Home screen when local control
