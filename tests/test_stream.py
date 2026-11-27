@@ -144,7 +144,7 @@ async def test_play_camera(
         },
         "message": "شخص عند الباب",
         "text_position": "bottom",
-        "text_size": "normal",
+        "text_size": "large",
     }
     # No credentials in what the TV receives.
     assert "pass" not in json.dumps(payload)

@@ -137,8 +137,9 @@ underneath keeps playing, the remote keeps controlling it, and the box goes away
 
 <p align="center"><img src="https://raw.githubusercontent.com/Mrslimon/samstream/main/docs/media/corner-camera.jpg" width="600" alt="A photo of a TV playing a video, with the door camera and a caption in a box at the top right"></p>
 
-This is the default. Choose the corner, the box size, where the text sits, how big it is and how
-long the box stays under **Configure → Cameras**. An action can override the first part:
+This is the default: a large box at the top right, large text at the bottom, for 30 seconds.
+Change the corner, the box size, where the text sits, how big it is and how long the box stays
+under **Configure → Cameras**. An action can override some of these:
 
 ```yaml
 actions:
@@ -150,7 +151,7 @@ actions:
       message: "Someone is at the door"
       corner: true                 # false: always full screen
       corner_position: top_left    # top_left, top_right, bottom_left, bottom_right
-      corner_size: large           # small, medium, large
+      corner_size: medium          # small, medium, large (default)
       duration: 30
 ```
 

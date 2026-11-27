@@ -14,7 +14,8 @@ the box goes away after `duration`, or after 30 seconds.
   **Configure → Cameras**, or add `corner: false` to the action. The dashboard card has a
   *Full screen* tick box.
 - **Settings** (Configure → Cameras): corner, box size, time on screen, text position and text
-  size. An action can set `corner`, `corner_position` and `corner_size`.
+  size. The defaults are top right, a large box and large text. An action can set `corner`,
+  `corner_position` and `corner_size`.
 - **Update the TV app** after updating: accept the *Samstream TV app* update (0.14.0), or press
   **Install Samstream app**. Until then the camera opens full screen.
 - The old *TV picture in a corner* mode (Live TV and HDMI only) is replaced. Automations that

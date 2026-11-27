@@ -166,10 +166,10 @@ async def test_cameras_option_step_saves_in_field_order(
     # How cameras appear is saved with them, corner on unless turned off.
     assert setup_entry.options["corner_view"] is True
     assert setup_entry.options["tv_corner"] == "top_right"
-    assert setup_entry.options["corner_size"] == "medium"
+    assert setup_entry.options["corner_size"] == "large"
     assert setup_entry.options["corner_seconds"] == 30
     assert setup_entry.options["text_position"] == "bottom"
-    assert setup_entry.options["text_size"] == "normal"
+    assert setup_entry.options["text_size"] == "large"
 
 
 async def test_cameras_option_step_saves_the_view_settings(
@@ -181,7 +181,7 @@ async def test_cameras_option_step_saves_the_view_settings(
         {
             "corner_view": False,
             "tv_corner": "bottom_left",
-            "corner_size": "large",
+            "corner_size": "small",
             "corner_seconds": 120,
             "text_position": "top",
             "text_size": "extra_large",
@@ -190,7 +190,7 @@ async def test_cameras_option_step_saves_the_view_settings(
     await hass.async_block_till_done()
     options = setup_entry.options
     assert options["corner_view"] is False
-    assert (options["tv_corner"], options["corner_size"]) == ("bottom_left", "large")
+    assert (options["tv_corner"], options["corner_size"]) == ("bottom_left", "small")
     assert options["corner_seconds"] == 120
     assert (options["text_position"], options["text_size"]) == ("top", "extra_large")
 

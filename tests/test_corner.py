@@ -86,13 +86,13 @@ async def test_corner_over_an_app(
     assert notifier["show"].await_args.args[1:3] == (HOST, secret)
     assert view(notifier) == {
         "corner": "top_right",
-        "size": "medium",
+        "size": "large",
         "seconds": "30",
-        "url": f"http://192.168.1.5:8123/api/samstream/tv/{secret}/mjpeg/cam?size=medium",
+        "url": f"http://192.168.1.5:8123/api/samstream/tv/{secret}/mjpeg/cam?size=large",
         "title": "Front door",
         "message": "شخص عند الباب",
         "text_position": "bottom",
-        "text_size": "normal",
+        "text_size": "large",
     }
     watching_youtube.launch_app.assert_not_called()
     watching_youtube.send_keys.assert_not_called()
@@ -105,19 +105,19 @@ async def test_corner_follows_the_cameras_settings(
     set_options(
         hass,
         tv_corner="bottom_left",
-        corner_size="large",
+        corner_size="small",
         corner_seconds=90,
         text_position="top",
-        text_size="large",
+        text_size="extra_large",
     )
     await hass.async_block_till_done()
     await play(hass)
     shown = view(notifier)
     assert shown["corner"] == "bottom_left"
-    assert shown["size"] == "large"
-    assert shown["url"].endswith("?size=large")
+    assert shown["size"] == "small"
+    assert shown["url"].endswith("?size=small")
     assert shown["seconds"] == "90"
-    assert (shown["text_position"], shown["text_size"]) == ("top", "large")
+    assert (shown["text_position"], shown["text_size"]) == ("top", "extra_large")
 
 
 async def test_action_fields_win_over_the_settings(

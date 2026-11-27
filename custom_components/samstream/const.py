@@ -100,13 +100,13 @@ CONF_CORNER_SECONDS: Final = "corner_seconds"
 CONF_TEXT_POSITION: Final = "text_position"
 CONF_TEXT_SIZE: Final = "text_size"
 DEFAULT_TV_CORNER: Final = "top_right"
-DEFAULT_CORNER_SIZE: Final = "medium"
+DEFAULT_CORNER_SIZE: Final = "large"
 # A corner camera cannot be closed with the remote, so it always has an end.
 DEFAULT_CORNER_SECONDS: Final = 30
 MIN_CORNER_SECONDS: Final = 5
 MAX_CORNER_SECONDS: Final = 3600
 DEFAULT_TEXT_POSITION: Final = "bottom"
-DEFAULT_TEXT_SIZE: Final = "normal"
+DEFAULT_TEXT_SIZE: Final = "large"
 # Sources before the apps, and the remote key each one presses. The TV keeps
 # its own names for inputs; these keys work whatever the input is called.
 SOURCE_INPUTS: Final = "Input list"
