@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest package="org.samstream.playbackprobe" version="1.0.0" api-version="9" xmlns="http://tizen.org/ns/packages">
+  <profile name="tv" />
+  <service-application appid="org.samstream.playbackprobe" exec="PlaybackProbe.dll" type="dotnet" multiple="false" taskmanage="false" nodisplay="true" auto-restart="true" on-boot="true">
+    <label>PlaybackProbe</label>
+    <background-category value="background-network" />
+    <background-category value="media" />
+  </service-application>
+  <privileges>
+    <privilege>http://tizen.org/privilege/internet</privilege>
+  </privileges>
+</manifest>
