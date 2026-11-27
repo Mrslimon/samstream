@@ -60,6 +60,8 @@ TV back to what you were watching when it is done.
 | Power, volume, keys, app launching | ✅ | ✅ | ✅ | ✅ |
 | Home Assistant as the TV's local OCF (SmartThings protocol) endpoint | ✅ | – | – | – |
 | Live **camera streams** on the TV | ✅ | – | – | – |
+| **Camera in a corner** while the app keeps playing ([details](#-in-a-corner-over-what-you-are-watching), new in 0.3.0) | ✅ | – | – | – |
+| **Text over the camera**, with its position and size | ✅ | – | – | – |
 | **Full-screen messages**, with text you can update live | ✅ | – | – | – |
 | **Native TV notification** with your own text | ✅ | – | – | – |
 | **Return** to what was playing afterwards | ✅ | – | – | – |
