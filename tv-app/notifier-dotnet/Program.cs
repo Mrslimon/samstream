@@ -45,8 +45,8 @@ namespace Notifier
     // The HTTP thread only enqueues; a main-loop timer dequeues and acts, so
     // NotificationManager.Post and all drawing run on the app's main thread.
     //
-    // The app's window is always transparent and never takes the remote: it is
-    // invisible until a camera is shown.
+    // The app's own window is always transparent, behind every app, and never
+    // takes the remote.
     internal sealed class Program : NUIApplication
     {
         private const string Tag = "SAMSTREAM_NOTI";
@@ -73,7 +73,7 @@ namespace Notifier
         {
             base.OnCreate();
             _key = LoadKey();
-            CornerCamera.PrepareWindow();
+            CornerCamera.StayBehind();
 
             StartServer();
 
@@ -99,6 +99,12 @@ namespace Notifier
             };
             _drainTimer.Start();
 
+        }
+
+        protected override void OnResume()
+        {
+            base.OnResume();
+            CornerCamera.StayBehind();
         }
 
         // Samstream (the web app) launches us as it starts, which brings this app
@@ -419,6 +425,8 @@ namespace Notifier
         protected override void OnAppControlReceived(AppControlReceivedEventArgs e)
         {
             base.OnAppControlReceived(e);
+            // A launch brings this app forward: step back before Samstream is raised.
+            CornerCamera.StayBehind();
             var extra = e.ReceivedAppControl?.ExtraData;
             if (extra == null)
             {

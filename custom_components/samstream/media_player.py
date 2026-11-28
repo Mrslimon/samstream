@@ -133,6 +133,9 @@ class _Interruption:
     ocf_input: str | None = None
 
 
+# The app the TV names (local control) while its Home screen is up.
+TV_HOME_APP = "com.samsung.tv.csfs"
+
 FEATURES = (
     MediaPlayerEntityFeature.TURN_ON
     | MediaPlayerEntityFeature.TURN_OFF
@@ -666,7 +669,14 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
         ocf = self.coordinator.ocf_state()
         if ocf is not None and ocf.art_mode:
             return False
-        if self._ocf_on_input() is not None:
+        # A corner camera still up means something was playing under it. An app
+        # the TV itself names in front counts too: the REST `visible` flag can
+        # miss it.
+        if (
+            self._corner_showing()
+            or self._ocf_on_input() is not None
+            or _ocf_names_an_app(ocf)
+        ):
             return True
         try:
             app = await self.coordinator.async_current_app()
@@ -1273,6 +1283,15 @@ class SamstreamMediaPlayer(SamstreamEntity, MediaPlayerEntity):
     async def _async_key(self, key: str) -> None:
         await self._async_call(self.coordinator.tv.send_keys([key]))
         await self.coordinator.async_request_refresh()
+
+
+def _ocf_names_an_app(ocf: OcfTvState | None) -> bool:
+    """Tell whether local control names an app in front (not Home or Samstream)."""
+    return (
+        ocf is not None
+        and ocf.content_input == "webapp"
+        and ocf.app_id not in (None, TV_HOME_APP, SAMSTREAM_APP_ID)
+    )
 
 
 def _ocf_input_name(ocf: OcfTvState | None) -> str | None:

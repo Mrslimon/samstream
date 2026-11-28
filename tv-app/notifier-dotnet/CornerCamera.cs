@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using Tizen;
@@ -13,14 +14,15 @@ using Timer = Tizen.NUI.Timer;
 
 namespace Notifier
 {
-    // A live camera in a corner of the screen, over whatever is playing. The
-    // app's own window is a transparent, non-focusable Notification window: the
-    // video underneath keeps playing and the remote keeps controlling it.
+    // A live camera in a corner of the screen, over whatever is playing. Each
+    // box gets its own transparent, non-focusable Notification window, destroyed
+    // with it: the video underneath keeps playing and the remote keeps
+    // controlling it. The app's own window stays behind everything.
     // Pictures come from Home Assistant as MJPEG and are drawn as images, because
     // the TV's video decoder belongs to the app underneath.
     // Every method here runs on the main thread, except Fetch.
-    // The window handling (transparent Notification window, 1x1 while idle,
-    // shrink then grow once it is up) is adapted from busycursor/tizen-notifier,
+    // The window handling (a transparent Notification window per box, the app's
+    // own window lowered) is adapted from busycursor/tizen-notifier,
     // MIT, Copyright (c) 2026 busycursor: see
     // custom_components/samstream/bundled/THIRD-PARTY-NOTICES.md.
     internal sealed class CornerCamera
@@ -55,6 +57,7 @@ namespace Notifier
 
         private readonly ConcurrentQueue<string> _frames = new ConcurrentQueue<string>();
         private readonly List<ImageView> _pictures = new List<ImageView>();
+        private Window _window;
         private View _box;
         private View _video;
         private View _caption;
@@ -67,7 +70,7 @@ namespace Notifier
         // Timers stay referenced or they are collected and stop ticking.
         private Timer _draw;
         private Timer _close;
-        private Timer _regrow;
+        private Timer _place;
         private int _run;
 
         public static bool KnownSize(string size) => Sizes.ContainsKey(size);
@@ -81,18 +84,22 @@ namespace Notifier
             corner == "top_left" || corner == "top_right" ||
             corner == "bottom_left" || corner == "bottom_right";
 
-        // Make the window invisible and harmless while nothing is shown.
-        public static void PrepareWindow()
+        // Keep the app's own window invisible, without the remote, and behind
+        // every app. Left in front, the TV counts this app as the one on screen
+        // when Samstream wakes it, and Home Assistant cannot return to what was
+        // playing. Hiding it instead would close the app.
+        public static void StayBehind()
         {
             var window = Window.Instance;
-            Try("transparent", () =>
+            Try("main", () =>
             {
                 window.BackgroundColor = Color.Transparent;
                 window.SetTransparency(true);
+                window.SetAcceptFocus(false);
+                window.WindowSize = new Size2D(1, 1);
+                window.WindowPosition = new Position2D(0, 0);
+                window.Lower();
             });
-            Try("focus", () => window.SetAcceptFocus(false));
-            Raise(window);
-            Idle(window);
         }
 
         public void Show(
@@ -109,7 +116,7 @@ namespace Notifier
             int x = corner.EndsWith("right") ? ScreenWidth - Edge - width : Edge;
             int y = corner.StartsWith("bottom") ? ScreenHeight - Edge - height : Edge;
 
-            _box = new View { Size2D = new Size2D(width, height), Position2D = new Position2D(x, y) };
+            _box = new View { Size2D = new Size2D(width, height) };
             _video = new View
             {
                 Size2D = _size,
@@ -126,24 +133,15 @@ namespace Notifier
             });
             SetText(title, message);
 
-            var window = Window.Instance;
-            window.GetDefaultLayer().Add(_box);
-            Raise(window);
-            Try("show", () => window.Show());
-            // The compositor can ignore a size set before the window is up:
-            // shrink, then grow, once it is.
-            Grow(window);
-            _regrow = new Timer(500);
-            _regrow.Tick += (s, e) =>
+            var own = NewWindow(x, y, width, height);
+            if (own != null)
             {
-                if (_box != null)
-                {
-                    Idle(window);
-                    Grow(window);
-                }
-                return false;
-            };
-            _regrow.Start();
+                ShowInOwnWindow(own, x, y, width, height);
+            }
+            else
+            {
+                ShowInMainWindow(x, y);
+            }
 
             _stop = new CancellationTokenSource();
             var token = _stop.Token;
@@ -165,6 +163,53 @@ namespace Notifier
             _close.Start();
         }
 
+        private void ShowInOwnWindow(Window window, int x, int y, int width, int height)
+        {
+            _window = window;
+            window.GetDefaultLayer().Add(_box);
+            Try("show", () => window.Show());
+            // The compositor can ignore a size set before the window is up: set
+            // it again once it is.
+            PlaceLater(window, () =>
+            {
+                window.WindowSize = new Size2D(width, height);
+                window.WindowPosition = new Position2D(x, y);
+            });
+        }
+
+        // Older TVs have the app's window only: the box is placed inside it, and
+        // the window covers the screen while the box is up.
+        private void ShowInMainWindow(int x, int y)
+        {
+            var window = Window.Instance;
+            _window = window;
+            _box.Position2D = new Position2D(x, y);
+            window.GetDefaultLayer().Add(_box);
+            MakeNotification(window);
+            Try("show", () => window.Show());
+            // As above: shrink, then grow, once it is up.
+            Grow(window);
+            PlaceLater(window, () =>
+            {
+                Idle(window);
+                Grow(window);
+            });
+        }
+
+        private void PlaceLater(Window window, Action place)
+        {
+            _place = new Timer(500);
+            _place.Tick += (s, e) =>
+            {
+                if (_window == window)
+                {
+                    Try("place", place);
+                }
+                return false;
+            };
+            _place.Start();
+        }
+
         // New text for the camera on screen; nothing happens without one.
         public void SetMessage(string message)
         {
@@ -180,7 +225,7 @@ namespace Notifier
             _stop = null;
             _draw?.Stop();
             _close?.Stop();
-            _regrow?.Stop();
+            _place?.Stop();
             while (_frames.TryDequeue(out var path))
             {
                 Delete(path);
@@ -197,12 +242,75 @@ namespace Notifier
             {
                 return;
             }
-            var window = Window.Instance;
-            window.GetDefaultLayer().Remove(_box);
+            var window = _window;
+            _window = null;
+            window?.GetDefaultLayer().Remove(_box);
             _box.Dispose();
             _box = null;
-            Idle(window);
+            if (window != null && window != Window.Instance)
+            {
+                Try("hide", () => window.Hide());
+                Try("dispose", () => window.Dispose());
+            }
+            StayBehind();
         }
+
+        // A second window needs a constructor the Tizen 4 build target does not
+        // declare, so look for it on the TV. Null where there is none.
+        private static Window NewWindow(int x, int y, int width, int height)
+        {
+            try
+            {
+                var ctor = typeof(Window).GetConstructor(
+                    BindingFlags.Instance | BindingFlags.Public, null,
+                    new[] { typeof(string), typeof(Rectangle), typeof(bool) }, null);
+                if (ctor == null)
+                {
+                    return null;
+                }
+                var window = (Window)ctor.Invoke(new object[]
+                {
+                    "samstream-corner", new Rectangle(x, y, width, height), true,
+                });
+                Configure(window);
+                return window;
+            }
+            catch (Exception ex)
+            {
+                Log.Error(Tag, "CORNER_window " + ex.GetType().Name + ": " + ex.Message);
+                return null;
+            }
+        }
+
+        private static void MakeNotification(Window window)
+        {
+            Try("type", () => window.Type = WindowType.Notification);
+            Try("level", () => window.SetNotificationLevel(NotificationLevel.High));
+        }
+
+        private static void Configure(Window window)
+        {
+            MakeNotification(window);
+            Try("transparent", () =>
+            {
+                window.BackgroundColor = Color.Transparent;
+                window.SetTransparency(true);
+            });
+            Try("opaque", () => window.SetOpaqueState(false));
+            Try("focus", () => window.SetAcceptFocus(false));
+        }
+
+        private static void Idle(Window window) => Try("idle", () =>
+        {
+            window.WindowSize = new Size2D(1, 1);
+            window.WindowPosition = new Position2D(0, 0);
+        });
+
+        private static void Grow(Window window) => Try("grow", () =>
+        {
+            window.WindowPosition = new Position2D(0, 0);
+            window.WindowSize = new Size2D(ScreenWidth, ScreenHeight);
+        });
 
         private void BuildCaption()
         {
@@ -390,24 +498,6 @@ namespace Notifier
                 view.Hide();
             }
         }
-
-        private static void Raise(Window window)
-        {
-            Try("type", () => window.Type = WindowType.Notification);
-            Try("level", () => window.SetNotificationLevel(NotificationLevel.High));
-        }
-
-        private static void Idle(Window window) => Try("idle", () =>
-        {
-            window.WindowSize = new Size2D(1, 1);
-            window.WindowPosition = new Position2D(0, 0);
-        });
-
-        private static void Grow(Window window) => Try("grow", () =>
-        {
-            window.WindowPosition = new Position2D(0, 0);
-            window.WindowSize = new Size2D(ScreenWidth, ScreenHeight);
-        });
 
         private static void Delete(string path)
         {

@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from aiosamstream import SAMSTREAM_APP_ID, AppStatus, SamstreamConnectionError
+from aiosamstream.ocf.state import OcfTvState
 from homeassistant.core import HomeAssistant
 from homeassistant.core_config import async_process_ha_core_config
 from homeassistant.util import dt as dt_util
@@ -206,6 +207,48 @@ async def test_corner_when_the_screen_cannot_be_read(
     mock_tv.foreground_app = AsyncMock(side_effect=SamstreamConnectionError("busy"))
     await play(hass)
     notifier["show"].assert_awaited_once()
+
+
+def local_control_reports(app_id: str) -> object:
+    """Local control naming `app_id` as the app in front."""
+    coordinator = "custom_components.samstream.coordinator.SamstreamCoordinator"
+    state = OcfTvState(content_input="webapp", app_id=app_id)
+    return patch(f"{coordinator}.ocf_state", return_value=state)
+
+
+@pytest.mark.parametrize(
+    "app_id", ["9Ur5IzDKqV.TizenYouTube", "org.samstream.notifier"]
+)
+async def test_corner_when_only_local_control_sees_the_app(
+    hass: HomeAssistant, mock_tv: MagicMock, notifier: dict, app_id: str
+) -> None:
+    with local_control_reports(app_id):
+        await play(hass)
+    notifier["show"].assert_awaited_once()
+    mock_tv.launch_app.assert_not_called()
+
+
+@pytest.mark.parametrize("app_id", ["com.samsung.tv.csfs", SAMSTREAM_APP_ID])
+async def test_full_screen_on_home_with_local_control(
+    hass: HomeAssistant, mock_tv: MagicMock, notifier: dict, app_id: str
+) -> None:
+    with local_control_reports(app_id):
+        await play(hass)
+    notifier["show"].assert_not_called()
+    mock_tv.launch_app.assert_awaited_once_with(SAMSTREAM_APP_ID)
+
+
+async def test_second_call_stays_in_the_corner(
+    hass: HomeAssistant, watching_youtube: MagicMock, notifier: dict
+) -> None:
+    """While the box is up, a TV reporting no app does not turn it full screen."""
+    await play(hass)
+    watching_youtube.foreground_app.return_value = None
+    watching_youtube.app_status.return_value = None
+    with local_control_reports("com.samsung.tv.csfs"):
+        await play(hass)
+    assert notifier["show"].await_count == 2
+    watching_youtube.launch_app.assert_not_called()
 
 
 async def test_stopped_notifier_is_started(

@@ -2,6 +2,27 @@
 
 Every release's section below is what Home Assistant shows in the update dialog.
 
+## 0.3.1 (2026-11-28)
+
+### 🏠 Back to what you were watching, not Home
+
+- **Fixed:** after a camera had been shown in a corner, a later full-screen camera ended on the
+  Home screen instead of returning to the app you were watching. Messages and videos return the
+  same way, so they were most likely affected too. The corner box now gets a window of its own,
+  which is removed with the box.
+
+Reproduced and checked on a QN800C (Tizen 9). TVs that cannot open a second window draw the box as
+in 0.3.0, so on those the fix may not apply.
+
+### 📺 Corner or full screen
+
+- With local control on, an app the TV names in front now counts as something playing, and a second
+  camera sent while the box is still up stays in the corner. This is aimed at a report from an S90H
+  ([issue #4](https://github.com/Mrslimon/samstream/issues/4)) that is **not yet confirmed fixed**.
+
+**After updating, restart Home Assistant.** The TV app must update too (0.14.1): with *auto-update*
+on it installs by itself, otherwise accept the *Samstream TV app* update.
+
 ## 0.3.0 (2026-11-28)
 
 ### 🪟 The camera in a corner, over what you are watching
