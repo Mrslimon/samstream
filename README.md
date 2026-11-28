@@ -638,6 +638,8 @@ It builds on the work of others:
 - [Apps2Samsung](https://github.com/Apps2Samsung/Apps2Samsung) and
   [Jellyfin2Samsung](https://github.com/Jellyfin2Samsung/Samsung-Jellyfin-Installer), whose
   per-user Samsung certificate technique Samstream follows.
+- [@Blacksuite](https://github.com/Blacksuite) for the decoder-interrupt playback probe
+  ([tv-app/playback-probe](tv-app/playback-probe)).
 - [Readex Pro](https://fonts.google.com/specimen/Readex+Pro) (SIL Open Font License) for Arabic
   and Latin text on the TV.
 
